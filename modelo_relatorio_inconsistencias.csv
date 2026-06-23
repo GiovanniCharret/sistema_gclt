@@ -1,0 +1,21 @@
+﻿Relatório de Inconsistências - Painel de Monitoramento (Anexo V)
+Contrato;ECO 035/2025 - LPT, 8ª Tranche
+UF;RO (Rondônia)
+Versão da planilha;23/06/2026
+Inconsistências neste relatório;14
+
+Severidade;Regra;Linha;Campo;Problema;Sugestão
+Erro;Campos obrigatórios vazios;L47;Latitude;célula vazia;preencher em graus decimais (ex.: -3.301800)
+Erro;Campos obrigatórios vazios;L102;Código IBGE;célula vazia;informar o código IBGE de 7 dígitos do município
+Erro;Campos obrigatórios vazios;L155;Número da UC;célula vazia;"campo-chave; obrigatório para todas as UCs"
+Erro;Campos obrigatórios vazios;L210;Data Energização;célula vazia;data de energização da UC (DD/MM/AAAA)
+Erro;Valor fora do domínio;L47;UF;valor “XX” não é uma UF válida;usar sigla de 2 letras (AM, PA, RR…)
+Erro;Valor fora do domínio;L63;Tipo de Atendimento;valor “Rede” inválido;usar “Extensão de Rede” ou “Sistemas de Geração…”
+Erro;Valor fora do domínio;L91;Tipo de Comunidade;valor “13” inexistente;o domínio aceita 1 a 12
+Erro;Coordenadas inválidas;L77;Latitude;valor “91.5” fora da faixa;latitude deve estar entre -90 e 90
+Erro;Coordenadas inválidas;L120;Longitude;valor “0” suspeito;confirmar a coordenada da UC
+Erro;Chave ODI + UC duplicada;L12 / L4087;ODI + UC;ODI “210001” + UC “70012345” repetida;cada UC deve aparecer uma única vez
+Aviso;“0 - Não é prioridade” + outra tipologia;L30;Tipologia;“0 - Não é prioridade” = Sim junto com “I - Baixa renda” = Sim;desmarcar “0” quando houver outra tipologia
+Aviso;“0 - Não é prioridade” + outra tipologia;L44;Tipologia;“0 - Não é prioridade” = Sim junto com “IV.1 - Família indígena” = Sim;revisar a marcação
+Aviso;Data de energização fora de 2026;L201;Data Energização;valor “12/11/2025”;remover ou enviar no painel do ano correspondente
+Aviso;Valor de tipologia ≠ Sim/Não;L88;V.1 - Escolas;valor “X” inválido;usar “Sim” ou “Não”

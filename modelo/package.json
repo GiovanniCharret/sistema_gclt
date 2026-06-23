@@ -1,0 +1,20 @@
+{
+  "name": "modelo-anexo-v",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mock estatico nao-funcional do site 'Classificacao de Beneficiarios do Programa' (Anexo V - Painel de Monitoramento). Validacao roteirada, sem backend. Para apresentacao aos gestores.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "vite": "^7.1.3"
+  }
+}
