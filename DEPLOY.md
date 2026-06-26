@@ -5,12 +5,15 @@ Guia para hospedar este projeto numa **VPS Hostinger** (Ubuntu) e publicar via
 
 ## Visão geral
 
-- O projeto é um **SPA estático** (Vite + React), **mock de apresentação** — sem
-  backend, sem banco de dados.
-- O código-fonte fica na pasta **`modelo/`** do repositório.
-- O comando de build gera arquivos estáticos em **`modelo/dist/`**. É essa pasta
-  que o servidor web entrega.
-- Requisito: **Node.js 20.19+ ou 22.x** (o Vite 7 exige essas versões).
+- O **front** é um **SPA estático** (Vite + React) na pasta **`modelo/`**; o build gera
+  **`modelo/dist/`**, que o Nginx entrega. Requisito: **Node.js 20.19+ ou 22.x** (Vite 7).
+- O **backend** (planejado/aprovado — ver
+  `planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md`) é uma **API
+  FastAPI** em **`backend/`**, servida por **uvicorn** atrás do mesmo Nginx em **`/api`**.
+  Faz validação real da planilha contra `entrada/`, autenticação (login/senha) e envio do
+  Anexo V por e-mail. Requisito: **Python 3.12+**.
+- Enquanto o backend não está no ar, o front roda como mock estático (seção do backend
+  abaixo só se aplica depois de implementado).
 
 ---
 
@@ -128,6 +131,72 @@ Acesse `http://SEU_IP_DA_VPS:8080` (libere a porta no firewall se necessário).
 
 ---
 
+## Backend (API FastAPI) — quando implementado
+
+> Baseado na §14 da spec. Aplica-se após os Blocos A–G estarem prontos.
+
+### 1. Python + dependências
+```bash
+apt install -y python3 python3-venv python3-pip
+cd /var/www/site-lpt/backend
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Configurar segredos (`.env`) e usuários
+```bash
+cp .env.example .env
+nano .env     # SMTP_*, DESTINATARIOS, ALERTA_EMAIL, SECRET_KEY, TOKEN_TTL, mapas de acesso
+python -m backend.admin_usuarios add fulano@equatorialenergia.com.br   # gera senha temporária
+```
+`.env` e `backend/usuarios.json` **não vão para o git** (segredos). `entrada/` fica em
+`/var/www/site-lpt/entrada` (atualizado diariamente por processo externo).
+
+### 3. Serviço uvicorn (systemd)
+Crie `/etc/systemd/system/site-lpt-api.service`:
+```ini
+[Unit]
+Description=Site LPT - API FastAPI
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/site-lpt
+ExecStart=/var/www/site-lpt/backend/.venv/bin/uvicorn backend.app:app --host 127.0.0.1 --port 8000
+Restart=always
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+```bash
+systemctl daemon-reload
+systemctl enable --now site-lpt-api
+```
+
+### 4. Nginx: proxy de `/api` ao lado do estático
+Dentro do `server { … }` do site (Opção A), acrescente:
+```nginx
+    # API do backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size 50m;   # planilhas grandes (até ~50.000 linhas)
+    }
+```
+```bash
+nginx -t && systemctl reload nginx
+```
+
+### 5. Atualizar o backend
+```bash
+cd /var/www/site-lpt && git pull
+cd backend && . .venv/bin/activate && pip install -r requirements.txt
+systemctl restart site-lpt-api
+```
+
+---
+
 ## Atualizar o site depois de novas mudanças
 
 ```bash
@@ -143,8 +212,10 @@ systemctl reload nginx     # (Opção A/B) — ou: pm2 restart site-lpt (Opção
 
 ## Observações
 
-- **Não comite `node_modules/` nem `dist/`** — já estão no `.gitignore`. O `dist/`
-  é gerado pelo build; o `node_modules/` é recriado pelo `npm install`.
-- Por ser estático, não há variáveis de ambiente nem porta de backend a configurar.
-- A "validação" das planilhas e o download do `.csv` são **roteirados no navegador**
-  (mock); nada é enviado a um servidor.
+- **Não comite `node_modules/`, `dist/`, `.env` nem `backend/usuarios.json`** — já estão
+  no `.gitignore` (artefatos regeneráveis e segredos). O resto do conteúdo é versionado.
+- O front estático não tem variáveis de ambiente; o **backend** usa `.env` (SMTP,
+  destinatários, `SECRET_KEY`, mapas de acesso) — ver seção do backend acima.
+- **Estado atual:** a "validação" e o download do `.csv` são roteirados no navegador
+  (mock). Após os Blocos A–G, a validação passa a ser **real** no backend e o Anexo V
+  validado é **enviado por e-mail** automaticamente.

@@ -1,17 +1,19 @@
-# ── Pessoais ──────────────────────────────────────────
-manuais/
-minhas_notas/
-planning/
-bug_fix/
+# Commitar tudo do projeto (conteúdo, dados, planejamento, manuais, notas).
+# Mantidos fora do git apenas artefatos regeneráveis e segredos.
 
-# ── Dependências ──────────────────────────────────────────
+# ── Dependências / build (regeneráveis) ──────────────────
 node_modules/
-
-# ── Build / saída do Vite ────────────────────────────────
 dist/
 dist-ssr/
 build/
 *.local
+
+# ── Segredos (NÃO versionar) ─────────────────────────────
+.env
+.env.*
+!.env.example
+usuarios.json
+backend/usuarios.json
 
 # ── Logs ─────────────────────────────────────────────────
 logs/
@@ -21,30 +23,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# ── Variáveis de ambiente / segredos ─────────────────────
-.env
-.env.*
-!.env.example
-CLAUDE.md
-plano_classificacao_beneficiarios.html
-
-# ── Editor / IDE ─────────────────────────────────────────
+# ── Editor / SO / temporários de Office ──────────────────
 .vscode/*
 !.vscode/extensions.json
 .idea/
 *.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.sw?
-
-# ── Sistema operacional ──────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# ── Temporários de Office (lock do Excel/Word) ───────────
 ~$*
-
-# ── Artefatos de automação / testes locais ───────────────
 .playwright-mcp/

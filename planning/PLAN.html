@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plano — Classificação de Beneficiários do Programa</title>
+  <style>
+    :root {
+      --ivory:    #FAF9F5;
+      --slate:    #141413;
+      --clay:     #D97757;
+      --oat:      #E3DACC;
+      --olive:    #788C5D;
+      --gray-150: #F0EEE6;
+      --gray-300: #D1CFC5;
+      --gray-500: #87867F;
+      --gray-700: #3D3D3A;
+      --white:    #FFFFFF;
+      --serif: ui-serif, Georgia, 'Times New Roman', serif;
+      --sans:  system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --mono:  ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--sans);
+      background: var(--ivory);
+      color: var(--gray-700);
+      line-height: 1.55;
+      padding: 56px 32px 120px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 1120px; margin: 0 auto; }
+
+    /* header */
+    header.page-head { margin-bottom: 44px; max-width: 860px; }
+    .eyebrow {
+      font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--gray-500); margin-bottom: 12px;
+    }
+    h1 {
+      font-family: var(--serif); font-weight: 500; font-size: 38px;
+      line-height: 1.15; color: var(--slate); margin-bottom: 18px; letter-spacing: -0.01em;
+    }
+    .prompt-box {
+      background: var(--gray-150); border: 1.5px solid var(--gray-300);
+      border-radius: 12px; padding: 16px 20px; font-size: 14.5px; color: var(--gray-700);
+    }
+    .prompt-box .label {
+      font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--gray-500); display: block; margin-bottom: 6px;
+    }
+    .prompt-box strong { color: var(--slate); }
+
+    /* section chrome */
+    section { margin-bottom: 60px; }
+    .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+    .sec-head .num {
+      font-family: var(--mono); font-size: 12px; background: var(--oat);
+      color: var(--slate); padding: 3px 9px; border-radius: 8px;
+    }
+    .sec-head h2 {
+      font-family: var(--serif); font-weight: 500; font-size: 26px;
+      color: var(--slate); letter-spacing: -0.01em;
+    }
+    .sec-intro { font-size: 14.5px; color: var(--gray-500); max-width: 760px; margin-bottom: 26px; }
+    p.body-text { font-size: 14.5px; max-width: 760px; margin-bottom: 14px; }
+    p.body-text + p.body-text { margin-top: -2px; }
+    code {
+      font-family: var(--mono); font-size: 0.86em; background: var(--gray-150);
+      border: 1px solid var(--gray-300); border-radius: 5px; padding: 1px 5px; color: var(--gray-700);
+    }
+
+    /* summary strip */
+    .summary {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 60px;
+    }
+    @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, 1fr); } }
+    .summary .cell {
+      background: var(--white); border: 1.5px solid var(--gray-300);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .summary .k {
+      font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--gray-500); margin-bottom: 6px;
+    }
+    .summary .v { font-size: 17px; color: var(--slate); font-weight: 600; }
+    .summary .v.accent { color: var(--clay); }
+
+    /* flow diagram */
+    .diagram {
+      background: var(--white); border: 1.5px solid var(--gray-300);
+      border-radius: 12px; padding: 28px; overflow-x: auto;
+    }
+    .diagram svg { display: block; min-width: 880px; }
+    .caption { font-size: 13px; color: var(--gray-500); margin-top: 12px; }
+
+    /* decision / generic cards grid */
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--white); border: 1.5px solid var(--gray-300);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .card.lead { border-left: 4px solid var(--clay); }
+    .card h3 {
+      font-family: var(--serif); font-weight: 500; font-size: 17px;
+      color: var(--slate); margin-bottom: 6px;
+    }
+    .card p { font-size: 13.5px; color: var(--gray-700); }
+    .card .meta {
+      font-family: var(--mono); font-size: 11px; color: var(--gray-500);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+    }
+
+    /* milestone timeline (Fases) */
+    .milestones { display: flex; flex-direction: column; gap: 0; }
+    .milestone { display: grid; grid-template-columns: 96px 28px 1fr; gap: 0 18px; position: relative; }
+    .milestone .when {
+      text-align: right; font-family: var(--mono); font-size: 12px;
+      color: var(--gray-500); padding-top: 4px;
+    }
+    .milestone .dot-col { display: flex; flex-direction: column; align-items: center; }
+    .milestone .dot {
+      width: 14px; height: 14px; border-radius: 50%; background: var(--white);
+      border: 3px solid var(--clay); margin-top: 4px; flex-shrink: 0;
+    }
+    .milestone .dot.done { background: var(--olive); border-color: var(--olive); }
+    .milestone .line { width: 2px; flex: 1; background: var(--gray-300); margin: 4px 0; }
+    .milestone:last-child .line { display: none; }
+    .milestone .body { padding-bottom: 30px; }
+    .milestone .body h3 {
+      font-family: var(--serif); font-weight: 500; font-size: 18px;
+      color: var(--slate); margin-bottom: 4px;
+    }
+    .milestone .body p { font-size: 13.5px; color: var(--gray-500); margin-bottom: 9px; max-width: 640px; }
+    .milestone .tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .milestone .tag {
+      font-family: var(--mono); font-size: 11.5px; background: var(--gray-150);
+      border: 1px solid var(--gray-300); border-radius: 6px; padding: 3px 8px; color: var(--gray-700);
+    }
+    .milestone .tag.ok { background: #E4E9DC; color: #4B5C39; border-color: #cdd8bf; }
+    .milestone .tag.next { background: #F3D9CC; color: #8A3B1E; border-color: #ecc6b4; }
+
+    /* rule list (painel) */
+    .rules { border: 1.5px solid var(--gray-300); border-radius: 12px; overflow: hidden; background: var(--white); }
+    .rules .r { display: grid; grid-template-columns: 70px 1fr; gap: 0; }
+    .rules .r + .r { border-top: 1.5px solid var(--gray-300); }
+    .rules .sev-cell { padding: 14px 16px; border-right: 1.5px solid var(--gray-300); display: flex; align-items: flex-start; }
+    .rules .txt-cell { padding: 14px 18px; font-size: 13.5px; }
+    .rules .txt-cell .rt { color: var(--slate); font-weight: 600; }
+    .rules .txt-cell .rd { color: var(--gray-500); font-size: 12.5px; }
+    .sev { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+    .sev.err { background: #F3D9CC; color: #8A3B1E; }
+    .sev.warn { background: var(--oat); color: var(--slate); }
+
+    /* risk / open questions */
+    .open-q { display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+    .q {
+      background: var(--white); border: 1.5px solid var(--gray-300);
+      border-left: 4px solid var(--clay); border-radius: 10px; padding: 16px 20px;
+    }
+    .q .qt { font-weight: 600; font-size: 15px; color: var(--slate); margin-bottom: 4px; }
+    .q .qd { font-size: 13.5px; color: var(--gray-500); }
+
+    .footnote { font-size: 12.5px; color: var(--gray-500); margin-top: 40px; border-top: 1px solid var(--gray-300); padding-top: 16px; }
+
+    /* sub-phase board */
+    .done-strip {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: #E4E9DC; border: 1.5px solid #cdd8bf; border-radius: 10px;
+      padding: 12px 16px; margin-bottom: 28px; font-size: 13.5px; color: #4B5C39;
+    }
+    .done-strip .ck { font-weight: 700; }
+    .blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .blocks { grid-template-columns: 1fr; } }
+    .block { background: var(--white); border: 1.5px solid var(--gray-300); border-radius: 12px; padding: 16px 18px; }
+    .block > h3 {
+      font-family: var(--serif); font-weight: 500; font-size: 17px; color: var(--slate);
+      margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gray-300);
+    }
+    .sp { display: grid; grid-template-columns: 42px 1fr; gap: 0 10px; padding: 8px 0; }
+    .sp + .sp { border-top: 1px dashed var(--gray-300); }
+    .sp .id {
+      font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--slate);
+      background: var(--gray-150); border: 1px solid var(--gray-300); border-radius: 6px;
+      padding: 2px 0; text-align: center; height: fit-content;
+    }
+    .sp .desc { font-size: 13px; color: var(--gray-700); }
+    .sp .desc .test {
+      display: block; font-size: 11.5px; color: var(--olive); margin-top: 3px;
+      font-style: italic;
+    }
+    .sp .desc .test::before { content: "▸ teste: "; font-style: normal; color: var(--gray-500); }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="page-head">
+      <div class="eyebrow">Plano do projeto · Programa Luz para Todos · MME · ENBPar</div>
+      <h1>Classificação de Beneficiários do Programa</h1>
+      <div class="prompt-box">
+        <span class="label">O que é</span>
+        Site para <strong>upload e validação da planilha "Anexo V — Painel de
+        Monitoramento - MME-CC_UF"</strong> (unidades consumidoras energizadas em 2026).
+        A fase 1 entregou um <strong>mock estático</strong> aprovado pelos gestores; a
+        próxima fase troca a validação roteirada por um <strong>backend real</strong> que
+        valida contra os dados de <code>entrada/</code> e envia a planilha validada por
+        e-mail. Render do <code>planning/PLAN.md</code> para avaliação.
+      </div>
+    </header>
+
+    <div class="summary">
+      <div class="cell"><div class="k">Domínio</div><div class="v">MME / ENBPar / LPT</div></div>
+      <div class="cell"><div class="k">Contratos selecionáveis</div><div class="v">41 <span style="font-weight:400;color:var(--gray-500)">de 113</span></div></div>
+      <div class="cell"><div class="k">Fases do mock</div><div class="v">6 / 6 concluídas</div></div>
+      <div class="cell"><div class="k">Próxima fase</div><div class="v accent">Backend real</div></div>
+    </div>
+
+    <!-- 01 Contexto -->
+    <section>
+      <div class="sec-head"><span class="num">01</span><h2>Contexto</h2></div>
+      <p class="body-text">O MME (via SNEE/DUPS, Ofícios 283 e 305/2026) determinou à
+        <strong>ENBPar</strong> — Agente Operacionalizador do Programa Luz para Todos — o
+        envio mensal da planilha <strong>Anexo V</strong>, detalhando as UCs energizadas
+        em 2026. Base legal: <strong>art. 12-A do Decreto 12.964/2026</strong>, que dá ao
+        MME competência para identificar, registrar, monitorar e verificar o atendimento
+        aos beneficiários (incluídos os prioritários).</p>
+      <p class="body-text"><strong>Objetivo de longo prazo:</strong> site que recebe o
+        upload da planilha, valida a completude por regras, critica na própria tela e pede
+        correção; se tudo estiver certo, salva na base / encaminha. A
+        <strong>chave de integração</strong> de cada registro é <code>Número ODI + Número
+        da UC</code>; o <strong>contrato</strong> de operacionalização é a chave principal
+        do fluxo (cada UF tem um ou mais contratos).</p>
+      <p class="body-text">A planilha tem <strong>52 colunas</strong>: 14 de
+        identificação/localização/classificação + <strong>38 colunas Sim/Não de
+        "Tipologia do Benefício"</strong> (1-a-1 com as prioridades do art. 3º do Decreto).
+        Domínios e regras vivem nas abas <code>Dicionario_Campos</code>,
+        <code>Dominios</code> e <code>Instruções</code> da própria planilha.</p>
+    </section>
+
+    <!-- 02 Fluxo de telas -->
+    <section>
+      <div class="sec-head"><span class="num">02</span><h2>Fluxo de telas</h2></div>
+      <p class="sec-intro">Sequência de "gates": cada passo ocupa a tela inteira até ser
+        satisfeito. O contrato é a chave principal; a UF é só o agrupamento acima dele.</p>
+      <div class="diagram">
+        <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#87867F"/>
+            </marker>
+            <marker id="arrowClay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#D97757"/>
+            </marker>
+          </defs>
+          <g font-family="ui-monospace, Menlo, monospace" font-size="11.5">
+            <!-- entrada gates -->
+            <g>
+              <rect x="10"  y="20" width="116" height="44" rx="9" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.5"/>
+              <text x="68"  y="46" text-anchor="middle" fill="#141413">Login</text>
+              <rect x="146" y="20" width="116" height="44" rx="9" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.5"/>
+              <text x="204" y="46" text-anchor="middle" fill="#141413">Menu</text>
+              <rect x="282" y="20" width="116" height="44" rx="9" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.5"/>
+              <text x="340" y="46" text-anchor="middle" fill="#141413">UF</text>
+              <rect x="418" y="20" width="126" height="44" rx="9" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.5"/>
+              <text x="481" y="46" text-anchor="middle" fill="#141413">Contrato</text>
+              <rect x="564" y="20" width="126" height="44" rx="9" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.5"/>
+              <text x="627" y="40" text-anchor="middle" fill="#141413">Versão</text>
+              <text x="627" y="55" text-anchor="middle" fill="#87867F" font-size="9.5">Passo 3</text>
+            </g>
+            <!-- shell -->
+            <g>
+              <rect x="282" y="128" width="126" height="48" rx="9" fill="#141413"/>
+              <text x="345" y="151" text-anchor="middle" fill="#FAF9F5" font-weight="600">Upload</text>
+              <text x="345" y="166" text-anchor="middle" fill="#C9B98A" font-size="9.5">.xlsx</text>
+              <rect x="448" y="128" width="150" height="48" rx="9" fill="#FFFFFF" stroke="#D97757" stroke-width="1.5"/>
+              <text x="523" y="151" text-anchor="middle" fill="#141413" font-weight="600">Painel</text>
+              <text x="523" y="166" text-anchor="middle" fill="#87867F" font-size="9.5">inconsistências</text>
+              <rect x="638" y="128" width="150" height="48" rx="9" fill="#FFFFFF" stroke="#788C5D" stroke-width="1.5"/>
+              <text x="713" y="151" text-anchor="middle" fill="#141413" font-weight="600">Sucesso</text>
+              <text x="713" y="166" text-anchor="middle" fill="#87867F" font-size="9.5">validada + enviada</text>
+            </g>
+          </g>
+          <g stroke="#87867F" stroke-width="1.5" fill="none">
+            <path d="M126 42 L146 42" marker-end="url(#arrow)"/>
+            <path d="M262 42 L282 42" marker-end="url(#arrow)"/>
+            <path d="M398 42 L418 42" marker-end="url(#arrow)"/>
+            <path d="M544 42 L564 42" marker-end="url(#arrow)"/>
+            <path d="M627 64 L627 96 L345 96 L345 128" marker-end="url(#arrow)"/>
+            <path d="M408 152 L448 152" marker-end="url(#arrow)"/>
+            <path d="M598 152 L638 152" marker-end="url(#arrow)"/>
+          </g>
+          <g stroke="#D97757" stroke-width="1.5" fill="none" stroke-dasharray="5 4">
+            <path d="M523 176 L523 190 L345 190 L345 176" marker-end="url(#arrowClay)"/>
+          </g>
+          <g font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#D97757">
+            <text x="360" y="187">corrigir e reenviar</text>
+          </g>
+        </svg>
+        <p class="caption">Linha cinza = avanço. Tracejado clay = laço "corrigir e
+          reenviar". No backend real: <strong>painel</strong> quando há erros;
+          <strong>sucesso</strong> (0 erros) dispara o e-mail automaticamente.</p>
+      </div>
+    </section>
+
+    <!-- 03 Decisões -->
+    <section>
+      <div class="sec-head"><span class="num">03</span><h2>Decisões registradas</h2></div>
+      <p class="sec-intro">Da fase de mock e das definições com o usuário. Mantidas como
+        princípios ao evoluir para o backend.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="meta">Seleção</div>
+          <h3>Contrato como chave principal</h3>
+          <p>Fluxo em 3 passos: UF → Contrato (vigente ≠ "Encerrado") → conferência da
+            versão. UF é o agrupamento; o contrato identifica o registro. 41 contratos
+            selecionáveis em 14 UFs; <code>tipo_contrato ∈ {LPT, MLA}</code>.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Granularidade</div>
+          <h3>Envio por contrato / UF</h3>
+          <p>Upload de <strong>um arquivo .xlsx</strong> por contrato. Avisos
+            <strong>não bloqueiam</strong> o salvamento — só erros bloqueiam. Preview das
+            primeiras linhas ao lado do painel.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Crítica</div>
+          <h3>Painel de inconsistências</h3>
+          <p>Crítica estruturada (não chat), agrupada por tipo de regra, expansível, com
+            contagem e severidade. Relatório <code>.csv</code> baixável de verdade no
+            navegador.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Identidade visual</div>
+          <h3>Design system reutilizado</h3>
+          <p>Azul/navy, ritmo de 8pt, componentes de <code>styles.css</code>.
+            <strong>O visual aprovado não muda</strong> ao ligar o backend — só o
+            comportamento.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 Fases -->
+    <section>
+      <div class="sec-head"><span class="num">04</span><h2>Fases de implementação — sub-fases testáveis</h2></div>
+      <p class="sec-intro">O mock (F1–F6) está concluído. A fase de backend é aberta em
+        <strong>sub-fases pequenas, cada uma testável por humano isoladamente</strong>
+        (governança do projeto). Ordem pensada para o front continuar intacto até o fim.</p>
+
+      <div class="done-strip">
+        <span class="ck">✓ Mock F1–F6 concluído e verificado</span>
+        <span>— scaffold, login, seleção UF/contrato, upload + barra de 3 fases, painel de
+        inconsistências roteirado, laço corrigir/reenviar e tela de sucesso. Build OK.</span>
+      </div>
+
+      <div class="blocks">
+        <div class="block">
+          <h3>Bloco A · Backend — fundação</h3>
+          <div class="sp"><span class="id">A1</span><span class="desc">Scaffold FastAPI + <code>requirements</code> + <code>.env.example</code> + <code>/api/health</code> mínimo.<span class="test">uvicorn sobe; health → 200.</span></span></div>
+          <div class="sp"><span class="id">A2</span><span class="desc">Carga de <code>entrada/</code> em memória (índices ODI+UC e ODI→UF/município) + recarga por mtime.<span class="test">alterar CSV reflete sem reiniciar.</span></span></div>
+          <div class="sp"><span class="id">A3</span><span class="desc">Integridade vs <code>base_contratos.json</code>; classifica contratos com/sem referência.<span class="test">health lista os 22 sem UC (19 MLA + 3 LPT).</span></span></div>
+          <div class="sp"><span class="id">A4</span><span class="desc">Mapas de acesso (domínio→grupo, grupo→siglas, ENBPAR curinga) via config.<span class="test">equatorial→18 contratos; enbpar→41.</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco B · Backend — autenticação (login/senha)</h3>
+          <div class="sp"><span class="id">B1</span><span class="desc">Store <code>usuarios.json</code> + hash pbkdf2 + CLI <code>admin_usuarios</code> (cria usuário, senha temporária, <strong>envia por e-mail ao usuário</strong>).<span class="test">CLI cria usuário; hash ok/errado; e-mail de credenciais (mock).</span></span></div>
+          <div class="sp"><span class="id">B2</span><span class="desc"><code>POST /api/login</code>: valida hash; emite token ou sinaliza troca de senha.<span class="test">senha certa→token; errada→401; flag→precisaTrocarSenha.</span></span></div>
+          <div class="sp"><span class="id">B3</span><span class="desc"><code>POST /api/trocar-senha</code>: grava novo hash, zera flag, emite token.<span class="test">1º acesso troca e depois loga normal.</span></span></div>
+          <div class="sp"><span class="id">B4</span><span class="desc">Guard de token + <code>POST /api/esqueci-senha</code> self-service (nova senha por e-mail, genérico, rate-limit).<span class="test">rota sem token→401; reset envia e-mail (mock).</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco C · Backend — contexto de login</h3>
+          <div class="sp"><span class="id">C1</span><span class="desc"><code>GET /api/contexto</code> (token): e-mail→grupo→UFs/contratos filtrados.<span class="test">equatorial → só EQUATORIAL; enbpar → 41; desconhecido → vazio.</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco D · Backend — parsing + validação</h3>
+          <div class="sp"><span class="id">D1</span><span class="desc">Parser do <code>.xlsx</code> (aba Preenchimento, cabeçalho linha 2, leitura defensiva; linha de dados = ODI/UC).<span class="test">fixture → linhas; sem aba/não-.xlsx → 400; 0 linhas → erro.</span></span></div>
+          <div class="sp"><span class="id">D2</span><span class="desc">Lê domínios válidos da aba <code>Dominios</code> do modelo.<span class="test">retorna as listas de domínio.</span></span></div>
+          <div class="sp"><span class="id">D3</span><span class="desc">Regras de formato/domínio (campos vazios=erro; coordenadas = <strong>aviso</strong>).<span class="test">fixture por regra acende o grupo certo.</span></span></div>
+          <div class="sp"><span class="id">D4</span><span class="desc">Cruzamento com <code>entrada/</code> (ODI+UC inexistente/UF-município divergente = erro; UCs faltando = aviso).<span class="test">fixtures vs referência mock.</span></span></div>
+          <div class="sp"><span class="id">D5</span><span class="desc">Monta resposta no formato do front (grupos + preview + totais + ok).<span class="test">limpa → ok; suja → grupos corretos.</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco E · Backend — envio + endpoints</h3>
+          <div class="sp"><span class="id">E1</span><span class="desc">E-mail (smtplib, dry-run); anexo <code>Anexo V preenchido - {contrato}.xlsx</code> byte a byte; destinatários únicos; alerta crítico + reset.<span class="test">SMTP mock confirma nome/anexo/destinos.</span></span></div>
+          <div class="sp"><span class="id">E2</span><span class="desc"><code>POST /api/validar</code> (token) orquestra: grupo (403), referência (409+alerta), erros→painel, ok→envia.<span class="test">e2e TestClient.</span></span></div>
+          <div class="sp"><span class="id">E3</span><span class="desc"><code>GET /api/modelo</code> (token) baixa o modelo oficial.<span class="test">200 + Content-Disposition + bytes.</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco F · Front — religação (visual inalterado; +1 tela de troca de senha)</h3>
+          <div class="sp"><span class="id">F1</span><span class="desc">Camada de API (<code>src/lib/api.js</code>, token no header) + <code>VITE_API_BASE</code>.<span class="test">dev aponta p/ backend local.</span></span></div>
+          <div class="sp"><span class="id">F2</span><span class="desc">Login real (<code>/api/login</code>) + nova tela <code>TrocarSenha</code> (reusa design system) no 1º acesso; "Esqueci minha senha".<span class="test">1º acesso força troca; depois entra direto.</span></span></div>
+          <div class="sp"><span class="id">F3</span><span class="desc">Seletores usam listas de <code>/api/contexto</code>.<span class="test">equatorial só EQUATORIAL; enbpar tudo. Visual idêntico.</span></span></div>
+          <div class="sp"><span class="id">F4</span><span class="desc">Upload real via <code>FormData</code> (arquivo+contrato+uf, token); mantém barra 3 fases.<span class="test">upload real → resposta real.</span></span></div>
+          <div class="sp"><span class="id">F5</span><span class="desc">App roteia painel/sucesso (remove <code>attempt</code>); painel por props; relatório real; "Baixar modelo" → <code>/api/modelo</code>.<span class="test">suja→painel; limpa→sucesso+e-mail.</span></span></div>
+        </div>
+
+        <div class="block">
+          <h3>Bloco G · Integração e deploy</h3>
+          <div class="sp"><span class="id">G1</span><span class="desc">E2E completo local: login→(troca)→contexto→upload→painel→corrige→sucesso→e-mail (dry-run).<span class="test">roteiro ponta a ponta no navegador.</span></span></div>
+          <div class="sp"><span class="id">G2</span><span class="desc">Deploy: uvicorn (systemd) + Nginx <code>/api</code> + <code>client_max_body_size</code> + <code>.env</code> + <code>usuarios.json</code>.<span class="test">build + smoke no VPS.</span></span></div>
+          <div class="sp"><span class="id">—</span><span class="desc">Polimento futuro: favicon, estados vazios, ajustes de copy pós-feedback.<span class="test">se necessário.</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 Painel -->
+    <section>
+      <div class="sec-head"><span class="num">05</span><h2>Painel de inconsistências — coração da demo</h2></div>
+      <p class="sec-intro">Cabeçalho-resumo (arquivo, contrato/UF, UCs lidas, ✗ erros ·
+        ⚠ avisos) + grupos por regra expansíveis. Erros bloqueiam o salvamento; avisos não.
+        As regras espelham os domínios reais do Anexo V. <strong>Células obrigatórias vazias
+        em linhas preenchidas (com ODI/UC) são erro</strong>; planilha sem nenhuma linha de
+        dados também é erro (não envia e-mail vazio).</p>
+      <div class="rules">
+        <div class="r"><div class="sev-cell"><span class="sev err">Erro</span></div><div class="txt-cell"><div class="rt">Campos obrigatórios vazios</div><div class="rd">Colunas obrigatórias na aba Preenchimento (ODI, UC, IBGE, Município, UF, Lat/Long, Data de Energização)</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev err">Erro</span></div><div class="txt-cell"><div class="rt">Valor fora do domínio</div><div class="rd">Valor não consta na lista de domínios válidos (aba Dominios)</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev err">Erro</span></div><div class="txt-cell"><div class="rt">Chave ODI + UC duplicada</div><div class="rd">Mesma combinação Número ODI + Número da UC em mais de uma linha</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev err">Erro</span></div><div class="txt-cell"><div class="rt">ODI + UC não consta na referência</div><div class="rd">A combinação não existe em entrada/ para o contrato</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev err">Erro</span></div><div class="txt-cell"><div class="rt">UF / município divergente</div><div class="rd">Não bate com a referência de entrada/ para aquele ODI</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev warn">Aviso</span></div><div class="txt-cell"><div class="rt">Coordenadas inválidas</div><div class="rd">Latitude/Longitude fora da faixa geográfica ou não numéricas</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev warn">Aviso</span></div><div class="txt-cell"><div class="rt">"0 - Não é prioridade" + outra tipologia</div><div class="rd">Marcar "0" só quando nenhuma outra tipologia se aplica</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev warn">Aviso</span></div><div class="txt-cell"><div class="rt">Data de energização fora de 2026</div><div class="rd">A planilha deve conter apenas UCs ligadas em 2026</div></div></div>
+        <div class="r"><div class="sev-cell"><span class="sev warn">Aviso</span></div><div class="txt-cell"><div class="rt">Valor de tipologia ≠ Sim/Não</div><div class="rd">Colunas de tipologia aceitam apenas "Sim" ou "Não"</div></div></div>
+      </div>
+    </section>
+
+    <!-- 06 Backend -->
+    <section>
+      <div class="sec-head"><span class="num">06</span><h2>Backend real — validação + envio (próxima fase)</h2></div>
+      <p class="sec-intro">FastAPI atrás do mesmo Nginx em <code>/api</code>. Valida a
+        planilha de verdade contra <code>entrada/</code> (atualizado diariamente) e, se
+        passar, envia o .xlsx por e-mail. Detalhe completo em
+        <code>planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md</code>.</p>
+      <div class="cards">
+        <div class="card lead">
+          <div class="meta">Núcleo</div>
+          <h3>O que "validar" significa</h3>
+          <p>(1) cruzar cada <code>ODI+UC</code> com <code>entrada/</code>; (2) conferir
+            UF/município contra a referência; (3) regras internas de formato/domínio.
+            UC faltando = aviso, não bloqueio.</p>
+        </div>
+        <div class="card lead">
+          <div class="meta">Saída</div>
+          <h3>Uma chamada: valida e envia</h3>
+          <p><code>POST /api/validar</code>. Se 0 erros, o backend envia o e-mail
+            <strong>automaticamente</strong> com o .xlsx <strong>como veio</strong> (anexo
+            <code>Anexo V preenchido - {contrato}.xlsx</code>), para uma lista única
+            configurável. SMTP via <code>.env</code>.</p>
+        </div>
+        <div class="card lead">
+          <div class="meta">Acesso (2 camadas)</div>
+          <h3>Filtro por domínio do e-mail</h3>
+          <p>Login define o grupo pelo domínio do e-mail (camada 1) → contratos/UFs
+            visíveis (camada 2). <strong>EQUATORIAL</strong> só vê os seus;
+            <strong>ENBPAR</strong> vê todos.</p>
+        </div>
+        <div class="card lead">
+          <div class="meta">Autenticação</div>
+          <h3>Login + senha reais</h3>
+          <p>Admin cria o usuário (CLI) e o sistema <strong>envia a senha temporária por
+            e-mail</strong>; troca obrigatória no 1º acesso. "Esqueci minha senha" é
+            self-service (manda nova senha por e-mail). Usuários em <code>usuarios.json</code>
+            com hash; token de sessão. Exige <strong>1 tela nova</strong> (trocar senha).</p>
+        </div>
+        <div class="card">
+          <div class="meta">Autoridade dos dados</div>
+          <h3>base_contratos.json valida entrada/</h3>
+          <p><code>base_contratos.json</code> é a autoridade sobre contratos
+            selecionáveis. Os CSVs de <code>entrada/</code> são validados contra ele; o gap
+            de cobertura fica observável em <code>/api/health</code> e nos logs.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Anomalia</div>
+          <h3>Alerta crítico ao admin</h3>
+          <p>No fluxo real, todo contrato tem ODI+UC. Se chegar um sem referência, dispara
+            <strong>e-mail de erro crítico</strong> para investigação — não é erro do
+            usuário.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Front</div>
+          <h3>Religação sem mudança visual</h3>
+          <p>Upload real via <code>FormData</code>; painel recebe dados reais por props;
+            "Baixar modelo" baixa de <code>/api/modelo</code>. JSX/classes idênticos.</p>
+        </div>
+        <div class="card">
+          <div class="meta">Qualidade</div>
+          <h3>Testes pytest obrigatórios</h3>
+          <p>Regras de validação (happy + edge), parsing de .xlsx com fixtures, e-mail com
+            SMTP mockado e e2e via <code>TestClient</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 Riscos / abertas -->
+    <section>
+      <div class="sec-head"><span class="num">07</span><h2>Riscos e questões abertas</h2></div>
+      <div class="open-q">
+        <div class="q">
+          <div class="qt">Gap de dados em entrada/ — os contratos do Mais Luz para a Amazônia</div>
+          <div class="qd">Os selecionáveis sem dados de UC hoje são os <strong>19 contratos
+            MLA (Mais Luz para a Amazônia)</strong>, listados em
+            <code>entrada/mla/consolidado.csv</code>, <strong>+ 3 contratos LPT</strong>
+            (<code>ECO 034/2026</code>, <code>039/2025</code>, <code>042/2025</code>) —
+            22 de 41. Com <code>base_contratos.json</code> como autoridade, o gap fica
+            observável (<code>/api/health</code>); pré-condição de produção é gerar o
+            <code>consolidado_ucs.csv</code> do MLA e cobrir os demais.</div>
+        </div>
+        <div class="q">
+          <div class="qt">Sem planilha preenchida real de exemplo</div>
+          <div class="qd">Não há arquivo real para calibrar formato de data e coordenadas.
+            O parser será defensivo (data DD/MM/AAAA e serial do Excel; decimal com "," ou
+            "."). Revalidar quando surgir um arquivo real.</div>
+        </div>
+        <div class="q">
+          <div class="qt">Mapa de acesso — domínios de e-mail</div>
+          <div class="qd">O mapa <code>sigla→grupo</code> está confirmado (AMAZONAS e
+            RORAIMA → ÂMBAR). Falta o mapa <code>domínio_email → grupo</code> (domínios
+            reais de cada distribuidora/ENBPar) — preencher na config antes do deploy.</div>
+        </div>
+        <div class="q">
+          <div class="qt">Tamanho do upload e performance da recarga</div>
+          <div class="qd">Até 50.000 linhas por planilha; ~176k linhas de referência em
+            memória. Validar limites de Nginx/uvicorn e o custo da recarga diária.</div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footnote">Documento gerado a partir de <code>planning/PLAN.md</code> e da
+      spec de backend, no estilo de <code>minhas_notas/html-effectiveness</code>. Mock:
+      Classificação de Beneficiários do Programa · Programa Luz para Todos · MME · ENBPar.</p>
+
+  </div>
+</body>
+</html>
