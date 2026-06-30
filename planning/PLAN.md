@@ -187,7 +187,12 @@ salvamento; avisos não.
 
 ---
 
-## Fases (entrega em partes — registrar progresso aqui)
+## Fases — Mock estático (F1–F6) — **CONCLUÍDO**
+
+> Esta é a **primeira fase do projeto** (mock de design, validação roteirada),
+> aprovada pelos gestores e verificada. A fase atual de desenvolvimento é o
+> **backend real** — ver "Fases de implementação do backend (Blocos A–G)" no fim
+> deste documento, onde o progresso passa a ser registrado.
 
 Cada fase é testável por humano isoladamente.
 
@@ -305,3 +310,124 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 - Testes pytest obrigatórios (auth, regras, parsing, acesso, e-mail mockado, e2e).
 - **Plano aberto em sub-fases testáveis** (Blocos A–G; A fundação, B auth, C contexto,
   D validação, E envio, F front, G deploy) na §17 da spec.
+
+---
+
+## Fases de implementação do backend (Blocos A–G) — **registrar progresso aqui**
+
+> Espelha a §17 da spec (`planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md`)
+> e o §04 do render `PLAN.html`. Cada sub-fase é **pequena e testável por humano
+> isoladamente**. Marcar `[x]` ao concluir, anotando o resultado do teste. Marcador de
+> teste em *itálico*. Estado inicial: tudo pendente (`backend/` ainda não existe).
+
+### Bloco A — Backend: fundação
+- [x] **A1 · Scaffold FastAPI.** App, `requirements.txt`, `.env.example`, CORS p/ dev,
+  `GET /api/health` mínimo. *Teste: `uvicorn` sobe; `GET /api/health` → 200.*
+  ✓ **(2026-06-30)** Criados `backend/{__init__.py, app.py, requirements.txt, .env.example}`
+  + `backend/tests/{__init__.py, conftest.py, test_api.py}` (`config.py` fica para A2);
+  `.venv` (uv, CPython 3.12) com deps instaladas;
+  `.gitignore` ganhou seção Python. `pytest` → **1 passed** (health 200 / `{"status":"ok"}`);
+  uvicorn real confirmado (`127.0.0.1:8000/api/health` → 200). Obs.: starlette 1.3 exige
+  `httpx2` (não `httpx`) no TestClient.
+- [x] **A2 · Carga da referência.** `referencia.py` lê `entrada/**/*.csv` em memória,
+  monta `chaves_uc` e `odi_ref`, recarrega por mtime. *Teste: health expõe contagem;
+  alterar um CSV reflete sem reiniciar.*
+  ✓ **(2026-06-30)** `backend/referencia.py` (classe `Referencia` + singleton
+  `obter_referencia`): índice por arquivo decidido pelas colunas do cabeçalho (tem `uc`
+  → `chaves_uc`; tem `uf`+`municipio` → `odi_ref`), chave de contrato normalizada
+  (trim+colapso+upper), recarga por comparação de mtimes. Health passou a expor `resumo()`.
+  `pytest` → **6 passed** (4 unit em `test_referencia.py` + health). Servidor real:
+  `contratosComChavesUc=19, contratosComOdiRef=45, totalChavesUc=145674, totalOdiRef=30183`.
+  (Os 45 contratos em `odi_ref` vs 41 selecionáveis e os só-19 com UC serão reconciliados
+  na A3.)
+- [x] **A3 · Integridade vs `base_contratos.json`.** Classifica contratos com/sem
+  referência; expõe no health. *Teste: health lista os 22 sem UC (19 MLA + 3 LPT).*
+  ✓ **(2026-06-30)** `referencia.py` ganhou `carregar_base_contratos` (lê a raiz
+  `base_contratos.json`; selecionável = `vigente ≠ "Encerrado"`), `Referencia.integridade`
+  (com referência = tem `chaves_uc`; sem = selecionável sem `chaves_uc`; órfão = em
+  `entrada/` fora da autoridade) e o singleton `obter_base_contratos`. Health passou a
+  expor `integridade`. `pytest` → **10 passed** (3 unit novos + e2e). Servidor real:
+  **comReferencia=19, semReferencia=22, orfaos=0** (os 22 incluem os 3 LPT
+  `ECO 034/2026, 039/2025, 042/2025`).
+- [x] **A4 · Acesso (mapas).** `acesso.py`: `domínio→grupo`, `grupo→siglas`, `ENBPAR`
+  curinga, via config. *Teste unit: e-mail equatorial→EQUATORIAL→18 contratos; enbpar→41.*
+  ✓ **(2026-06-30)** `backend/acesso.py`: `MAPA_GRUPO_SIGLAS` (invertido da tabela §5.1:
+  NEOENERGISA→COELBA; ÂMBAR→{ÂMBAR,AMAZONAS,RORAIMA}; ENBPAR=curinga/`None`),
+  `MAPA_DOMINIO_GRUPO` (**provisório** — domínios reais ainda são pendência, risco #3),
+  e funções `grupo_do_email`/`siglas_do_grupo`/`contratos_visiveis`. `carregar_base_contratos`
+  passou a expor `contratos` (selecionáveis com `sigla`). Sigla "ÂMBAR" = U+00C2 (literal
+  casou). `pytest` → **16 passed** (6 de acesso, contagens reais: EQUATORIAL=18, ENBPAR=41,
+  ÂMBAR=7). Sem rota nova (consumido pelo `/api/contexto` no Bloco C). **Bloco A (fundação)
+  concluído.**
+
+### Bloco B — Backend: autenticação (login/senha)
+- [ ] **B1 · Store + hash + CLI + e-mail de credenciais.** `auth.py` (usuarios.json,
+  pbkdf2 + salt), `email_envio.py` (senha temporária) e `admin_usuarios.py` (cria/desativa
+  usuário, gera senha temporária e **envia por e-mail ao usuário**). *Teste: CLI cria
+  usuário; hash verifica certo/errado; `precisa_trocar_senha=true`; e-mail de credenciais
+  disparado (mock).*
+- [ ] **B2 · `POST /api/login`.** Valida hash; emite token ou sinaliza troca. *Teste:
+  senha certa→token; errada→401; flag ligada→`precisaTrocarSenha`.*
+- [ ] **B3 · `POST /api/trocar-senha`.** Grava novo hash, zera a flag, emite token.
+  *Teste: 1º acesso troca e depois loga normal.*
+- [ ] **B4 · Guard de rota + `POST /api/esqueci-senha` (self-service).** Middleware de
+  token (401 sem token); esqueci-senha gera nova temporária e **envia ao usuário**;
+  resposta genérica + rate-limit. *Teste: rota protegida sem token→401; reset envia
+  e-mail (mock).*
+
+### Bloco C — Backend: contexto de login
+- [ ] **C1 · `GET /api/contexto` (protegida).** E-mail do token → grupo → UFs/contratos
+  filtrados. *Teste: equatorial → só EQUATORIAL; enbpar → 41; domínio desconhecido → vazio.*
+
+### Bloco D — Backend: parsing + validação
+- [ ] **D1 · Parser do `.xlsx`.** `planilha.py`: aba `Preenchimento`, cabeçalho linha 2,
+  mapeamento por nome, leitura defensiva de data/coordenada, definição de linha de dados
+  (ODI/UC). *Teste: fixture → linhas; sem aba/não-.xlsx → 400; 0 linhas → guarda de erro.*
+- [ ] **D2 · Domínios do modelo.** Lê listas válidas da aba `Dominios`. *Teste: retorna
+  Tipo de Atendimento/UF/Tipo de Comunidade/Enquadramento/Sim-Não.*
+- [ ] **D3 · Regras de formato/domínio.** Campos vazios=erro (em linha com ODI/UC),
+  domínio=erro, duplicado ODI+UC=erro; coordenadas=**aviso**, data fora 2026=aviso,
+  tipologia≠Sim/Não=aviso, "0"+outra=aviso. *Teste: fixture por regra acende o grupo
+  certo c/ severidade.*
+- [ ] **D4 · Regras de cruzamento com `entrada/`.** ODI+UC inexistente=erro, UF/município
+  divergente=erro, UCs faltando=aviso. *Teste: fixtures vs referência mock.*
+- [ ] **D5 · Montagem da resposta.** `grupos` + `previewRows` + totais + `ok`. *Teste:
+  planilha limpa → ok=true, 0 erros; suja → grupos/totais corretos.*
+
+### Bloco E — Backend: envio + endpoints finais
+- [ ] **E1 · E-mail (`email_envio.py`).** smtplib via `.env`, dry-run, anexo
+  `Anexo V preenchido - {contrato}.xlsx` (byte a byte), destinatários únicos; alerta
+  crítico; credenciais/senha temporária ao usuário. *Teste: SMTP mock confirma nome do
+  anexo, anexo intacto, destinos.*
+- [ ] **E1-smoke · Smoke manual com SMTP real.** Configurar `.env` real e disparar para
+  uma **caixa de teste** os 3 tipos: planilha validada (anexo chega), alerta crítico,
+  credenciais. *Teste manual: e-mails reais chegam corretos (ver `TESTES.md`).*
+- [ ] **E2 · `POST /api/validar` (orquestra, protegida).** Token→email; checa grupo (403),
+  referência (409+alerta), erros→painel, ok→envia. *Teste e2e (TestClient, SMTP mock).*
+- [ ] **E3 · `GET /api/modelo` (protegida).** Baixa o modelo oficial. *Teste: 200 +
+  Content-Disposition + bytes do arquivo.*
+
+### Bloco F — Front: religação (visual inalterado; +1 tela de troca de senha)
+- [ ] **F1 · Camada de API.** `src/lib/api.js` (token no header) + `VITE_API_BASE`.
+  *Teste: dev aponta p/ backend local.*
+- [ ] **F2 · Login real + troca de senha.** `AuthScreen` → `/api/login`; nova `TrocarSenha`
+  (reusa design system) no 1º acesso; "Esqueci minha senha" → `/api/esqueci-senha`.
+  *Teste: 1º acesso força troca; depois entra direto.*
+- [ ] **F3 · Contexto nos seletores.** `UfSelector`/`ContratoSelector` usam listas de
+  `/api/contexto`. *Teste: equatorial só EQUATORIAL; enbpar tudo. Visual idêntico.*
+- [ ] **F4 · Upload real.** `UploadAnexoV` envia `FormData` (arquivo+contrato+uf, token);
+  mantém barra 3 fases. *Teste: upload real → resposta real.*
+- [ ] **F5 · Roteamento real + painel por props.** `App` roteia painel/sucesso, remove
+  `attempt`; `PainelInconsistencias` por props; `relatorioCsv` usa grupos reais; "Baixar
+  modelo" → `/api/modelo`. *Teste: suja→painel; limpa→sucesso+e-mail.*
+
+### Bloco G — Integração e deploy
+- [ ] **G1 · E2E completo (local).** login→(troca)→contexto→upload→painel→corrige→sucesso→
+  e-mail (dry-run). *Teste: roteiro ponta a ponta no navegador.*
+- [ ] **G2 · Deploy + smoke real.** `DEPLOY.md`: uvicorn (systemd) + Nginx `/api` +
+  `client_max_body_size` + `.env` + onde fica `usuarios.json`. *Teste: build + smoke no
+  VPS, **com 1 envio real** (planilha validada + credenciais) para destinatário de
+  homologação.*
+
+> Ordem de implementação: **começa pelo Bloco A** (A1). Cada sub-fase concluída é
+> marcada `[x]` aqui com o resultado do teste.

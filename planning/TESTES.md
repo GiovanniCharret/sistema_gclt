@@ -11,13 +11,21 @@ A–G (§17). Toda sub-fase é **testável isoladamente**; e2e cobre os caminhos
 
 ## Como rodar
 
+O `.venv` fica na **raiz** do projeto (criado com `uv` — ver `PROJECT_BUILDING.md`),
+irmão de `backend/` e `modelo/`. Rode tudo **a partir da raiz**:
+
 ```powershell
-cd backend
-python -m venv .venv ; .venv\Scripts\activate     # Python 3.12/3.13
-pip install -r requirements.txt
-pytest -v                          # toda a suíte
-pytest tests/test_validacao.py -v  # só um módulo
-pytest -k "coordenada" -v          # só casos que batem no padrão
+uv venv                                    # cria .venv (Python 3.12/3.13) — só na 1ª vez
+uv pip install -r backend/requirements.txt # instala/atualiza as deps
+.venv\Scripts\activate                     # ativa o venv na sessão (opcional)
+
+# Com o venv ativado, basta `pytest`; sem ativar, use o python do venv explicitamente:
+pytest backend/tests/ -v                                  # toda a suíte
+pytest backend/tests/test_validacao.py -v                 # só um módulo
+pytest backend/tests/ -k "coordenada" -v                  # só casos que batem no padrão
+
+# Sem ativar (equivalente):
+.venv\Scripts\python.exe -m pytest backend/tests/ -v
 ```
 
 Pré-requisitos: `requirements.txt` instalado; o modelo
@@ -175,8 +183,9 @@ momentos, com uma "escada" segura: **dry-run → caixa de teste → destinatári
 
 ### Como
 ```powershell
-cd backend ; .venv\Scripts\activate
-# .env com SMTP real (host/porta/usuário/senha), SMTP_DRYRUN=0,
+# Da raiz do projeto (venv na raiz):
+.venv\Scripts\activate
+# backend/.env com SMTP real (host/porta/usuário/senha), SMTP_DRYRUN=0,
 # DESTINATARIOS e ALERTA_EMAIL = seu e-mail de teste
 ```
 

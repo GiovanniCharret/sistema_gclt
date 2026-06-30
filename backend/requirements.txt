@@ -1,0 +1,15 @@
+# Dependências do backend FastAPI (validação + envio do Anexo V).
+# Instalar com:  uv pip install -r backend/requirements.txt
+
+# --- Produção (runtime da API) ---
+fastapi                 # framework da API (rotas, validação de request, OpenAPI)
+uvicorn[standard]       # servidor ASGI que roda o app FastAPI
+openpyxl                # leitura do .xlsx (aba Preenchimento / Dominios) — Blocos D
+python-multipart        # parsing de multipart/form-data (upload do arquivo) — Bloco E
+pydantic-settings       # leitura tipada do .env (config.py) — Blocos A+
+python-dotenv           # carrega o .env em desenvolvimento
+PyJWT                   # token de sessão assinado (auth) — Bloco B
+
+# --- Testes (pytest + cliente HTTP do FastAPI TestClient) ---
+pytest                  # framework de testes
+httpx2                  # backend HTTP do starlette.testclient.TestClient (starlette 1.3+ exige httpx2, não httpx)
