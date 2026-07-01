@@ -33,11 +33,28 @@ faked with hardcoded data.
 > `installMockApi.js` fetch interceptor, they belong to that dead project — they do
 > **not** describe this one.
 
-## Backend (approved 2026-06-27 — not yet implemented)
+## Backend (approved 2026-06-27 — Bloco A done; B–G pending)
 
 The mock is approved to evolve into a real backend. **Read the spec first:**
 `planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md` (and `planning/PLAN.md`).
-Summary of what's coming (don't assume it exists until built):
+
+**What exists now (as of 2026-06-30 — Bloco A "fundação" complete, 16 pytest tests green):**
+- `backend/app.py` — FastAPI app + dev CORS + `GET /api/health` (exposes referência
+  counts + integridade).
+- `backend/referencia.py` — loads `entrada/**/*.csv` into memory (`chaves_uc`, `odi_ref`),
+  reloads on mtime change; `carregar_base_contratos` reads the authority `base_contratos.json`
+  (root); `integridade()` classifies contracts com/sem referência + órfãos. Singletons
+  `obter_referencia` / `obter_base_contratos`.
+- `backend/acesso.py` — two-layer access filter maps (`grupo_do_email`, `siglas_do_grupo`,
+  `contratos_visiveis`); ÂMBAR sigla is U+00C2; **domain→grupo map is provisional** (real
+  email domains still pending, spec risk #3).
+- `backend/tests/` — pytest (`test_api.py`, `test_referencia.py`, `test_acesso.py`).
+- `.venv` at repo **root** (uv, CPython 3.12); deps in `backend/requirements.txt`
+  (note: TestClient needs **`httpx2`**, not `httpx`, on starlette 1.3+).
+
+Still **not built** (don't assume it exists): auth (B), `/api/contexto` (C), `.xlsx`
+parsing + validation rules (D), email send + `/api/validar` + `/api/modelo` (E), front
+rewiring + TrocarSenha screen (F), deploy (G). Summary of what those will do:
 
 - **`backend/`** — FastAPI + uvicorn behind the same Nginx at **`/api`**. Validates the
   uploaded Anexo V **for real** against the CSVs in **`entrada/`**, then **emails** the
@@ -63,7 +80,7 @@ Summary of what's coming (don't assume it exists until built):
 
 ## Commands
 
-All **front** commands run from `modelo/`. Requires **Node.js 20.19+ or 22.x** (Vite 7).
+**Front** commands run from `modelo/`. Requires **Node.js 20.19+ or 22.x** (Vite 7).
 
 ```bash
 npm install
@@ -72,8 +89,21 @@ npm run build    # produces modelo/dist/ (static SPA; this IS the deployable art
 npm run preview
 ```
 
-There are **no tests, linter, or type-checker**. Don't claim test/lint results.
-`DEPLOY.md` (repo root) covers hosting `modelo/dist/` on an Nginx VPS.
+The **front** has **no tests, linter, or type-checker** — don't claim front test/lint
+results. `DEPLOY.md` (repo root) covers hosting `modelo/dist/` on an Nginx VPS.
+
+**Backend** commands run from the **repo root** (`.venv` lives at root, created with `uv`):
+
+```bash
+uv venv                                    # create .venv (CPython 3.12) — first time only
+uv pip install -r backend/requirements.txt
+.venv\Scripts\python.exe -m pytest backend/tests/ -v          # run the suite (16 green)
+.venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000   # run the API
+```
+
+The **backend HAS pytest tests** (`backend/tests/`, see `planning/TESTES.md`) — run them
+and report real results. On Windows, kill stray `python` before a uvicorn smoke test (an
+orphan holding the port silently serves stale code); prefer a fresh port.
 
 ## Architecture
 
@@ -156,10 +186,15 @@ material), **`minhas_notas/`**, **`planning/`**, **`bug_fix/`**, plus `node_modu
 `dist/`, this `CLAUDE.md`, and `plano_classificacao_beneficiarios.html`. The app source
 is entirely under `modelo/src/`.
 
-**`entrada/`** is an untracked working-data folder (`entrada/lpt/`, `entrada/mla/`
-hold `consolidado*.csv` extracts). It is **not** gitignored but is **not** app
-code — treat it as scratch/input data, don't import from it into `modelo/src/`, and
-don't commit it unless asked.
+**`entrada/`** holds the backend's reference data (`entrada/lpt/`, `entrada/mla/` with
+`consolidado*.csv`; BOM UTF-8, `;`-separated). Per the backend spec (§12) it **is now
+committed** (versioned; an external process refreshes it daily). It is **not** front app
+code — don't import it into `modelo/src/`. The backend reads it via `backend/referencia.py`.
+
+Backend **secrets stay out of git** (already in `.gitignore`): `.env` / `backend/.env`
+and **`backend/usuarios.json`** (password hashes). `.venv/`, `__pycache__/`, `.pytest_cache/`
+are gitignored too. The committable backend source is under **`backend/`** (see the
+"Backend" section above).
 
 ## Coding Style
 

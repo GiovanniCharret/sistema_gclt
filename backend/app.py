@@ -16,13 +16,23 @@ Lógica (Entrada → Saída):
   Saída: o objeto `app` pronto para servir requisições.
 """
 
-# `FastAPI` é a classe que representa a aplicação/roteador ASGI.
-from fastapi import FastAPI
+# `time` fornece o relógio do rate-limiter do esqueci-senha.
+import time
+
+# `FastAPI`/`Depends`/`HTTPException`/`Header` — app, DI, erros HTTP e leitura de header.
+from fastapi import FastAPI, Depends, HTTPException, Header
 # `CORSMiddleware` libera chamadas cross-origin do front em desenvolvimento.
 from fastapi.middleware.cors import CORSMiddleware
+# `BaseModel` valida/tipa o corpo JSON das requisições (ex.: login).
+from pydantic import BaseModel
 
 # Cache de referência de `entrada/` (índices) — A2 — e da autoridade `base_contratos.json` — A3.
 from backend.referencia import obter_referencia, obter_base_contratos
+# Configuração do processo (caminho do store de usuários) e auth (B2–B4).
+from backend.config import obter_config
+from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_token, LimitadorReset
+# Envio do e-mail de credenciais (reset self-service) — importado aqui p/ ser mockável.
+from backend.email_envio import enviar_credenciais
 
 # Fase 1: instancia o app com título/versão (aparecem na doc OpenAPI em /docs).
 app = FastAPI(
@@ -91,3 +101,141 @@ def health():
         "referencia": referencia.resumo(),
         "integridade": integridade,
     }
+
+
+def caminho_usuarios():
+    """Dependência: caminho do store de usuários (da config).
+
+    Por que existe: isola de onde vem o `usuarios.json`, permitindo os testes
+    sobrescreverem para um arquivo temporário via `app.dependency_overrides`.
+
+    Entrada: nenhuma.
+    Fase 1: lê `usuarios_path` da config do processo.
+    Saída: o caminho (str) do store.
+    """
+    # Fase 1/Saída: caminho configurado do store de usuários.
+    return obter_config().usuarios_path
+
+
+class LoginIn(BaseModel):
+    """Corpo do `POST /api/login`: e-mail + senha."""
+
+    # E-mail informado no login.
+    email: str
+    # Senha em texto (validada contra o hash guardado).
+    senha: str
+
+
+@app.post("/api/login")
+def login(dados: LoginIn, caminho=Depends(caminho_usuarios)):
+    """Autentica o usuário; emite token ou sinaliza troca de senha (B2, §5.2/§6).
+
+    Entrada: `dados` (email/senha) e `caminho` (store, injetado).
+    Fase 1: aplica a regra de login (`autenticar`).
+    Fase 2: credenciais inválidas → 401.
+    Fase 3: 1º acesso (flag) → `{precisaTrocarSenha: true}` (sem token).
+    Fase 4: caso normal → `{token}`.
+    Saída: JSON conforme o desfecho; 401 quando inválido.
+    """
+    # Fase 1: decide o desfecho do login.
+    resultado = autenticar(dados.email, dados.senha, caminho=caminho)
+    # Fase 2: inválido → 401 (mensagem genérica, não revela o que falhou).
+    if not resultado["autenticado"]:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    # Fase 3: precisa trocar senha no 1º acesso (sem token pleno).
+    if resultado.get("precisaTrocarSenha"):
+        return {"precisaTrocarSenha": True}
+    # Fase 4/Saída: login pleno com token de sessão.
+    return {"token": resultado["token"]}
+
+
+class TrocarSenhaIn(BaseModel):
+    """Corpo do `POST /api/trocar-senha`: e-mail + senha atual + nova senha."""
+
+    # E-mail do usuário que está trocando a senha.
+    email: str
+    # Senha atual (temporária, no 1º acesso).
+    senhaAtual: str
+    # Nova senha desejada.
+    novaSenha: str
+
+
+@app.post("/api/trocar-senha")
+def trocar_senha_rota(dados: TrocarSenhaIn, caminho=Depends(caminho_usuarios)):
+    """Troca a senha (1º acesso) e emite token (B3, §5.2/§6).
+
+    Entrada: `dados` (email/senhaAtual/novaSenha) e `caminho` (store, injetado).
+    Fase 1: valida que a nova senha não é vazia → senão 400.
+    Fase 2: aplica a troca (`trocar_senha`); senha atual inválida → 401.
+    Fase 3: sucesso → `{token}`.
+    Saída: JSON `{token}`; 400/401 nos erros.
+    """
+    # Fase 1: nova senha obrigatória (política mínima).
+    if not dados.novaSenha.strip():
+        raise HTTPException(status_code=400, detail="Nova senha obrigatória")
+    # Fase 2: tenta trocar; falha de credencial → 401.
+    resultado = trocar_senha(dados.email, dados.senhaAtual, dados.novaSenha, caminho=caminho)
+    if not resultado["ok"]:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    # Fase 3/Saída: token de sessão após a troca.
+    return {"token": resultado["token"]}
+
+
+def usuario_do_token(authorization: str = Header(default=None)):
+    """Guard de rota: extrai e valida o token `Bearer`, devolvendo o e-mail (B4).
+
+    Por que existe: as rotas protegidas (`/api/contexto`, `/api/validar`, `/api/modelo`
+    a partir dos Blocos C/E) identificam o usuário pelo token, não por parâmetro. Este
+    guard reusável rejeita requisições sem token válido.
+
+    Entrada: header `Authorization: Bearer <token>` (injetado).
+    Fase 1: exige o esquema Bearer; ausente/mal-formado → 401.
+    Fase 2: valida o token; inválido/expirado → 401.
+    Saída: o e-mail (subject) do token.
+    """
+    # Fase 1: precisa do header no formato "Bearer <token>".
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token ausente")
+    # Extrai o token após "Bearer ".
+    token = authorization[len("Bearer "):].strip()
+    # Fase 2: valida a assinatura/expiração.
+    email = verificar_token(token)
+    if email is None:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+    # Saída: e-mail autenticado.
+    return email
+
+
+# Rate-limiter do esqueci-senha (compartilhado no processo; tempo real via time.time()).
+_limitador_reset = LimitadorReset()
+
+
+class EsqueciSenhaIn(BaseModel):
+    """Corpo do `POST /api/esqueci-senha`: apenas o e-mail."""
+
+    # E-mail que solicitou a redefinição.
+    email: str
+
+
+@app.post("/api/esqueci-senha")
+def esqueci_senha_rota(dados: EsqueciSenhaIn, caminho=Depends(caminho_usuarios)):
+    """Reset self-service: gera nova senha temporária e a envia (B4, §5.2/§6).
+
+    Segurança: resposta **genérica** (não revela se o e-mail existe) e **rate-limited**
+    por e-mail (mitiga abuso).
+
+    Entrada: `dados` (email) e `caminho` (store, injetado).
+    Fase 1: consulta o rate-limiter (silenciosamente ignora se estourou).
+    Fase 2: se permitido, tenta resetar; se o usuário existe, envia a nova senha por e-mail.
+    Fase 3: responde sempre `{ok: true}` (genérico).
+    Saída: JSON `{ok: true}`.
+    """
+    # Fase 1: respeita o rate-limit (sem revelar nada ao chamador).
+    if _limitador_reset.permitido(dados.email, time.time()):
+        # Fase 2: reseta (None se não existe/inativo) e, se resetou, envia o e-mail.
+        resultado = resetar_senha(dados.email, caminho=caminho)
+        if resultado is not None:
+            email_canonico, nova_senha = resultado
+            enviar_credenciais(email_canonico, nova_senha)
+    # Fase 3/Saída: resposta genérica (não revela existência do e-mail).
+    return {"ok": True}

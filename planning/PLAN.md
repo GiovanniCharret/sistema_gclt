@@ -318,7 +318,19 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 > Espelha a §17 da spec (`planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md`)
 > e o §04 do render `PLAN.html`. Cada sub-fase é **pequena e testável por humano
 > isoladamente**. Marcar `[x]` ao concluir, anotando o resultado do teste. Marcador de
-> teste em *itálico*. Estado inicial: tudo pendente (`backend/` ainda não existe).
+> teste em *itálico*.
+>
+> **Estado (2026-06-30): Blocos A e B concluídos** (A1–A4, B1–B4) — fundação + auth
+> (login/trocar-senha/esqueci-senha, hash pbkdf2, token JWT, CLI de provisionamento),
+> **49 testes pytest verdes**, `.venv` na raiz (uv, CPython 3.12). Próximo: antecipar
+> F1+F2 (login visual) conforme decisão abaixo; depois C–E.
+>
+> **Ajuste de sequência (2026-06-30, decisão do usuário):** hospedagem confirmada =
+> **VPS Hostinger** → backend FastAPI/uvicorn roda (spec §4 vale; **sem replanejamento de
+> deploy**). Ao concluir o **Bloco B**, **antecipar F1 + F2** (camada de API + login real +
+> tela `TrocarSenha`) para um **teste visual de login/troca de senha** no navegador, antes de
+> seguir para C–E. Ressalva: pós-login, os seletores ainda mostram dados **mock** até o
+> `/api/contexto` (C) + F3.
 
 ### Bloco A — Backend: fundação
 - [x] **A1 · Scaffold FastAPI.** App, `requirements.txt`, `.env.example`, CORS p/ dev,
@@ -361,19 +373,41 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
   concluído.**
 
 ### Bloco B — Backend: autenticação (login/senha)
-- [ ] **B1 · Store + hash + CLI + e-mail de credenciais.** `auth.py` (usuarios.json,
+- [x] **B1 · Store + hash + CLI + e-mail de credenciais.** `auth.py` (usuarios.json,
   pbkdf2 + salt), `email_envio.py` (senha temporária) e `admin_usuarios.py` (cria/desativa
   usuário, gera senha temporária e **envia por e-mail ao usuário**). *Teste: CLI cria
   usuário; hash verifica certo/errado; `precisa_trocar_senha=true`; e-mail de credenciais
   disparado (mock).*
-- [ ] **B2 · `POST /api/login`.** Valida hash; emite token ou sinaliza troca. *Teste:
+  ✓ **(2026-06-30)** `auth.py` (pbkdf2-sha256 200k iter + salt por usuário; store
+  `usuarios.json` com **escrita atômica** temp+`os.replace`; `criar_usuario`/`obter_usuario`/
+  `desativar_usuario`; e-mail chave normalizada minúsculas), `config.py` (pydantic-settings,
+  SMTP via `.env`, `smtp_dryrun=True` default), `email_envio.py` (`montar_email_credenciais`
+  + `enviar` dry-run-aware + `enviar_credenciais`), `admin_usuarios.py` (CLI `add`/`disable`,
+  entrypoint testável `executar`). `pytest` → **28 passed** (7 auth + 3 email + 2 CLI novos).
+  Smoke CLI real em dry-run: cria usuário com hash/salt/flag e remove o segredo.
+  Obs.: em dry-run a CLI ainda imprime "enviada por e-mail" (envio real é o smoke do Bloco E).
+- [x] **B2 · `POST /api/login`.** Valida hash; emite token ou sinaliza troca. *Teste:
   senha certa→token; errada→401; flag ligada→`precisaTrocarSenha`.*
-- [ ] **B3 · `POST /api/trocar-senha`.** Grava novo hash, zera a flag, emite token.
+  ✓ **(2026-06-30)** `config.py` ganhou `secret_key`/`token_ttl`/`usuarios_path`; `auth.py`
+  ganhou `gerar_token`/`verificar_token` (PyJWT HS256, exp) e `autenticar` (regra de login
+  testável); rota `POST /api/login` no `app.py` com dependência `caminho_usuarios`
+  (sobrescrevível nos testes). `pytest` → **37 passed** (8 novos: token/autenticar/login e2e).
+  Smoke HTTP real: senha certa→JWT, errada→401. Nota: `SECRET_KEY` default ≥32 bytes (PyJWT
+  alerta abaixo disso); trocar por chave forte no `.env` em produção.
+- [x] **B3 · `POST /api/trocar-senha`.** Grava novo hash, zera a flag, emite token.
   *Teste: 1º acesso troca e depois loga normal.*
-- [ ] **B4 · Guard de rota + `POST /api/esqueci-senha` (self-service).** Middleware de
+  ✓ **(2026-06-30)** `auth.trocar_senha` (valida senha atual, grava novo hash+salt, zera
+  flag, emite token) + rota `POST /api/trocar-senha` (400 se nova senha vazia, 401 se
+  atual errada). Testes: troca no 1º acesso e login direto depois; atual errada→401.
+- [x] **B4 · Guard de rota + `POST /api/esqueci-senha` (self-service).** Middleware de
   token (401 sem token); esqueci-senha gera nova temporária e **envia ao usuário**;
   resposta genérica + rate-limit. *Teste: rota protegida sem token→401; reset envia
   e-mail (mock).*
+  ✓ **(2026-06-30)** guard `usuario_do_token` (Bearer; 401 sem/inválido — será aplicado às
+  rotas protegidas de C/E), `auth.resetar_senha` (nova temporária + religa flag),
+  `LimitadorReset` (rate-limit por e-mail, tempo injetável) e rota `POST /api/esqueci-senha`
+  (resposta **genérica** `{ok:true}` + envio mockado ao usuário). `pytest` → **49 passed**.
+  Smoke HTTP: login→troca→login→esqueci OK. **Bloco B (auth) concluído.**
 
 ### Bloco C — Backend: contexto de login
 - [ ] **C1 · `GET /api/contexto` (protegida).** E-mail do token → grupo → UFs/contratos
