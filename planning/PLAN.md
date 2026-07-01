@@ -444,9 +444,22 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 ### Bloco F — Front: religação (visual inalterado; +1 tela de troca de senha)
 - [ ] **F1 · Camada de API.** `src/lib/api.js` (token no header) + `VITE_API_BASE`.
   *Teste: dev aponta p/ backend local.*
+  ⏳ **(2026-06-30, antecipado)** `modelo/src/lib/api.js`: `login`/`trocarSenha`/`esqueciSenha`,
+  base = `VITE_API_BASE` ?? (dev→`http://127.0.0.1:8000/api`, prod→`/api`), header Bearer.
+  `npm run build` OK. **Teste visual pendente** com o usuário.
 - [ ] **F2 · Login real + troca de senha.** `AuthScreen` → `/api/login`; nova `TrocarSenha`
   (reusa design system) no 1º acesso; "Esqueci minha senha" → `/api/esqueci-senha`.
   *Teste: 1º acesso força troca; depois entra direto.*
+  ⏳ **(2026-06-30, antecipado)** `AuthScreen` religado ao `/api/login` (erros 401, botão
+  "carregando", "Esqueci minha senha"→`/api/esqueci-senha` com msg genérica); nova tela
+  `TrocarSenha.jsx` (reusa `auth-shell`/`auth-card`/`field`); `App.jsx` com estado
+  `token`/`trocaPendente` e gating. CSS `.auth-error`/`.auth-ok`. `npm run build` OK.
+  **Bug fix (2026-07-01):** 1º teste visual falhou com "Senha atual incorreta" — causa: o
+  campo "senha atual" era preenchido por **autofill** do navegador (backend/senha gravada
+  estavam corretos; `verificar_senha('Temp123')`=True). Correção: no 1º acesso a senha
+  temporária **usada no login é carregada** para a troca (some o campo "senha atual"; o
+  usuário só define a nova senha), + `autoComplete` semântico (`new-password`/`current-password`).
+  **Reteste visual pendente** com o usuário.
 - [ ] **F3 · Contexto nos seletores.** `UfSelector`/`ContratoSelector` usam listas de
   `/api/contexto`. *Teste: equatorial só EQUATORIAL; enbpar tudo. Visual idêntico.*
 - [ ] **F4 · Upload real.** `UploadAnexoV` envia `FormData` (arquivo+contrato+uf, token);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import AuthScreen from "./components/AuthScreen";
+import TrocarSenha from "./components/TrocarSenha";
 import MenuPrincipal from "./components/MenuPrincipal";
 import UfSelector from "./components/UfSelector";
 import ContratoSelector from "./components/ContratoSelector";
@@ -13,7 +14,9 @@ import { descreverContrato } from "./seedData";
 // Orquestrador do mock. Telas: login → menu → UF → contrato → versão → shell
 // (upload → painel → sucesso). Tudo em estado local; validação roteirada.
 export default function App() {
-  const [user, setUser] = useState(null);          // null = não autenticado
+  const [user, setUser] = useState(null);          // null = não autenticado (e-mail quando logado)
+  const [token, setToken] = useState(null);        // token de sessão (JWT) — usado nas rotas protegidas
+  const [trocaPendente, setTrocaPendente] = useState(null); // { email, senha } aguardando troca no 1º acesso
   const [moduloOk, setModuloOk] = useState(false); // menu principal escolhido
   const [uf, setUf] = useState(null);              // UF selecionada
   const [contrato, setContrato] = useState(null);  // contrato (chave principal)
@@ -32,6 +35,8 @@ export default function App() {
 
   function handleLogout() {
     setUser(null);
+    setToken(null);
+    setTrocaPendente(null);
     setModuloOk(false);
     setUf(null);
     setContrato(null);
@@ -59,7 +64,27 @@ export default function App() {
   }
 
   // ── Telas de entrada ──────────────────────────────────────────────
-  if (!user) return <AuthScreen onEnter={setUser} />;
+  if (!user) {
+    // 1º acesso: backend sinalizou troca de senha → tela de troca (sem estar logado).
+    // A senha atual é a que o usuário acabou de usar no login (carregada daqui).
+    if (trocaPendente) {
+      return (
+        <TrocarSenha
+          email={trocaPendente.email}
+          senhaAtual={trocaPendente.senha}
+          onTrocada={(email, tok) => { setToken(tok); setTrocaPendente(null); setUser(email); }}
+          onVoltar={() => setTrocaPendente(null)}
+        />
+      );
+    }
+    // Login real: onAutenticado (com token) entra; onPrecisaTrocar abre a tela de troca.
+    return (
+      <AuthScreen
+        onAutenticado={(email, tok) => { setToken(tok); setUser(email); }}
+        onPrecisaTrocar={(email, senha) => setTrocaPendente({ email, senha })}
+      />
+    );
+  }
   if (!moduloOk) return <MenuPrincipal onClassificacao={() => setModuloOk(true)} />;
   if (!uf) return <UfSelector onSelect={selectUf} />;
   if (!contrato) return <ContratoSelector uf={uf} onSelect={selectContrato} onBack={() => setUf(null)} />;

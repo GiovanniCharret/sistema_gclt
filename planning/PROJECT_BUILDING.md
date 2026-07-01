@@ -46,6 +46,7 @@ r - Rollback - falhou
 [x] - always include e2e tests to cover important paths. You should always make sure that the plans include a test suite that covers the happy paths and edge cases. Your tests should be high quality and give confidence while covering most of the implementation.
 [n] - Reproduzir o site atual como um mock não-funcional (cópia React/Vite, dados, hardcoded) para servir de base/canvas no desenho/design de uma futura nova página.
 A nova página (que conectará a esta, herdará os estilos e compartilhará o mesmo BD).
+[x] - Criar o "claude resume.txt"
 
 ### Python env
 1 - powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"

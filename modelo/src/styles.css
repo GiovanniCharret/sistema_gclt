@@ -75,6 +75,8 @@ button, input, select, textarea { font: inherit; }
 .auth-links { display: flex; gap: 16px; margin-top: 14px; justify-content: center; }
 .auth-link { background: transparent; border: none; color: var(--blue); font-size: 0.82rem; text-decoration: underline; cursor: pointer; padding: 4px 6px; }
 .auth-link:hover { color: var(--blue-dark); }
+.auth-error { margin: 12px 0 0; padding: 8px 11px; border-radius: var(--radius-sm); font-size: 0.82rem; line-height: 1.45; background: var(--err-bg); border: 1px solid var(--err-bd); color: var(--err-tx); }
+.auth-ok { margin: 12px 0 0; padding: 8px 11px; border-radius: var(--radius-sm); font-size: 0.82rem; line-height: 1.45; background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
 
 /* ── APP SHELL / TOPBAR ────────────────────────────────── */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
