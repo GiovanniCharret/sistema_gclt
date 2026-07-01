@@ -25,6 +25,17 @@ SERVICO="anexov-api"                          # nome do serviço systemd
 [ "$(id -u)" -eq 0 ] || { echo "ERRO: rode como root (sudo)."; exit 1; }
 [ -n "$DOMINIO" ] || { echo "ERRO: defina DOMINIO=seu-dominio.com.br"; exit 1; }
 
+# Atende também o "www." (registro A www → VPS). Se DOMINIO já for um subdomínio,
+# rode com INCLUIR_WWW=0 para não tentar validar um www inexistente.
+INCLUIR_WWW="${INCLUIR_WWW:-1}"
+if [ "$INCLUIR_WWW" = "1" ]; then
+  SERVER_NAMES="$DOMINIO www.$DOMINIO"
+  CERTBOT_DOMS=(-d "$DOMINIO" -d "www.$DOMINIO")
+else
+  SERVER_NAMES="$DOMINIO"
+  CERTBOT_DOMS=(-d "$DOMINIO")
+fi
+
 echo ">> [1/9] Pacotes base"
 apt-get update -y
 apt-get install -y git nginx curl ufw ca-certificates
@@ -119,7 +130,7 @@ echo ">> [9/9] Nginx (front + proxy /api)"
 cat > /etc/nginx/sites-available/anexov <<EOF
 server {
     listen 80;
-    server_name $DOMINIO;
+    server_name $SERVER_NAMES;
     root $APP_DIR/modelo/dist;
     index index.html;
     location / { try_files \$uri \$uri/ /index.html; }
@@ -141,8 +152,8 @@ nginx -t && systemctl reload nginx
 if [ -n "$ADMIN_EMAIL" ]; then
   echo ">> HTTPS: certbot (Let's Encrypt)"
   apt-get install -y certbot python3-certbot-nginx
-  certbot --nginx -d "$DOMINIO" --non-interactive --agree-tos -m "$ADMIN_EMAIL" --redirect \
-    || echo "   certbot falhou (o DNS já aponta p/ este IP?). Rode depois: certbot --nginx -d $DOMINIO"
+  certbot --nginx "${CERTBOT_DOMS[@]}" --non-interactive --agree-tos -m "$ADMIN_EMAIL" --redirect \
+    || echo "   certbot falhou (o DNS já aponta p/ este IP?). Rode depois: certbot --nginx ${CERTBOT_DOMS[*]}"
 fi
 
 # ── Resumo + próximo passo ──

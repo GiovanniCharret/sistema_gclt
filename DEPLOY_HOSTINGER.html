@@ -92,6 +92,12 @@ sudo DOMINIO=SEU_DOMINIO.com.br ADMIN_EMAIL=voce@exemplo.com bash deploy.sh</pre
 
   <!-- 1 -->
   <h2><span class="num">1</span>Acessar e preparar o servidor</h2>
+  <div class="callout warn"><strong>Servidor recém-reinstalado?</strong> A reinstalação troca a
+    identidade SSH do servidor. Se o IP for o mesmo de antes, seu PC vai recusar a conexão
+    (<em>REMOTE HOST IDENTIFICATION HAS CHANGED</em>). Limpe a chave antiga no seu PC antes de
+    conectar: <pre style="margin-top:10px">ssh-keygen -R IP_DO_VPS</pre>
+    E confirme o <strong>DNS</strong>: se o IP mudou, atualize o registro A
+    (<code>SEU_DOMINIO.com.br → novo IP</code>) no hPanel e aguarde alguns minutos.</div>
   <p>Do seu PC, conecte por SSH e atualize o sistema:</p>
   <pre><span class="c"># no seu computador</span>
 ssh root@IP_DO_VPS
