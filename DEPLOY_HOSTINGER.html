@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deploy no VPS Hostinger — Classificação de Beneficiários</title>
+  <style>
+    :root{
+      --ivory:#FAF9F5; --slate:#141413; --clay:#D97757; --oat:#E3DACC;
+      --olive:#788C5D; --g150:#F0EEE6; --g300:#D1CFC5; --g500:#87867F;
+      --g700:#3D3D3A; --white:#FFF; --code:#1e1e1c; --code-tx:#e6e4dc;
+      --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      --mono:ui-monospace,'SF Mono',Menlo,Monaco,monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:var(--sans);background:var(--ivory);color:var(--g700);line-height:1.6;padding:48px 24px 120px;-webkit-font-smoothing:antialiased}
+    .page{max-width:920px;margin:0 auto}
+    .eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--g500);margin-bottom:10px}
+    h1{font-family:Georgia,serif;font-weight:500;font-size:34px;line-height:1.15;color:var(--slate);margin-bottom:14px;letter-spacing:-.01em}
+    .lead{background:var(--g150);border:1.5px solid var(--g300);border-radius:12px;padding:16px 20px;font-size:14.5px;margin-bottom:32px}
+    .lead strong{color:var(--slate)}
+    h2{font-family:Georgia,serif;font-weight:500;font-size:23px;color:var(--slate);margin:44px 0 6px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:12px}
+    h2 .num{font-family:var(--mono);font-size:13px;background:var(--oat);color:var(--slate);padding:3px 9px;border-radius:8px;flex:none}
+    h3{font-size:15px;color:var(--slate);margin:22px 0 6px;font-weight:700}
+    p{font-size:14.5px;margin:8px 0}
+    ul,ol{margin:8px 0 8px 22px;font-size:14.5px}
+    li{margin:5px 0}
+    code{font-family:var(--mono);font-size:.86em;background:var(--g150);border:1px solid var(--g300);border-radius:5px;padding:1px 5px;color:var(--g700)}
+    pre{background:var(--code);color:var(--code-tx);border-radius:10px;padding:15px 17px;overflow-x:auto;margin:12px 0;font-family:var(--mono);font-size:13px;line-height:1.55}
+    pre .c{color:#8b8f86}
+    .cap{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--g500);margin:14px 0 -6px}
+    .callout{border-radius:10px;padding:13px 16px;margin:14px 0;font-size:13.7px;border:1.5px solid}
+    .warn{background:#fff7ed;border-color:#fdba74;color:#7c2d12}
+    .info{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
+    .ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+    .warn strong,.info strong,.ok strong{color:inherit}
+    table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+    th,td{border:1px solid var(--g300);padding:8px 11px;text-align:left;vertical-align:top}
+    th{background:var(--g150);font-weight:600;color:var(--slate)}
+    .foot{margin-top:48px;border-top:1px solid var(--g300);padding-top:16px;font-size:12.5px;color:var(--g500)}
+    kbd{font-family:var(--mono);font-size:.85em;background:#fff;border:1px solid var(--g300);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="eyebrow">Guia operacional · Programa Luz para Todos · MME · ENBPar</div>
+  <h1>Deploy no VPS Hostinger — passo a passo</h1>
+  <div class="lead">
+    Este guia leva um <strong>VPS Hostinger com Ubuntu</strong> do zero até o site
+    <strong>“Classificação de Beneficiários do Programa”</strong> no ar, com
+    <strong>HTTPS</strong>, servindo o front estático (<code>modelo/dist</code>) e o
+    backend FastAPI atrás do Nginx em <code>/api</code>.
+    <br><br>
+    <strong>Escopo atual (fatia de autenticação):</strong> este deploy já permite testar
+    em produção <strong>login, troca de senha no 1º acesso e “esqueci minha senha”</strong>.
+    As telas de seleção/validação ainda usam dados mock até os Blocos C–E do plano — mas a
+    <strong>infraestrutura de deploy é a mesma</strong>, então atualizá-la depois será só
+    <code>git pull</code> + <code>restart</code> + rebuild do front.
+  </div>
+
+  <table>
+    <tr><th>O que JÁ dá para testar em produção com este deploy</th><th>O que vem depois (Blocos C–E)</th></tr>
+    <tr>
+      <td><code>GET /api/health</code>; login real; troca de senha no 1º acesso; “esqueci minha senha”; criação de usuário via CLI; e-mail de credenciais (se o SMTP estiver configurado).</td>
+      <td>Filtro por grupo nos seletores (<code>/api/contexto</code>); validação real da planilha e envio do <code>.xlsx</code> por e-mail (<code>/api/validar</code>); “Baixar modelo” (<code>/api/modelo</code>).</td>
+    </tr>
+  </table>
+
+  <div class="callout ok"><strong>Opção rápida (script automático).</strong> Em vez de rodar os
+    passos 1–9 na mão, há um script que faz tudo: <code>deploy_hostinger.sh</code> (na raiz do
+    repo). No servidor, como root, com o DNS já apontando para o VPS:
+    <pre style="margin-top:10px">curl -fsSL https://raw.githubusercontent.com/GiovanniCharret/sistema_gclt_demo/main/deploy_hostinger.sh -o deploy.sh
+sudo DOMINIO=SEU_DOMINIO.com.br ADMIN_EMAIL=voce@exemplo.com bash deploy.sh</pre>
+    Ele instala tudo, gera a <code>SECRET_KEY</code>, sobe o serviço, configura o Nginx e o
+    HTTPS, e ao final mostra o comando para criar o 1º usuário. Os passos abaixo continuam
+    valendo como <strong>referência/explicação</strong> e para o <strong>diagnóstico</strong> se algo falhar.</div>
+
+  <div class="callout info"><strong>Convenções deste guia.</strong> Substitua os
+    <em>placeholders</em>: <code>SEU_DOMINIO.com.br</code> (seu domínio/subdomínio),
+    <code>IP_DO_VPS</code> (IP do servidor) e o e-mail do admin. O projeto será instalado em
+    <code>/opt/anexov</code>, rodando sob o usuário <code>deploy</code>.</div>
+
+  <!-- 0 -->
+  <h2><span class="num">0</span>Pré-requisitos</h2>
+  <ul>
+    <li>VPS Hostinger com <strong>Ubuntu 22.04 ou 24.04</strong> e acesso <strong>root via SSH</strong> (painel Hostinger → VPS → dados de acesso).</li>
+    <li>Um <strong>domínio (ou subdomínio)</strong> apontando para o IP do VPS: no hPanel/DNS, crie um registro <strong>A</strong> <code>SEU_DOMINIO.com.br → IP_DO_VPS</code>. HTTPS exige domínio (não funciona só com IP).</li>
+    <li>Acesso ao repositório <code>github.com/GiovanniCharret/sistema_gclt_demo</code> (se privado, um token/deploy key).</li>
+    <li>(Opcional, para e-mail real) credenciais SMTP de um provedor.</li>
+  </ul>
+
+  <!-- 1 -->
+  <h2><span class="num">1</span>Acessar e preparar o servidor</h2>
+  <p>Do seu PC, conecte por SSH e atualize o sistema:</p>
+  <pre><span class="c"># no seu computador</span>
+ssh root@IP_DO_VPS
+
+<span class="c"># já no servidor</span>
+apt update &amp;&amp; apt -y upgrade
+apt -y install git nginx curl ufw</pre>
+
+  <p>Firewall (libera SSH e Nginx):</p>
+  <pre>ufw allow OpenSSH
+ufw allow 'Nginx Full'
+ufw --force enable</pre>
+
+  <p>Crie um usuário de aplicação (não rode o serviço como root):</p>
+  <pre>adduser --disabled-password --gecos "" deploy
+usermod -aG sudo deploy
+mkdir -p /opt/anexov &amp;&amp; chown deploy:deploy /opt/anexov</pre>
+
+  <p>Instale o <strong>uv</strong> (gerencia o Python 3.12, igual ao ambiente de dev) para o usuário <code>deploy</code>:</p>
+  <pre>su - deploy
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc        <span class="c"># garante o uv no PATH</span>
+uv --version</pre>
+
+  <!-- 2 -->
+  <h2><span class="num">2</span>Baixar o projeto</h2>
+  <pre><span class="c"># como usuário deploy</span>
+cd /opt/anexov
+git clone https://github.com/GiovanniCharret/sistema_gclt_demo.git .
+ls        <span class="c"># deve listar backend/  modelo/  entrada/  base_contratos.json ...</span></pre>
+  <div class="callout warn"><strong>Atenção ao ponto final (<code>.</code>)</strong> do
+    <code>git clone … .</code> — ele faz o conteúdo cair <strong>direto em <code>/opt/anexov</code></strong>.
+    Sem o <code>.</code>, o git cria uma <strong>subpasta</strong> (ex.: <code>sistema_gclt_demo/</code>)
+    e todos os caminhos deste guia deixam de bater. Se isso acontecer, corrija:
+    <pre style="margin-top:10px"><span class="c"># ainda em /opt/anexov</span>
+ls -a                        <span class="c"># veja o nome exato da subpasta</span>
+rm -rf sistema_gclt_demo     <span class="c"># remova a subpasta (ajuste o nome)</span>
+git clone https://github.com/GiovanniCharret/sistema_gclt_demo.git .
+ls                           <span class="c"># deve listar backend/ modelo/ entrada/ ...</span></pre>
+    (<code>git clone … .</code> exige a pasta vazia; por isso remova a subpasta antes.)</div>
+  <div class="callout info">O <code>entrada/</code> e o <code>base_contratos.json</code> vêm
+    versionados no repo — o backend precisa deles. Um processo externo atualiza o
+    <code>entrada/</code> diariamente (fora do escopo deste guia).</div>
+
+  <!-- 3 -->
+  <h2><span class="num">3</span>Backend: ambiente, dependências e <code>.env</code></h2>
+  <pre>cd /opt/anexov
+uv venv
+uv pip install -r backend/requirements.txt</pre>
+
+  <p>Gere uma <strong>SECRET_KEY forte</strong> (assina o token de sessão):</p>
+  <pre>.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(48))"</pre>
+
+  <p>Crie o arquivo <code>backend/.env</code> (segredo — fica fora do git). Baseie-se no
+    <code>backend/.env.example</code>. Mínimo para a fatia de auth:</p>
+  <pre><span class="c"># backend/.env</span>
+SECRET_KEY=&lt;cole-o-valor-gerado-acima&gt;
+TOKEN_TTL=28800
+
+<span class="c"># E-mail — opção A: SEM enviar ainda (dry-run). Crie o usuário com senha conhecida.</span>
+SMTP_DRYRUN=1
+
+<span class="c"># E-mail — opção B: enviar a senha temporária de verdade (troque DRYRUN p/ 0):</span>
+<span class="c"># SMTP_DRYRUN=0</span>
+<span class="c"># SMTP_HOST=smtp.seu-provedor.com</span>
+<span class="c"># SMTP_PORT=587</span>
+<span class="c"># SMTP_USER=usuario</span>
+<span class="c"># SMTP_PASS=senha</span>
+<span class="c"># SMTP_FROM=nao-responder@SEU_DOMINIO.com.br</span>
+<span class="c"># SMTP_TLS=1</span></pre>
+
+  <p>Teste rápido que o backend sobe (depois interrompa com <kbd>Ctrl</kbd>+<kbd>C</kbd>):</p>
+  <pre>cd /opt/anexov
+.venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 &amp;
+sleep 3
+curl -s http://127.0.0.1:8000/api/health ; echo
+kill %1</pre>
+  <div class="callout ok"><strong>Esperado:</strong> um JSON <code>{"status":"ok", "referencia":{...}, "integridade":{...}}</code>.</div>
+
+  <!-- 4 -->
+  <h2><span class="num">4</span>Rodar o backend como serviço (systemd)</h2>
+  <p>Crie o serviço (como root ou <code>sudo</code>):</p>
+  <pre>sudo tee /etc/systemd/system/anexov-api.service &gt;/dev/null &lt;&lt;'EOF'
+[Unit]
+Description=Anexo V API (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/opt/anexov
+ExecStart=/opt/anexov/.venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+Restart=always
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now anexov-api
+sudo systemctl status anexov-api --no-pager</pre>
+  <div class="callout warn"><strong>Crítico:</strong> o <code>WorkingDirectory</code> tem que ser a
+    <strong>raiz do projeto</strong> (<code>/opt/anexov</code>). O backend lê o
+    <code>backend/.env</code> e o <code>backend/usuarios.json</code> por caminho relativo à
+    raiz — se o diretório de trabalho for outro, o login não acha os usuários. <strong>Rode o
+    CLI de usuários (passo 8) também a partir de <code>/opt/anexov</code>.</strong></div>
+
+  <!-- 5 -->
+  <h2><span class="num">5</span>Front: gerar e publicar o <code>dist</code></h2>
+  <p>O build de produção já aponta a API para <code>/api</code> (mesma origem, atrás do Nginx) —
+    não precisa configurar nada. Duas opções:</p>
+
+  <h3>Opção A (recomendada): buildar no seu PC e enviar o <code>dist</code></h3>
+  <pre><span class="c"># no seu computador, na pasta do projeto</span>
+cd modelo
+npm install
+npm run build          <span class="c"># gera modelo/dist</span>
+
+<span class="c"># envia o dist para o servidor</span>
+scp -r dist/* deploy@IP_DO_VPS:/opt/anexov/modelo/dist/</pre>
+
+  <h3>Opção B: buildar no próprio servidor</h3>
+  <pre><span class="c"># como deploy, instale Node 20+ via nvm</span>
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 20
+cd /opt/anexov/modelo
+npm install &amp;&amp; npm run build</pre>
+
+  <!-- 6 -->
+  <h2><span class="num">6</span>Nginx: servir o front + proxy do <code>/api</code></h2>
+  <pre>sudo tee /etc/nginx/sites-available/anexov &gt;/dev/null &lt;&lt;'EOF'
+server {
+    listen 80;
+    server_name SEU_DOMINIO.com.br;
+
+    root /opt/anexov/modelo/dist;
+    index index.html;
+
+    # SPA: qualquer rota cai no index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API: repassa para o uvicorn mantendo o prefixo /api
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 50m;   # planilhas grandes (Blocos D/E)
+    }
+}
+EOF
+
+sudo ln -sf /etc/nginx/sites-available/anexov /etc/nginx/sites-enabled/anexov
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre>
+  <p>Teste em HTTP antes do TLS: <code>curl -s http://SEU_DOMINIO.com.br/api/health</code> deve responder o JSON.</p>
+
+  <!-- 7 -->
+  <h2><span class="num">7</span>HTTPS (obrigatório — o login trafega senha)</h2>
+  <pre>sudo apt -y install certbot python3-certbot-nginx
+sudo certbot --nginx -d SEU_DOMINIO.com.br</pre>
+  <p>O certbot configura o <code>443</code> e o redirecionamento de <code>80→443</code>
+    automaticamente, e renova sozinho. Confirme abrindo <code>https://SEU_DOMINIO.com.br</code>.</p>
+  <div class="callout warn"><strong>Não pule o HTTPS.</strong> Sem ele, e-mails/senhas trafegam
+    em texto puro. O guard de token e o login só devem ir a produção sob TLS.</div>
+
+  <!-- 8 -->
+  <h2><span class="num">8</span>Criar o primeiro usuário (no servidor)</h2>
+  <p>Sempre a partir da raiz do projeto (mesmo diretório do serviço):</p>
+  <pre>cd /opt/anexov
+.venv/bin/python -m backend.admin_usuarios add fulano@distribuidora.com.br</pre>
+
+  <ul>
+    <li>Com <strong>SMTP_DRYRUN=0</strong> (passo 3, opção B): o usuário <strong>recebe a senha temporária por e-mail</strong> e a troca no 1º acesso.</li>
+    <li>Com <strong>SMTP_DRYRUN=1</strong>: nada é enviado. Para testar mesmo assim, crie com uma senha conhecida:</li>
+  </ul>
+  <pre>cd /opt/anexov
+.venv/bin/python -c "from backend.auth import criar_usuario; criar_usuario('fulano@distribuidora.com.br', senha='Temp123'); print('ok')"</pre>
+  <div class="callout info">O grupo econômico que o usuário enxerga vem do <strong>domínio do e-mail</strong>
+    (mapa provisório em <code>backend/acesso.py</code> — confirmar domínios reais antes do uso
+    amplo). Isso só afeta os seletores (Bloco C); não impede o teste de login agora.</div>
+
+  <!-- 9 -->
+  <h2><span class="num">9</span>Testar em produção</h2>
+  <ol>
+    <li>Abra <code>https://SEU_DOMINIO.com.br</code>.</li>
+    <li>Login com o e-mail criado e a senha temporária → deve abrir <strong>“Definir nova senha”</strong>.</li>
+    <li>Defina a nova senha (≥ 6 caracteres) → deve entrar (cai no Menu Principal — ainda mock).</li>
+    <li>Saia e entre de novo com a nova senha → entra direto.</li>
+    <li>Sanidade da API: <code>curl -s https://SEU_DOMINIO.com.br/api/health</code>.</li>
+  </ol>
+  <div class="callout ok"><strong>Se isso funcionar, a parte sensível do deploy está validada:</strong>
+    Nginx + uvicorn + <code>/api</code> + TLS + auth. Os próximos blocos reaproveitam esta mesma base.</div>
+
+  <!-- 10 -->
+  <h2><span class="num">10</span>Operação e atualizações</h2>
+  <p>Quando houver novidades no repositório (ex.: Blocos C–E):</p>
+  <pre>cd /opt/anexov
+git pull
+uv pip install -r backend/requirements.txt   <span class="c"># se mudaram deps</span>
+sudo systemctl restart anexov-api            <span class="c"># reinicia o backend</span>
+
+<span class="c"># front: rebuild + republicar o dist (opção A do passo 5) OU buildar no servidor</span></pre>
+  <p>Logs e diagnóstico:</p>
+  <pre>journalctl -u anexov-api -f          <span class="c"># logs do backend em tempo real</span>
+sudo tail -f /var/log/nginx/error.log
+sudo systemctl status anexov-api --no-pager</pre>
+  <div class="callout info">O <code>entrada/</code> é recarregado sozinho quando os CSVs mudam
+    (o backend detecta pelo <em>mtime</em>) — não precisa reiniciar o serviço na atualização diária.</div>
+
+  <!-- 11 -->
+  <h2><span class="num">11</span>Checklist de segurança</h2>
+  <ul>
+    <li><strong>HTTPS</strong> ativo (passo 7).</li>
+    <li><code>SECRET_KEY</code> forte e única, só no <code>backend/.env</code> (nunca no git).</li>
+    <li><code>backend/usuarios.json</code> é <strong>segredo</strong> (hashes de senha) — já é gitignored; faça backup dele à parte.</li>
+    <li>Serviço roda como <code>deploy</code>, não root.</li>
+    <li>Firewall (ufw) só com SSH e Nginx.</li>
+    <li>Se usar SMTP, guarde as credenciais só no <code>.env</code>.</li>
+  </ul>
+
+  <div class="callout warn"><strong>Ainda NÃO disponível em produção</strong> (aparecem conforme o
+    plano avança): seleção filtrada por grupo (<code>/api/contexto</code> — Bloco C), validação
+    real e envio da planilha (<code>/api/validar</code> — Blocos D/E), “Baixar modelo”
+    (<code>/api/modelo</code>). Até lá, após o login o fluxo de seleção/upload é o mock.</div>
+
+  <p class="foot">Gerado para o projeto “Classificação de Beneficiários do Programa” · deploy da
+    fatia de autenticação (Blocos A–B + F1/F2) no VPS Hostinger. Complementa o
+    <code>planning/PLAN.md</code> e a spec de backend. A versão final (Bloco G) apenas amplia
+    este mesmo deploy.</p>
+
+</div>
+</body>
+</html>

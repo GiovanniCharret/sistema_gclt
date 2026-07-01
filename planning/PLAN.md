@@ -331,6 +331,11 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 > tela `TrocarSenha`) para um **teste visual de login/troca de senha** no navegador, antes de
 > seguir para C–E. Ressalva: pós-login, os seletores ainda mostram dados **mock** até o
 > `/api/contexto` (C) + F3.
+>
+> **Deploy antecipado (2026-07-01):** guia passo a passo do VPS Hostinger criado em
+> **`DEPLOY_HOSTINGER.html`** (raiz) — sobe a fatia de auth (health + login/troca/esqueci +
+> front F1/F2) com Nginx + uvicorn(systemd) + `/api` + HTTPS, para testar em produção cedo e
+> de-riscar o deploy. O Bloco G apenas amplia essa mesma base.
 
 ### Bloco A — Backend: fundação
 - [x] **A1 · Scaffold FastAPI.** App, `requirements.txt`, `.env.example`, CORS p/ dev,
@@ -442,14 +447,15 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
   Content-Disposition + bytes do arquivo.*
 
 ### Bloco F — Front: religação (visual inalterado; +1 tela de troca de senha)
-- [ ] **F1 · Camada de API.** `src/lib/api.js` (token no header) + `VITE_API_BASE`.
-  *Teste: dev aponta p/ backend local.*
+- [x] **F1 · Camada de API.** `src/lib/api.js` (token no header) + `VITE_API_BASE`.
+  *Teste: dev aponta p/ backend local.* ✓ teste visual aprovado (2026-07-01).
   ⏳ **(2026-06-30, antecipado)** `modelo/src/lib/api.js`: `login`/`trocarSenha`/`esqueciSenha`,
   base = `VITE_API_BASE` ?? (dev→`http://127.0.0.1:8000/api`, prod→`/api`), header Bearer.
   `npm run build` OK. **Teste visual pendente** com o usuário.
-- [ ] **F2 · Login real + troca de senha.** `AuthScreen` → `/api/login`; nova `TrocarSenha`
+- [x] **F2 · Login real + troca de senha.** `AuthScreen` → `/api/login`; nova `TrocarSenha`
   (reusa design system) no 1º acesso; "Esqueci minha senha" → `/api/esqueci-senha`.
-  *Teste: 1º acesso força troca; depois entra direto.*
+  *Teste: 1º acesso força troca; depois entra direto.* ✓ teste visual aprovado (2026-07-01);
+  tela de 1º acesso final tem **só os campos de nova senha** (decisão do usuário — mais simples).
   ⏳ **(2026-06-30, antecipado)** `AuthScreen` religado ao `/api/login` (erros 401, botão
   "carregando", "Esqueci minha senha"→`/api/esqueci-senha` com msg genérica); nova tela
   `TrocarSenha.jsx` (reusa `auth-shell`/`auth-card`/`field`); `App.jsx` com estado
