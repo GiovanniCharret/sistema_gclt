@@ -41,17 +41,77 @@ MAPA_DOMINIO_GRUPO = {
     # Energisa.
     "energisa.com.br": "ENERGISA",
     # Neoenergia / Coelba.
-    "neoenergia.com": "NEOENERGISA",
+    "neoenergia.com.br": "NEOENERGISA",
     "coelba.com.br": "NEOENERGISA",
     # CERCI.
     "cerci.com.br": "CERCI",
-    # Grupo ÂMBAR (ÂMBAR / Amazonas / Roraima Energia).
+    # Grupo ÂMBAR — só o domínio ambarenergia por ora (vê o grupo econômico inteiro:
+    # ÂMBAR + AMAZONAS + RORAIMA). Os domínios `amazonasenergia`/`roraimaenergia` ficam
+    # FORA até os engenheiros decidirem se serão cadastrados (hoje duplicariam esta visão).
     "ambarenergia.com.br": "ÂMBAR",
-    "amazonasenergia.com": "ÂMBAR",
-    "roraimaenergia.com.br": "ÂMBAR",
     # ENBPar (Agente Operacionalizador) — curinga.
     "enbpar.gov.br": "ENBPAR",
 }
+
+# Nomes das UFs (sigla → nome), para o payload do /api/contexto. Espelha o
+# `UF_NOMES` do front (`seedData.js`), mantendo os rótulos idênticos aos aprovados.
+UF_NOMES = {
+    "AC": "Acre", "AL": "Alagoas", "AP": "Amapá", "AM": "Amazonas", "BA": "Bahia",
+    "CE": "Ceará", "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás",
+    "MA": "Maranhão", "MT": "Mato Grosso", "MS": "Mato Grosso do Sul", "MG": "Minas Gerais",
+    "PA": "Pará", "PB": "Paraíba", "PR": "Paraná", "PE": "Pernambuco", "PI": "Piauí",
+    "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RS": "Rio Grande do Sul",
+    "RO": "Rondônia", "RR": "Roraima", "SC": "Santa Catarina", "SP": "São Paulo",
+    "SE": "Sergipe", "TO": "Tocantins",
+}
+
+
+def montar_contexto(email, contratos_detalhe, ucs_por_contrato, mapa_dominio=None, mapa_grupo=None):
+    """Monta o payload do `/api/contexto`: grupo + UFs/contratos visíveis (C1, §5.1/§6).
+
+    Por que existe: o front, após o login, precisa das UFs e contratos que o usuário
+    pode selecionar — já filtrados pelo grupo do e-mail (camada 1→2) e enriquecidos com
+    a contagem de UCs por contrato (que no mock vinha de `mockUcsContrato`, e agora vem
+    do backend). Concentrar essa montagem aqui a torna testável sem HTTP.
+
+    Entrada: `email` (do token), `contratos_detalhe` (lista de dicts com numero/uf/sigla/
+             tipo_contrato/tranche — de `carregar_base_contratos`), `ucs_por_contrato`
+             (dict numero→nº de UCs na referência), e os mapas opcionais de acesso.
+    Fase 1: resolve o grupo do e-mail (camada 1).
+    Fase 2: filtra os contratos visíveis do grupo (camada 2) e monta cada item com a
+            contagem de UCs (0 se o contrato não tem referência).
+    Fase 3: agrega as UFs distintas (sigla, nome, nº de contratos), ordenadas por sigla.
+    Saída: dict `{email, grupo, ufs, contratos}` (grupo None e listas vazias se o domínio
+           não mapeia a nenhum grupo).
+    """
+    # Fase 1: grupo econômico derivado do domínio do e-mail.
+    grupo = grupo_do_email(email, mapa_dominio)
+    # Fase 2: contratos que o grupo enxerga, com o detalhe + UCs.
+    visiveis = contratos_visiveis(grupo, contratos_detalhe, mapa_grupo)
+    contratos = [
+        {
+            "numero": c["numero"],                       # número do contrato (normalizado)
+            "uf": c.get("uf"),                           # UF do contrato
+            "tipo_contrato": c.get("tipo_contrato"),     # LPT / MLA
+            "tranche": c.get("tranche"),                 # tranche
+            "sigla": c.get("sigla"),                     # distribuidora
+            "vigente": c.get("vigente"),                 # Andamento / Encerramento (badge no front)
+            "ucs": ucs_por_contrato.get(c["numero"], 0), # nº de UCs na referência (0 se sem)
+        }
+        for c in visiveis
+    ]
+    # Fase 3: agrega as UFs (sigla → contagem de contratos visíveis).
+    contagem_uf = {}
+    for c in contratos:
+        # Conta contratos por UF (ignora contrato sem UF definida).
+        if c["uf"]:
+            contagem_uf[c["uf"]] = contagem_uf.get(c["uf"], 0) + 1
+    ufs = [
+        {"sigla": sigla, "nome": UF_NOMES.get(sigla, sigla), "contratos": n}
+        for sigla, n in sorted(contagem_uf.items())   # ordena por sigla
+    ]
+    # Saída: contexto pronto para o front.
+    return {"email": email, "grupo": grupo, "ufs": ufs, "contratos": contratos}
 
 
 def grupo_do_email(email, mapa_dominio=None):

@@ -247,9 +247,17 @@ def carregar_base_contratos(caminho=None):
         for numero, dados in base.items()
         if (dados.get("vigente") != "Encerrado")
     }
-    # Fase 4: detalhe dos selecionáveis (número normalizado + sigla) p/ o filtro de acesso.
+    # Fase 4: detalhe dos selecionáveis (para o filtro de acesso e o /api/contexto):
+    # número normalizado + sigla (camada 2) + uf/tipo/tranche (payload do contexto).
     contratos = [
-        {"numero": _norm_contrato(numero), "sigla": dados.get("sigla")}
+        {
+            "numero": _norm_contrato(numero),
+            "sigla": dados.get("sigla"),
+            "uf": dados.get("uf"),
+            "tipo_contrato": dados.get("tipo_contrato"),
+            "tranche": dados.get("tranche"),
+            "vigente": dados.get("vigente"),
+        }
         for numero, dados in base.items()
         if (dados.get("vigente") != "Encerrado")
     ]

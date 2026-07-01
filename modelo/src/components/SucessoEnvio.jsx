@@ -1,7 +1,5 @@
-import { LINHAS_LIDAS } from "../seedData";
-
-// Estado final: planilha sem erros bloqueantes → salva na base.
-export default function SucessoEnvio({ uf, contrato, onNova }) {
+// Estado final: planilha sem erros bloqueantes → validada e enviada por e-mail.
+export default function SucessoEnvio({ uf, contrato, linhasLidas, onNova }) {
   return (
     <section className="card success-card">
       <div className="success-icon">✓</div>
@@ -11,7 +9,7 @@ export default function SucessoEnvio({ uf, contrato, onNova }) {
         contrato e estão disponíveis para o Painel de Monitoramento do MME.
       </p>
       <div className="success-meta">
-        <span className="mi"><b>{LINHAS_LIDAS.toLocaleString("pt-BR")}</b> UCs classificadas</span>
+        <span className="mi"><b>{(linhasLidas ?? 0).toLocaleString("pt-BR")}</b> UCs classificadas</span>
         <span className="mi">Contrato <b>{contrato.numero}</b></span>
         <span className="mi">{contrato.tipo_contrato} · {contrato.tranche}</span>
         <span className="mi">UF <b>{uf.sigla}</b></span>

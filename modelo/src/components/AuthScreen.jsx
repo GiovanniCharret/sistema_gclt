@@ -21,6 +21,11 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
         setErro("E-mail ou senha inválidos.");
         return;
       }
+      if (status === 403) {
+        // Domínio de e-mail não mapeado a nenhum grupo — informa e não entra.
+        setErro(dados?.detail || "Domínio de e-mail não registrado no sistema.");
+        return;
+      }
       if (!ok) {
         setErro("Não foi possível entrar. Tente novamente.");
         return;

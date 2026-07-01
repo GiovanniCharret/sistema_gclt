@@ -7,7 +7,9 @@ o store de usuários apontado para um `tmp_path` via override de dependência.
 
 # `json` grava o store de usuários temporário dos testes de login.
 import json
-# `patch` espiona o envio de e-mail no teste de esqueci-senha.
+# `types` monta uma referência fake (SimpleNamespace) nos testes de validar.
+import types
+# `patch` espiona o envio de e-mail / injeta fakes.
 from unittest.mock import patch
 
 # `pytest` para a fixture de store temporário.
@@ -19,6 +21,8 @@ from fastapi import HTTPException
 from backend.app import app, caminho_usuarios, usuario_do_token
 # Criação de usuário, verificação de token e geração de token nos testes.
 from backend.auth import criar_usuario, verificar_token, gerar_token, obter_usuario
+# Gerador de .xlsx-fixture para os testes de validar.
+from backend.tests.fixtures import gerar_xlsx
 
 
 @pytest.fixture
@@ -132,6 +136,20 @@ def test_login_senha_correta_retorna_token(client, store_usuarios):
     assert resposta.status_code == 200
     token = resposta.json()["token"]
     assert verificar_token(token) == "op@equatorialenergia.com.br"
+
+
+def test_login_dominio_nao_registrado_retorna_403(client, store_usuarios):
+    """`POST /api/login` com domínio fora do mapa de acesso → 403 (não autentica).
+
+    Não precisa nem existir usuário: o domínio não mapeia a nenhum grupo, então não há
+    o que acessar — informa e para (§5.1). Fase 1: login com domínio desconhecido.
+    Fase 2: 403 com mensagem sobre domínio não registrado.
+    """
+    # Fase 1/2: domínio desconhecido → 403.
+    resposta = client.post("/api/login",
+                           json={"email": "alguem@desconhecido.com", "senha": "qualquer"})
+    assert resposta.status_code == 403
+    assert "registrad" in resposta.json()["detail"].lower()
 
 
 def test_login_senha_errada_retorna_401(client, store_usuarios):
@@ -276,3 +294,172 @@ def test_esqueci_senha_email_inexistente_resposta_generica(client, store_usuario
     assert resposta.status_code == 200
     assert resposta.json() == {"ok": True}
     assert mock_env.called is False
+
+
+# --- Contexto de login (C1) — rota protegida ---
+
+def test_contexto_sem_token_retorna_401(client):
+    """`GET /api/contexto` sem token → 401 (rota protegida pelo guard)."""
+    # Sem Authorization → 401.
+    assert client.get("/api/contexto").status_code == 401
+
+
+def test_contexto_equatorial_ve_18_contratos(client):
+    """`GET /api/contexto` com token equatorial → grupo EQUATORIAL e 18 contratos.
+
+    Fase 1: gera token para um e-mail do domínio equatorial.
+    Fase 2: chama a rota com o Bearer.
+    Fase 3: grupo correto, 18 contratos (todos EQUATORIAL) e UFs com nome resolvido.
+    """
+    # Fase 1: token do usuário equatorial.
+    token = gerar_token("op@equatorialenergia.com.br")
+    # Fase 2: consulta o contexto autenticado.
+    resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    # Fase 3: grupo, contratos e UFs coerentes com a base real.
+    assert corpo["grupo"] == "EQUATORIAL"
+    assert len(corpo["contratos"]) == 18
+    assert all(c["sigla"] == "EQUATORIAL" for c in corpo["contratos"])
+    assert all("nome" in u and "contratos" in u for u in corpo["ufs"])
+
+
+def test_contexto_enbpar_ve_41_contratos(client):
+    """`GET /api/contexto` com token enbpar (curinga) → todos os 41 contratos."""
+    # Token enbpar → vê tudo.
+    token = gerar_token("chefe@enbpar.gov.br")
+    resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
+    assert resposta.status_code == 200
+    assert len(resposta.json()["contratos"]) == 41
+
+
+# --- Validar (E2) e Modelo (E3) — rotas protegidas ---
+
+# Domínios pequenos para a validação nos testes de /api/validar.
+_DOM_VAL = {
+    "TIPO_ATENDIMENTO": ["Extensão de Rede"],
+    "UF": ["AM"],
+    "SIM_NAO": ["Sim", "Não"],
+    "TIPO_COMUNIDADE": ["1 - Comunidade indígena"],
+    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade"],
+}
+
+# Uma linha 100% válida (para o caminho limpo).
+_LINHA_LIMPA = {
+    "Número ODI": "O1", "Número da Unidade Consumidora": "U1",
+    "Código IBGE do Município": "1302603", "Município": "MANACAPURU", "UF": "AM",
+    "Latitude": "-3.30", "Longitude": "-60.0", "Data de Energização da UC": "14/02/2026",
+    "Tipo de Atendimento": "Extensão de Rede", "Tipo de Comunidade": "1 - Comunidade indígena",
+    "Enquadramento do beneficiário": "0 - Não é prioridade",
+    "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
+}
+
+
+def _referencia_fake():
+    """Referência fake: 'CTR TESTE' tem UC; 'CTR SEMREF' não tem (para o 409)."""
+    return types.SimpleNamespace(
+        chaves_uc={"CTR TESTE": {("O1", "U1")}},
+        odi_ref={"CTR TESTE": {"O1": ("AM", "MANACAPURU")}},
+        recarregar_se_preciso=lambda: None,
+    )
+
+
+def _base_fake():
+    """Base fake: dois contratos EQUATORIAL selecionáveis (um com, outro sem referência)."""
+    contratos = [
+        {"numero": "CTR TESTE", "sigla": "EQUATORIAL", "uf": "AM",
+         "tipo_contrato": "LPT", "tranche": "1ª", "vigente": "Andamento"},
+        {"numero": "CTR SEMREF", "sigla": "EQUATORIAL", "uf": "AM",
+         "tipo_contrato": "LPT", "tranche": "1ª", "vigente": "Andamento"},
+    ]
+    return {"contratos": contratos, "selecionaveis": {"CTR TESTE", "CTR SEMREF"},
+            "todos": {"CTR TESTE", "CTR SEMREF"}}
+
+
+@pytest.fixture
+def validar_env():
+    """Injeta referência/base/domínios fake e espiona os envios de e-mail."""
+    with patch("backend.app.obter_referencia", _referencia_fake), \
+         patch("backend.app.obter_base_contratos", _base_fake), \
+         patch("backend.app.obter_dominios", lambda: _DOM_VAL), \
+         patch("backend.app.enviar_planilha_validada") as env_planilha, \
+         patch("backend.app.enviar_alerta_critico") as env_alerta:
+        env_planilha.return_value = True
+        yield {"planilha": env_planilha, "alerta": env_alerta}
+
+
+def _headers(email="op@equatorialenergia.com.br"):
+    """Cabeçalho Authorization com um token válido para o e-mail dado."""
+    return {"Authorization": f"Bearer {gerar_token(email)}"}
+
+
+def test_validar_sem_token_retorna_401(client):
+    """`POST /api/validar` sem token → 401."""
+    r = client.post("/api/validar", files={"arquivo": ("a.xlsx", b"x")},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 401
+
+
+def test_validar_planilha_limpa_envia_email(client, validar_env):
+    """Planilha limpa → 200, ok=true, e-mail da planilha disparado."""
+    conteudo = gerar_xlsx([_LINHA_LIMPA])
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", conteudo)},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["ok"] is True and corpo["totalErros"] == 0
+    assert corpo["enviado"] is True
+    assert validar_env["planilha"].called is True
+
+
+def test_validar_planilha_suja_nao_envia(client, validar_env):
+    """Planilha com erro → 200, ok=false, e-mail NÃO enviado."""
+    suja = {**_LINHA_LIMPA, "UF": "XX"}  # UF fora do domínio
+    conteudo = gerar_xlsx([suja])
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", conteudo)},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+    assert validar_env["planilha"].called is False
+
+
+def test_validar_contrato_fora_do_grupo_403(client, validar_env):
+    """Contrato de outro grupo (token ENERGISA, contrato EQUATORIAL) → 403."""
+    conteudo = gerar_xlsx([_LINHA_LIMPA])
+    r = client.post("/api/validar", headers=_headers("op@energisa.com.br"),
+                    files={"arquivo": ("Anexo.xlsx", conteudo)},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 403
+
+
+def test_validar_contrato_sem_referencia_409_e_alerta(client, validar_env):
+    """Contrato sem referência → 409 e alerta crítico ao admin."""
+    conteudo = gerar_xlsx([_LINHA_LIMPA])
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", conteudo)},
+                    data={"contrato": "CTR SEMREF", "uf": "AM"})
+    assert r.status_code == 409
+    assert validar_env["alerta"].called is True
+
+
+def test_validar_arquivo_invalido_400(client, validar_env):
+    """Arquivo que não é .xlsx → 400."""
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("a.xlsx", b"isto nao e xlsx")},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 400
+
+
+def test_modelo_sem_token_retorna_401(client):
+    """`GET /api/modelo` sem token → 401."""
+    assert client.get("/api/modelo").status_code == 401
+
+
+def test_modelo_baixa_o_arquivo(client):
+    """`GET /api/modelo` com token → 200 + Content-Disposition + bytes."""
+    r = client.get("/api/modelo", headers=_headers())
+    assert r.status_code == 200
+    assert "attachment" in r.headers.get("content-disposition", "").lower()
+    assert len(r.content) > 0

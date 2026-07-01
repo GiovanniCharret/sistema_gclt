@@ -1,10 +1,22 @@
 import { useState } from "react";
+import * as api from "../lib/api";
 
 // Passo 3 — conferência da versão da planilha antes do envio.
 const VERSAO_DATA = "23/06/2026";
 
-export default function VersaoPlanilha({ onAvancar, onBack }) {
+export default function VersaoPlanilha({ token, onAvancar, onBack }) {
   const [baixado, setBaixado] = useState(false);
+  const [erro, setErro] = useState("");
+
+  async function baixar() {
+    setErro("");
+    try {
+      await api.baixarModelo(token);
+      setBaixado(true);
+    } catch {
+      setErro("Não foi possível baixar o modelo. Tente novamente.");
+    }
+  }
 
   return (
     <div className="auth-shell">
@@ -19,8 +31,9 @@ export default function VersaoPlanilha({ onAvancar, onBack }) {
         <div className="versao-card">
           <p className="section-kicker">Modelo oficial</p>
           <h2 className="card-title">Versão de {VERSAO_DATA}</h2>
-          <button className="btn-ghost versao-btn" onClick={() => setBaixado(true)}>Baixar modelo</button>
-          {baixado && <p className="versao-baixado">✓ Modelo baixado (protótipo — sem download real)</p>}
+          <button className="btn-ghost versao-btn" onClick={baixar}>Baixar modelo</button>
+          {baixado && <p className="versao-baixado">✓ Modelo baixado</p>}
+          {erro && <p className="auth-error">{erro}</p>}
         </div>
 
         <div className="btn-row">

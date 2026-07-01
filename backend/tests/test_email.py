@@ -13,7 +13,11 @@ from unittest.mock import patch
 # Config injetável (evita depender de `.env` real nos testes).
 from backend.config import Config
 # Funções sob teste.
-from backend.email_envio import montar_email_credenciais, enviar, enviar_credenciais
+from backend.email_envio import (
+    montar_email_credenciais, enviar, enviar_credenciais,
+    montar_email_planilha, enviar_planilha_validada,
+    montar_email_alerta, enviar_alerta_critico,
+)
 
 
 def _config_smtp_real():
@@ -96,3 +100,57 @@ def test_enviar_credenciais_dispara_smtp_mock():
     assert "TMP-XYZ" in msg_enviada.get_content()
     # Retorno indica envio bem-sucedido.
     assert enviado is True
+
+
+# ── E1 · E-mail da planilha validada + alerta crítico ──
+
+def _config_com_destinatarios():
+    """Config de envio (dry-run off) com destinatários e e-mail de alerta."""
+    return Config(smtp_host="smtp.teste", smtp_port=587, smtp_from="nao-responder@teste",
+                  smtp_tls=False, smtp_dryrun=False,
+                  destinatarios="dest1@mme.gov.br, dest2@enbpar.gov.br",
+                  alerta_email="admin@enbpar.gov.br")
+
+
+def test_montar_email_planilha_anexo_nomeado_e_intacto():
+    """A planilha validada é anexada byte a byte, com o nome e destinos corretos.
+
+    Fase 1: monta o e-mail com um conteúdo .xlsx fake e contrato com "/".
+    Fase 2: To = destinatários; assunto tem o contrato/UF; anexo nomeado
+            `Anexo V preenchido - {contrato com / → -}.xlsx` e conteúdo idêntico.
+    """
+    # Fase 1: monta a mensagem.
+    conteudo = b"CONTEUDO-XLSX-BYTES"
+    msg = montar_email_planilha(conteudo, "ECM 018/2025", "PA", config=_config_com_destinatarios())
+    # Fase 2: destinatários no To e contrato no assunto.
+    assert "dest1@mme.gov.br" in msg["To"] and "dest2@enbpar.gov.br" in msg["To"]
+    assert "ECM 018/2025" in msg["Subject"]
+    # Anexo: nome com "/"→"-" e bytes intactos.
+    anexos = list(msg.iter_attachments())
+    assert len(anexos) == 1
+    assert anexos[0].get_filename() == "Anexo V preenchido - ECM 018-2025.xlsx"
+    assert anexos[0].get_payload(decode=True) == conteudo
+
+
+def test_enviar_planilha_validada_dispara_smtp_mock():
+    """`enviar_planilha_validada` (fora do dry-run) envia via SMTP mockado."""
+    # Intercepta o SMTP e envia.
+    with patch("backend.email_envio.smtplib.SMTP") as mock_smtp:
+        sessao = mock_smtp.return_value.__enter__.return_value
+        enviado = enviar_planilha_validada(b"XLSX", "ECM 018/2025", "PA",
+                                           config=_config_com_destinatarios())
+    # SMTP usado e mensagem enviada.
+    assert mock_smtp.called is True
+    assert sessao.send_message.called is True
+    assert enviado is True
+
+
+def test_montar_email_alerta_critico_para_admin():
+    """O alerta crítico vai ao ALERTA_EMAIL, com assunto de alerta e contrato no corpo."""
+    # Monta o alerta.
+    msg = montar_email_alerta("ECM 999/2030", "AM", "Anexo V - ...xlsx",
+                              config=_config_com_destinatarios())
+    # Destino e assunto de alerta.
+    assert msg["To"] == "admin@enbpar.gov.br"
+    assert "[ALERTA]" in msg["Subject"]
+    assert "ECM 999/2030" in msg["Subject"] or "ECM 999/2030" in msg.get_content()

@@ -1,7 +1,6 @@
-// Monta e baixa o relatório de inconsistências em .csv (mock — gera no
-// navegador a partir dos dados roteirados, sem backend).
+// Monta e baixa o relatório de inconsistências em .csv a partir dos `grupos`
+// reais do /api/validar (gerado no navegador).
 // Separador ";" e BOM UTF-8 para abrir certo no Excel em pt-BR.
-import { RULE_GROUPS } from "../seedData";
 
 const VERSAO_DATA = "23/06/2026";
 
@@ -11,10 +10,10 @@ function campo(v) {
   return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function linhasDetalhe() {
+function linhasDetalhe(grupos) {
   const sev = (s) => (s === "err" ? "Erro" : "Aviso");
   const out = [];
-  for (const g of RULE_GROUPS) {
+  for (const g of grupos) {
     for (const r of g.rows) {
       out.push([sev(g.sev), g.title, r.loc, r.field, r.problem, r.sug]);
     }
@@ -22,8 +21,8 @@ function linhasDetalhe() {
   return out;
 }
 
-export function buildRelatorioCsv(contrato, uf) {
-  const detalhe = linhasDetalhe();
+export function buildRelatorioCsv(contrato, uf, grupos) {
+  const detalhe = linhasDetalhe(grupos);
   const linhas = [
     ["Relatório de Inconsistências - Painel de Monitoramento (Anexo V)"],
     ["Contrato", `${contrato.numero} - ${contrato.tipo_contrato}, ${contrato.tranche}`],
@@ -37,8 +36,8 @@ export function buildRelatorioCsv(contrato, uf) {
   return linhas.map((cols) => cols.map(campo).join(";")).join("\r\n");
 }
 
-export function baixarRelatorioCsv(contrato, uf) {
-  const csv = buildRelatorioCsv(contrato, uf);
+export function baixarRelatorioCsv(contrato, uf, grupos) {
+  const csv = buildRelatorioCsv(contrato, uf, grupos);
   // BOM (﻿) para o Excel pt-BR exibir acentos corretamente.
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

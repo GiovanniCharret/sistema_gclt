@@ -10,6 +10,8 @@ Design testável: a montagem da mensagem (`montar_email_credenciais`) é separad
 transporte (`enviar`), para testar conteúdo sem SMTP e transporte com SMTP mockado.
 """
 
+# `datetime` compõe a data do assunto do e-mail da planilha.
+import datetime
 # `smtplib` faz a conexão/entrega SMTP.
 import smtplib
 # `EmailMessage` monta a mensagem (cabeçalhos + corpo) de forma segura.
@@ -20,6 +22,14 @@ from backend.config import obter_config
 
 # Assunto padrão do e-mail de credenciais (§9).
 _ASSUNTO_CREDENCIAIS = "Acesso ao sistema — senha temporária"
+# Subtype MIME do .xlsx (planilha do Office Open XML).
+_XLSX_SUBTYPE = "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _destinatarios(cfg):
+    """Lista de destinatários a partir da string `DESTINATARIOS` (separada por vírgula)."""
+    # Divide por vírgula, tira espaços e descarta vazios.
+    return [d.strip() for d in cfg.destinatarios.split(",") if d.strip()]
 
 
 def montar_email_credenciais(email, senha_temporaria, config=None):
@@ -97,3 +107,80 @@ def enviar_credenciais(email, senha_temporaria, config=None):
     msg = montar_email_credenciais(email, senha_temporaria, config)
     # Fase 2/Saída: transporte.
     return enviar(msg, config)
+
+
+def montar_email_planilha(arquivo, contrato, uf, config=None):
+    """Monta o e-mail com a planilha validada anexada **byte a byte** (E1, §9).
+
+    Por que existe: quando a validação passa (0 erros), o backend envia o próprio `.xlsx`
+    recebido — sem reescrever — aos destinatários configurados.
+
+    Entrada: `arquivo` (bytes do .xlsx como veio), `contrato` (número), `uf` (sigla),
+             `config` (opcional).
+    Fase 1: resolve a config e a data de hoje.
+    Fase 2: monta From/To (destinatários)/Subject e um corpo curto.
+    Fase 3: anexa o arquivo com o nome `Anexo V preenchido - {contrato}.xlsx` (`/`→`-`).
+    Saída: o `EmailMessage`.
+    """
+    # Fase 1: config + data de hoje (DD/MM/AAAA) para o assunto.
+    cfg = config if config is not None else obter_config()
+    hoje = datetime.date.today().strftime("%d/%m/%Y")
+    # Fase 2: cabeçalhos e corpo.
+    msg = EmailMessage()
+    msg["From"] = cfg.smtp_from
+    msg["To"] = ", ".join(_destinatarios(cfg))              # lista única global
+    msg["Subject"] = f"Anexo V validado — {contrato} ({uf}) — {hoje}"
+    msg.set_content(
+        f"Segue em anexo o Anexo V validado do contrato {contrato} ({uf}).\n\n"
+        "Enviado automaticamente pelo sistema após a validação sem erros."
+    )
+    # Fase 3: anexo com nome de arquivo válido (`/` do número vira `-`).
+    nome_anexo = f"Anexo V preenchido - {contrato.replace('/', '-')}.xlsx"
+    msg.add_attachment(arquivo, maintype="application", subtype=_XLSX_SUBTYPE, filename=nome_anexo)
+    # Saída: mensagem pronta.
+    return msg
+
+
+def enviar_planilha_validada(arquivo, contrato, uf, config=None):
+    """Monta e envia o e-mail da planilha validada (respeita dry-run).
+
+    Saída: True se enviou; False em dry-run.
+    """
+    # Monta e transporta.
+    cfg = config if config is not None else obter_config()
+    return enviar(montar_email_planilha(arquivo, contrato, uf, cfg), cfg)
+
+
+def montar_email_alerta(contrato, uf, nome_arquivo, config=None):
+    """Monta o e-mail de **alerta crítico** ao admin (contrato sem referência, §8).
+
+    Entrada: `contrato`, `uf`, `nome_arquivo` (arquivo enviado), `config` (opcional).
+    Fase 1: resolve a config.
+    Fase 2: monta a mensagem ao `ALERTA_EMAIL` com contexto técnico.
+    Saída: o `EmailMessage`.
+    """
+    # Fase 1: config efetiva.
+    cfg = config if config is not None else obter_config()
+    # Fase 2: mensagem de alerta.
+    msg = EmailMessage()
+    msg["From"] = cfg.smtp_from
+    msg["To"] = cfg.alerta_email
+    msg["Subject"] = f"[ALERTA] Contrato sem referência — {contrato}"
+    msg.set_content(
+        "Anomalia na validação do Anexo V.\n\n"
+        f"Contrato sem referência em entrada/: {contrato} ({uf}).\n"
+        f"Arquivo enviado: {nome_arquivo}.\n\n"
+        "No fluxo normal todo contrato tem ODI+UC. Investigar a base de referência."
+    )
+    # Saída: mensagem pronta.
+    return msg
+
+
+def enviar_alerta_critico(contrato, uf, nome_arquivo, config=None):
+    """Monta e envia o alerta crítico ao admin (respeita dry-run).
+
+    Saída: True se enviou; False em dry-run.
+    """
+    # Monta e transporta.
+    cfg = config if config is not None else obter_config()
+    return enviar(montar_email_alerta(contrato, uf, nome_arquivo, cfg), cfg)

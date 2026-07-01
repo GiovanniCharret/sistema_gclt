@@ -10,19 +10,21 @@ import UploadAnexoV from "./components/UploadAnexoV";
 import PainelInconsistencias from "./components/PainelInconsistencias";
 import SucessoEnvio from "./components/SucessoEnvio";
 import { descreverContrato } from "./seedData";
+import * as api from "./lib/api";
 
-// Orquestrador do mock. Telas: login → menu → UF → contrato → versão → shell
-// (upload → painel → sucesso). Tudo em estado local; validação roteirada.
+// Orquestrador. Telas: login → menu → UF → contrato → versão → shell
+// (upload → painel → sucesso). Auth + contexto + validação são reais (backend).
 export default function App() {
   const [user, setUser] = useState(null);          // null = não autenticado (e-mail quando logado)
   const [token, setToken] = useState(null);        // token de sessão (JWT) — usado nas rotas protegidas
   const [trocaPendente, setTrocaPendente] = useState(null); // { email, senha } aguardando troca no 1º acesso
+  const [contexto, setContexto] = useState(null);  // { grupo, ufs, contratos } vindo de /api/contexto
   const [moduloOk, setModuloOk] = useState(false); // menu principal escolhido
   const [uf, setUf] = useState(null);              // UF selecionada
   const [contrato, setContrato] = useState(null);  // contrato (chave principal)
   const [versaoOk, setVersaoOk] = useState(false); // passo 3 — versão conferida
   const [view, setView] = useState("upload");      // upload | painel | sucesso
-  const [attempt, setAttempt] = useState(1);       // 1 = mostra erros · 2 = limpa
+  const [resultado, setResultado] = useState(null);// resposta do /api/validar (painel real)
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
 
@@ -33,16 +35,32 @@ export default function App() {
   }
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // Ao autenticar (token disponível), busca o contexto do usuário (grupo → UFs/contratos).
+  useEffect(() => {
+    if (!token || contexto) return;
+    let ativo = true;
+    api
+      .contexto(token)
+      .then(({ ok, dados }) => {
+        if (ativo) setContexto(ok && dados ? dados : { grupo: null, ufs: [], contratos: [] });
+      })
+      .catch(() => {
+        if (ativo) setContexto({ grupo: null, ufs: [], contratos: [] });
+      });
+    return () => { ativo = false; };
+  }, [token, contexto]);
+
   function handleLogout() {
     setUser(null);
     setToken(null);
     setTrocaPendente(null);
+    setContexto(null);
     setModuloOk(false);
     setUf(null);
     setContrato(null);
     setVersaoOk(false);
     setView("upload");
-    setAttempt(1);
+    setResultado(null);
   }
 
   function selectUf(novaUf) {
@@ -55,12 +73,13 @@ export default function App() {
     setContrato(c);
     setVersaoOk(false);
     setView("upload");
-    setAttempt(1);
+    setResultado(null);
   }
 
-  // Fim da validação roteirada: 1ª tentativa → painel; 2ª (corrigida) → sucesso.
-  function handleValidated() {
-    setView(attempt === 1 ? "painel" : "sucesso");
+  // Fim da validação real: sem erros → sucesso; com erros → painel de inconsistências.
+  function onValidated(res) {
+    setResultado(res);
+    setView(res.ok ? "sucesso" : "painel");
   }
 
   // ── Telas de entrada ──────────────────────────────────────────────
@@ -86,9 +105,27 @@ export default function App() {
     );
   }
   if (!moduloOk) return <MenuPrincipal onClassificacao={() => setModuloOk(true)} />;
-  if (!uf) return <UfSelector onSelect={selectUf} />;
-  if (!contrato) return <ContratoSelector uf={uf} onSelect={selectContrato} onBack={() => setUf(null)} />;
-  if (!versaoOk) return <VersaoPlanilha onAvancar={() => setVersaoOk(true)} onBack={() => setContrato(null)} />;
+  // Aguarda o contexto (grupo → UFs/contratos) chegar do backend antes dos seletores.
+  if (!contexto) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <p className="auth-subtitle">Carregando seu acesso…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!uf) return <UfSelector ufs={contexto.ufs} onSelect={selectUf} />;
+  if (!contrato)
+    return (
+      <ContratoSelector
+        uf={uf}
+        contratos={contexto.contratos.filter((c) => c.uf === uf.sigla)}
+        onSelect={selectContrato}
+        onBack={() => setUf(null)}
+      />
+    );
+  if (!versaoOk) return <VersaoPlanilha token={token} onAvancar={() => setVersaoOk(true)} onBack={() => setContrato(null)} />;
 
   // ── Shell logado ──────────────────────────────────────────────────
   const contratoLabel = descreverContrato(contrato);
@@ -100,11 +137,11 @@ export default function App() {
         <nav className="topbar-nav">
           <button
             className={`topbar-link${view === "upload" ? " is-active" : ""}`}
-            onClick={() => { setAttempt(1); setView("upload"); }}
+            onClick={() => { setResultado(null); setView("upload"); }}
           >
             Envio da Planilha
           </button>
-          <button className="topbar-link" onClick={() => { setContrato(null); setUf(null); }}>Trocar Contrato</button>
+          <button className="topbar-link" onClick={() => { setContrato(null); setUf(null); setResultado(null); setView("upload"); }}>Trocar Contrato</button>
         </nav>
         <div className="topbar-right">
           <span className="topbar-uf" title={`${uf.sigla} · ${contratoLabel}`}>{uf.sigla} · {contrato.numero}</span>
@@ -118,23 +155,30 @@ export default function App() {
           <UploadAnexoV
             uf={uf}
             contrato={contrato}
-            secondAttempt={attempt === 2}
-            onComplete={handleValidated}
+            token={token}
+            onComplete={onValidated}
           />
         )}
-        {view === "painel" && (
+        {view === "painel" && resultado && (
           <PainelInconsistencias
             uf={uf}
             contrato={contrato}
-            onCorrigir={() => { setAttempt(2); setView("upload"); }}
+            grupos={resultado.grupos}
+            previewRows={resultado.previewRows}
+            totalErros={resultado.totalErros}
+            totalAvisos={resultado.totalAvisos}
+            linhasLidas={resultado.linhasLidas}
+            onCorrigir={() => setView("upload")}
             onToast={showToast}
           />
         )}
-        {view === "sucesso" && (
+        {view === "sucesso" && resultado && (
           <SucessoEnvio
             uf={uf}
             contrato={contrato}
-            onNova={() => { setAttempt(1); setView("upload"); }}
+            linhasLidas={resultado.linhasLidas}
+            enviado={resultado.enviado}
+            onNova={() => { setResultado(null); setView("upload"); }}
           />
         )}
       </main>

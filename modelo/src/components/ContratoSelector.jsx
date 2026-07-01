@@ -1,10 +1,8 @@
-import { contratosDaUf } from "../seedData";
-
 // Passo 2 (sublista) — escolha do contrato (chave principal de cada registro).
-// Lista apenas contratos da UF cujo `vigente` é diferente de "Encerrado".
+// Os contratos vêm do /api/contexto (já filtrados pela UF e pelo grupo) — via prop.
 // Cartões em grade, espelhando o painel de UFs.
-export default function ContratoSelector({ uf, onSelect, onBack }) {
-  const lista = contratosDaUf(uf.sigla);
+export default function ContratoSelector({ uf, contratos, onSelect, onBack }) {
+  const lista = [...contratos].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR"));
 
   return (
     <div className="auth-shell">

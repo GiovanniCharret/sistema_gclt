@@ -47,6 +47,10 @@ class Config(BaseSettings):
     smtp_tls: bool = True
     # Dry-run: não envia de verdade (padrão em dev/testes), só registraria o envio.
     smtp_dryrun: bool = True
+    # Lista única e global de destinatários da planilha validada (separados por vírgula).
+    destinatarios: str = ""
+    # E-mail do administrador que recebe os alertas críticos (§8).
+    alerta_email: str = ""
 
 
 # Singleton de configuração (carregado uma vez por processo).

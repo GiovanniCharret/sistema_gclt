@@ -1,15 +1,14 @@
 import { useState } from "react";
-import {
-  RULE_GROUPS, TOTAL_ERROS, TOTAL_AVISOS,
-  PREVIEW_COLS, PREVIEW_ROWS, LINHAS_LIDAS,
-} from "../seedData";
+import { PREVIEW_COLS } from "../seedData";
 import { baixarRelatorioCsv } from "../lib/relatorioCsv";
 
 // Entregável central: resumo + grupos por tipo de regra (expansíveis) ao lado
 // de um preview das primeiras linhas da planilha com as células sinalizadas.
-// Decisão: avisos NÃO bloqueiam — só erros impedem o salvamento.
-export default function PainelInconsistencias({ uf, contrato, onCorrigir, onToast }) {
-  const ucs = LINHAS_LIDAS;
+// Dados vêm do /api/validar (via props). Avisos NÃO bloqueiam — só erros impedem o salvamento.
+export default function PainelInconsistencias({
+  uf, contrato, grupos, previewRows, totalErros, totalAvisos, linhasLidas, onCorrigir, onToast,
+}) {
+  const ucs = linhasLidas;
   // primeiro grupo aberto por padrão
   const [open, setOpen] = useState(() => ({ 0: true }));
   const toggle = (i) => setOpen((o) => ({ ...o, [i]: !o[i] }));
@@ -29,24 +28,24 @@ export default function PainelInconsistencias({ uf, contrato, onCorrigir, onToas
         <div className="assist-body">
           Recebi a planilha do contrato <strong>{contrato.numero}</strong> ({contrato.sigla} · {uf.sigla}). Li{" "}
           <strong>{ucs.toLocaleString("pt-BR")} unidades consumidoras</strong>. Encontrei{" "}
-          <strong>{TOTAL_ERROS} erros</strong> e <strong>{TOTAL_AVISOS} avisos</strong>.
+          <strong>{totalErros} erros</strong> e <strong>{totalAvisos} avisos</strong>.
           Os <strong>erros impedem o salvamento</strong> na base — corrija e reenvie.
           Os avisos não bloqueiam, mas recomendo revisar.
         </div>
       </div>
 
       <div className="val-summary">
-        <span className="val-pill err"><span className="big">{TOTAL_ERROS}</span> erros</span>
-        <span className="val-pill warn"><span className="big">{TOTAL_AVISOS}</span> avisos</span>
+        <span className="val-pill err"><span className="big">{totalErros}</span> erros</span>
+        <span className="val-pill warn"><span className="big">{totalAvisos}</span> avisos</span>
         <span className="val-pill">{ucs.toLocaleString("pt-BR")} UCs lidas</span>
-        <span className="val-pill">{RULE_GROUPS.length} regras acionadas</span>
+        <span className="val-pill">{grupos.length} regras acionadas</span>
       </div>
 
       <div className="av-split">
         {/* Coluna 1 — inconsistências por regra */}
         <div>
           <p className="av-col-title">Inconsistências por regra</p>
-          {RULE_GROUPS.map((g, i) => (
+          {grupos.map((g, i) => (
             <div key={g.title} className={`rule-group${open[i] ? " is-open" : ""}`}>
               <button className="rule-head" onClick={() => toggle(i)}>
                 <span className={`sev-badge ${g.sev}`}>{g.sev === "err" ? "Erro" : "Aviso"}</span>
@@ -87,7 +86,7 @@ export default function PainelInconsistencias({ uf, contrato, onCorrigir, onToas
                   <tr>{PREVIEW_COLS.map((c) => <th key={c.key}>{c.label}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {PREVIEW_ROWS.map((row) => (
+                  {previewRows.map((row) => (
                     <tr key={row.linha}>
                       {PREVIEW_COLS.map((c) => {
                         const flag = row.flags[c.key];
@@ -116,7 +115,7 @@ export default function PainelInconsistencias({ uf, contrato, onCorrigir, onToas
         <button className="btn-primary" onClick={onCorrigir}>Corrigir e reenviar</button>
         <button
           className="btn-ghost"
-          onClick={() => { baixarRelatorioCsv(contrato, uf); onToast("Relatório de inconsistências (.csv) gerado"); }}
+          onClick={() => { baixarRelatorioCsv(contrato, uf, grupos); onToast("Relatório de inconsistências (.csv) gerado"); }}
         >
           Baixar relatório (.csv)
         </button>

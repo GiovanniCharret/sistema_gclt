@@ -19,20 +19,28 @@ Lógica (Entrada → Saída):
 # `time` fornece o relógio do rate-limiter do esqueci-senha.
 import time
 
-# `FastAPI`/`Depends`/`HTTPException`/`Header` — app, DI, erros HTTP e leitura de header.
-from fastapi import FastAPI, Depends, HTTPException, Header
+# `FastAPI`/`Depends`/`HTTPException`/`Header`/`File`/`Form`/`UploadFile` — app, DI, erros,
+# header e upload multipart (E2).
+from fastapi import FastAPI, Depends, HTTPException, Header, File, Form, UploadFile
+# `FileResponse` serve o modelo oficial como download (E3).
+from fastapi.responses import FileResponse
 # `CORSMiddleware` libera chamadas cross-origin do front em desenvolvimento.
 from fastapi.middleware.cors import CORSMiddleware
 # `BaseModel` valida/tipa o corpo JSON das requisições (ex.: login).
 from pydantic import BaseModel
 
-# Cache de referência de `entrada/` (índices) — A2 — e da autoridade `base_contratos.json` — A3.
-from backend.referencia import obter_referencia, obter_base_contratos
+# Cache de referência de `entrada/` (A2), autoridade (A3) e normalização do nº de contrato.
+from backend.referencia import obter_referencia, obter_base_contratos, _norm_contrato
 # Configuração do processo (caminho do store de usuários) e auth (B2–B4).
 from backend.config import obter_config
 from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_token, LimitadorReset
-# Envio do e-mail de credenciais (reset self-service) — importado aqui p/ ser mockável.
-from backend.email_envio import enviar_credenciais
+# E-mails: credenciais (B1), planilha validada e alerta crítico (E1) — mockáveis nos testes.
+from backend.email_envio import enviar_credenciais, enviar_planilha_validada, enviar_alerta_critico
+# Montagem do contexto, resolução do grupo e filtro de contratos por grupo (C1/E2, §5.1).
+from backend.acesso import montar_contexto, grupo_do_email, contratos_visiveis
+# Parsing (D1), domínios (D2) e validação (D3–D5) da planilha.
+from backend.planilha import ler_preenchimento, obter_dominios, PlanilhaInvalida, _MODELO_PADRAO
+from backend.validacao import validar
 
 # Fase 1: instancia o app com título/versão (aparecem na doc OpenAPI em /docs).
 app = FastAPI(
@@ -137,6 +145,10 @@ def login(dados: LoginIn, caminho=Depends(caminho_usuarios)):
     Fase 4: caso normal → `{token}`.
     Saída: JSON conforme o desfecho; 401 quando inválido.
     """
+    # Fase 0: domínio do e-mail precisa mapear a um grupo (§5.1); senão não há o que
+    # acessar — informa e para (não faz sentido autenticar num domínio não registrado).
+    if grupo_do_email(dados.email) is None:
+        raise HTTPException(status_code=403, detail="Domínio de e-mail não registrado no sistema.")
     # Fase 1: decide o desfecho do login.
     resultado = autenticar(dados.email, dados.senha, caminho=caminho)
     # Fase 2: inválido → 401 (mensagem genérica, não revela o que falhou).
@@ -239,3 +251,106 @@ def esqueci_senha_rota(dados: EsqueciSenhaIn, caminho=Depends(caminho_usuarios))
             enviar_credenciais(email_canonico, nova_senha)
     # Fase 3/Saída: resposta genérica (não revela existência do e-mail).
     return {"ok": True}
+
+
+@app.post("/api/validar")
+async def validar_rota(
+    arquivo: UploadFile = File(...),
+    contrato: str = Form(...),
+    uf: str = Form(...),
+    email=Depends(usuario_do_token),
+):
+    """Valida a planilha e, se passar, envia por e-mail (E2, §5.1/§6/§8).
+
+    Protegida: o e-mail vem do token. `multipart/form-data` com `arquivo`/`contrato`/`uf`.
+
+    Entrada: arquivo (.xlsx), contrato, uf; email (do token).
+    Fase 1: escopo — contrato precisa pertencer ao grupo do e-mail (senão 403).
+    Fase 2: anomalia — contrato sem referência em `entrada/` → alerta crítico + 409 (§8).
+    Fase 3: parsing — lê a aba Preenchimento (não-.xlsx/sem aba → 400).
+    Fase 4: valida (regras D3/D4) e monta o painel (D5).
+    Fase 5: se 0 erros, envia o `.xlsx` como veio aos destinatários (marca `enviado`).
+    Saída: JSON do painel + `ok`/`enviado` (+ `erroEnvio` em falha de SMTP).
+    """
+    # Número do contrato normalizado (casa com as chaves da referência/base).
+    contrato_norm = _norm_contrato(contrato)
+    referencia = obter_referencia()
+    referencia.recarregar_se_preciso()
+    base = obter_base_contratos()
+    # Fase 1: o contrato precisa estar entre os visíveis do grupo do e-mail.
+    visiveis = {c["numero"] for c in contratos_visiveis(grupo_do_email(email), base["contratos"])}
+    if contrato_norm not in visiveis:
+        raise HTTPException(status_code=403, detail="Contrato fora do escopo do seu acesso.")
+    # Fase 2: contrato sem referência (sem chaves_uc) = anomalia → alerta + 409 (§8).
+    if contrato_norm not in referencia.chaves_uc:
+        enviar_alerta_critico(contrato, uf, arquivo.filename or "(sem nome)")
+        raise HTTPException(status_code=409,
+                            detail="Não foi possível validar este contrato no momento.")
+    # Fase 3: lê os bytes e parseia a aba Preenchimento.
+    conteudo = await arquivo.read()
+    try:
+        linhas = ler_preenchimento(conteudo)
+    except PlanilhaInvalida as erro:
+        raise HTTPException(status_code=400, detail=erro.mensagem)
+    # Fase 4: valida contra domínios + referência do contrato.
+    resultado = validar(
+        linhas,
+        obter_dominios(),
+        referencia.chaves_uc.get(contrato_norm, set()),
+        referencia.odi_ref.get(contrato_norm, {}),
+    )
+    # Fase 5: sem erros → envia o arquivo como veio (respeita dry-run/falha de SMTP).
+    enviado = False
+    erro_envio = None
+    if resultado["ok"]:
+        try:
+            enviado = enviar_planilha_validada(conteudo, contrato, uf)
+        except Exception as erro:  # falha de SMTP não derruba a resposta
+            erro_envio = str(erro)
+    # Saída: painel + status de envio.
+    resposta = {**resultado, "enviado": enviado}
+    if erro_envio:
+        resposta["erroEnvio"] = erro_envio
+    return resposta
+
+
+@app.get("/api/modelo")
+def modelo(email=Depends(usuario_do_token)):
+    """Baixa o modelo oficial do Anexo V (E3, §6). Protegida pelo token.
+
+    Entrada: email (do token, injetado).
+    Fase 1: confere que o arquivo do modelo existe (senão 404).
+    Fase 2: devolve como download (Content-Disposition attachment, nome canônico).
+    Saída: o arquivo .xlsx.
+    """
+    # Fase 1: o modelo precisa estar presente (em `manuais/`, no servidor).
+    if not _MODELO_PADRAO.exists():
+        raise HTTPException(status_code=404, detail="Modelo não encontrado no servidor.")
+    # Fase 2/Saída: download com o nome oficial.
+    return FileResponse(
+        str(_MODELO_PADRAO),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.xlsx",
+    )
+
+
+@app.get("/api/contexto")
+def contexto(email=Depends(usuario_do_token)):
+    """Contexto de login: grupo do usuário + UFs/contratos visíveis (C1, §5.1/§6).
+
+    Protegida: o e-mail vem do token (guard `usuario_do_token`), nunca de parâmetro.
+
+    Entrada: `email` (do token, injetado).
+    Fase 1: obtém referência (recarrega se `entrada/` mudou) e a autoridade de contratos.
+    Fase 2: calcula a contagem de UCs por contrato (tamanho de `chaves_uc`).
+    Fase 3: monta o contexto filtrado pelo grupo do e-mail.
+    Saída: JSON `{email, grupo, ufs, contratos}`.
+    """
+    # Fase 1: caches de referência e autoridade.
+    referencia = obter_referencia()
+    referencia.recarregar_se_preciso()
+    base = obter_base_contratos()
+    # Fase 2: nº de UCs por contrato (a partir dos pares (odi, uc) da referência).
+    ucs_por_contrato = {numero: len(pares) for numero, pares in referencia.chaves_uc.items()}
+    # Fase 3/Saída: contexto filtrado pelo grupo do e-mail do token.
+    return montar_contexto(email, base["contratos"], ucs_por_contrato)

@@ -320,10 +320,12 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 > isoladamente**. Marcar `[x]` ao concluir, anotando o resultado do teste. Marcador de
 > teste em *itálico*.
 >
-> **Estado (2026-06-30): Blocos A e B concluídos** (A1–A4, B1–B4) — fundação + auth
-> (login/trocar-senha/esqueci-senha, hash pbkdf2, token JWT, CLI de provisionamento),
-> **49 testes pytest verdes**, `.venv` na raiz (uv, CPython 3.12). Próximo: antecipar
-> F1+F2 (login visual) conforme decisão abaixo; depois C–E.
+> **Estado (2026-07-01): Blocos A, B, C + F1/F2 concluídos** — fundação, auth
+> (login/trocar-senha/esqueci-senha, hash pbkdf2, token JWT, CLI), contexto de login
+> (`/api/contexto`) e front religado ao login real. **55 testes pytest verdes**;
+> **produção no ar** (`gerenciador-gclt.com`). **Backend completo (A–E).** Falta: **F4–F5**
+> (upload/painel reais no front) e **G** (deploy final + smoke SMTP real). Concluídos: A, B, C,
+> D, E, F1–F3. **93 testes verdes.**
 >
 > **Ajuste de sequência (2026-06-30, decisão do usuário):** hospedagem confirmada =
 > **VPS Hostinger** → backend FastAPI/uvicorn roda (spec §4 vale; **sem replanejamento de
@@ -335,7 +337,14 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 > **Deploy antecipado (2026-07-01):** guia passo a passo do VPS Hostinger criado em
 > **`DEPLOY_HOSTINGER.html`** (raiz) — sobe a fatia de auth (health + login/troca/esqueci +
 > front F1/F2) com Nginx + uvicorn(systemd) + `/api` + HTTPS, para testar em produção cedo e
-> de-riscar o deploy. O Bloco G apenas amplia essa mesma base.
+> de-riscar o deploy. Também há um **`deploy_hostinger.sh`** (1 comando, idempotente,
+> apex+www). O Bloco G apenas amplia essa mesma base.
+>
+> **Produção no ar (2026-07-01):** `gerenciador-gclt.com` — login/troca/esqueci validados por
+> teste visual **em produção** (F1/F2 ✓ definitivos). **Gotcha registrado:** o script NÃO cria
+> usuário; sem rodar o passo de criação, `usuarios.json` não existe, todo login dá "Credenciais
+> inválidas" e o "esqueci senha" responde genérico (não denuncia o usuário ausente). Criar via
+> `criar_usuario(...)` na raiz, como usuário do serviço. (HTTPS ainda pendente no host.)
 
 ### Bloco A — Backend: fundação
 - [x] **A1 · Scaffold FastAPI.** App, `requirements.txt`, `.env.example`, CORS p/ dev,
@@ -415,36 +424,58 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
   Smoke HTTP: login→troca→login→esqueci OK. **Bloco B (auth) concluído.**
 
 ### Bloco C — Backend: contexto de login
-- [ ] **C1 · `GET /api/contexto` (protegida).** E-mail do token → grupo → UFs/contratos
+- [x] **C1 · `GET /api/contexto` (protegida).** E-mail do token → grupo → UFs/contratos
   filtrados. *Teste: equatorial → só EQUATORIAL; enbpar → 41; domínio desconhecido → vazio.*
+  ✓ **(2026-07-01)** `acesso.montar_contexto` (grupo → contratos visíveis + UCs por contrato
+  + UFs agregadas com nome via `UF_NOMES` espelhado do front); `carregar_base_contratos`
+  passou a expor `uf`/`tipo_contrato`/`tranche`; rota `GET /api/contexto` protegida pelo guard
+  `usuario_do_token`. `ucs` = nº de pares (odi,uc) na referência (0 p/ os sem referência).
+  `pytest` → **55 passed** (3 unit + 3 e2e novos). Smoke: sem token→401; equatorial→18/5 UFs;
+  enbpar→41. **Bloco C concluído.**
 
 ### Bloco D — Backend: parsing + validação
-- [ ] **D1 · Parser do `.xlsx`.** `planilha.py`: aba `Preenchimento`, cabeçalho linha 2,
+- [x] **D1 · Parser do `.xlsx`.** `planilha.py`: aba `Preenchimento`, cabeçalho linha 2,
   mapeamento por nome, leitura defensiva de data/coordenada, definição de linha de dados
   (ODI/UC). *Teste: fixture → linhas; sem aba/não-.xlsx → 400; 0 linhas → guarda de erro.*
-- [ ] **D2 · Domínios do modelo.** Lê listas válidas da aba `Dominios`. *Teste: retorna
+  ✓ **(2026-07-01)** `planilha.py`: `ler_preenchimento` (read_only/iter_rows, mapeia por nome,
+  filtra linhas com ODI/UC, anexa `_linha`; `PlanilhaInvalida` p/ não-.xlsx e aba ausente),
+  `normalizar_data` (texto DD/MM/AAAA + serial Excel) e `normalizar_coordenada` (`,`/`.`).
+  Gerador `tests/fixtures.py` (openpyxl). Modelo real inspecionado: 52 colunas, 14 ident. +
+  38 tipologias; aba `Dominios` mapeada (p/ D2). `pytest` → **65 passed** (8 novos).
+- [x] **D2 · Domínios do modelo.** Lê listas válidas da aba `Dominios`. *Teste: retorna
   Tipo de Atendimento/UF/Tipo de Comunidade/Enquadramento/Sim-Não.*
-- [ ] **D3 · Regras de formato/domínio.** Campos vazios=erro (em linha com ODI/UC),
+  ✓ **(2026-07-01)** `planilha.ler_dominios` + `obter_dominios` (cache do modelo real).
+- [x] **D3 · Regras de formato/domínio.** Campos vazios=erro (em linha com ODI/UC),
   domínio=erro, duplicado ODI+UC=erro; coordenadas=**aviso**, data fora 2026=aviso,
   tipologia≠Sim/Não=aviso, "0"+outra=aviso. *Teste: fixture por regra acende o grupo
   certo c/ severidade.*
-- [ ] **D4 · Regras de cruzamento com `entrada/`.** ODI+UC inexistente=erro, UF/município
+- [x] **D4 · Regras de cruzamento com `entrada/`.** ODI+UC inexistente=erro, UF/município
   divergente=erro, UCs faltando=aviso. *Teste: fixtures vs referência mock.*
-- [ ] **D5 · Montagem da resposta.** `grupos` + `previewRows` + totais + `ok`. *Teste:
+  ✓ **(2026-07-01)** `validacao.regras_cruzamento(linhas, chaves_uc, odi_ref)` por contrato.
+- [x] **D5 · Montagem da resposta.** `grupos` + `previewRows` + totais + `ok`. *Teste:
   planilha limpa → ok=true, 0 erros; suja → grupos/totais corretos.*
+  ✓ **(2026-07-01)** `validacao.validar` agrupa por regra (formato do painel), `previewRows`
+  com `flags` por célula, totais + `ok`, guarda "Planilha sem dados". `pytest` → **82 passed**.
+  **Bloco D (parsing+validação) concluído.**
 
 ### Bloco E — Backend: envio + endpoints finais
-- [ ] **E1 · E-mail (`email_envio.py`).** smtplib via `.env`, dry-run, anexo
+- [x] **E1 · E-mail (`email_envio.py`).** smtplib via `.env`, dry-run, anexo
   `Anexo V preenchido - {contrato}.xlsx` (byte a byte), destinatários únicos; alerta
   crítico; credenciais/senha temporária ao usuário. *Teste: SMTP mock confirma nome do
   anexo, anexo intacto, destinos.*
 - [ ] **E1-smoke · Smoke manual com SMTP real.** Configurar `.env` real e disparar para
   uma **caixa de teste** os 3 tipos: planilha validada (anexo chega), alerta crítico,
   credenciais. *Teste manual: e-mails reais chegam corretos (ver `TESTES.md`).*
-- [ ] **E2 · `POST /api/validar` (orquestra, protegida).** Token→email; checa grupo (403),
+- [x] **E2 · `POST /api/validar` (orquestra, protegida).** Token→email; checa grupo (403),
   referência (409+alerta), erros→painel, ok→envia. *Teste e2e (TestClient, SMTP mock).*
-- [ ] **E3 · `GET /api/modelo` (protegida).** Baixa o modelo oficial. *Teste: 200 +
+  ✓ **(2026-07-01)** rota async multipart (`arquivo`/`contrato`/`uf`, e-mail do token):
+  403 fora do grupo → 409+alerta se sem referência → 400 parse → valida (D) → ok envia o
+  `.xlsx` como veio (`enviado`/`erroEnvio`). 6 testes e2e (limpa→envia, suja→não, 401/403/409/400).
+- [x] **E3 · `GET /api/modelo` (protegida).** Baixa o modelo oficial. *Teste: 200 +
   Content-Disposition + bytes do arquivo.*
+  ✓ **(2026-07-01)** `FileResponse` do modelo em `manuais/` (nome canônico). `pytest` → **93 passed**.
+  Smoke: 7 rotas registradas; `/api/modelo` → 200, 1.6 MB, attachment. **Bloco E concluído**
+  (falta só o **E1-smoke manual** com SMTP real — no deploy/homologação).
 
 ### Bloco F — Front: religação (visual inalterado; +1 tela de troca de senha)
 - [x] **F1 · Camada de API.** `src/lib/api.js` (token no header) + `VITE_API_BASE`.
@@ -466,13 +497,36 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
   temporária **usada no login é carregada** para a troca (some o campo "senha atual"; o
   usuário só define a nova senha), + `autoComplete` semântico (`new-password`/`current-password`).
   **Reteste visual pendente** com o usuário.
-- [ ] **F3 · Contexto nos seletores.** `UfSelector`/`ContratoSelector` usam listas de
+- [x] **F3 · Contexto nos seletores.** `UfSelector`/`ContratoSelector` usam listas de
   `/api/contexto`. *Teste: equatorial só EQUATORIAL; enbpar tudo. Visual idêntico.*
-- [ ] **F4 · Upload real.** `UploadAnexoV` envia `FormData` (arquivo+contrato+uf, token);
+  ✓ teste visual aprovado (2026-07-01) — todas as empresas conferidas (EQUATORIAL 18, ENERGISA 13,
+  NEOENERGISA 2, ÂMBAR 7, CERCI 1, ENBPAR 41; domínio fora do mapa → "não registrado").
+  ⏳ **(2026-07-01)** `api.contexto(token)` (GET Bearer); `App` busca o contexto após login
+  (useEffect) e alimenta os seletores (loading "Carregando seu acesso…"); `UfSelector`/`ContratoSelector`
+  recebem `ufs`/`contratos` por prop (removido `seedData`); `vigente` adicionado ao
+  `/api/contexto` p/ manter o badge. `npm run build` OK. **Teste visual pendente.**
+  **Simplificação (feedback do usuário 2026-07-01):** domínio de e-mail não mapeado é
+  **barrado no login** → `POST /api/login` retorna **403 "Domínio de e-mail não registrado"**
+  (checagem antes de autenticar), e o `AuthScreen` mostra a mensagem. Removido o estado-vazio
+  do `UfSelector` (era overengineering — não faz sentido logar para chegar num seletor vazio).
+  `montar_contexto` mantém o tratamento de domínio vazio só como rede de segurança do backend.
+  **Domínios (2026-07-01, mitiga risco #3):** mapa `domínio→grupo` padronizado em `.com.br`:
+  equatorial, energisa, neoenergia/coelba, ambar, cerci + enbpar. **ÂMBAR é grupo econômico**
+  (spec §5.1): `ambarenergia` vê os 7 contratos do grupo (ÂMBAR+AMAZONAS+RORAIMA). Os domínios
+  `amazonasenergia`/`roraimaenergia` foram **retirados do mapa** (ficariam idênticos ao ambar) —
+  **pendentes de decisão dos engenheiros** se serão cadastrados; hoje dão "domínio não registrado".
+  Travado por teste.
+- [x] **F4 · Upload real.** `UploadAnexoV` envia `FormData` (arquivo+contrato+uf, token);
   mantém barra 3 fases. *Teste: upload real → resposta real.*
-- [ ] **F5 · Roteamento real + painel por props.** `App` roteia painel/sucesso, remove
+  ⏳ **(2026-07-01)** input `.xlsx` real + drop; `api.validar` (multipart); barra de 3 fases
+  durante o await; erros 400/401/403/409 exibidos. `npm run build` OK. **Teste visual pendente.**
+- [x] **F5 · Roteamento real + painel por props.** `App` roteia painel/sucesso, remove
   `attempt`; `PainelInconsistencias` por props; `relatorioCsv` usa grupos reais; "Baixar
   modelo" → `/api/modelo`. *Teste: suja→painel; limpa→sucesso+e-mail.*
+  ⏳ **(2026-07-01)** `App` com estado `resultado` (rota `res.ok`→sucesso / senão painel);
+  `PainelInconsistencias`/`SucessoEnvio` por props; `relatorioCsv(grupos)`; `VersaoPlanilha`
+  baixa o modelo real (`api.baixarModelo`). Geradas `planilha_teste_{limpa,suja}.xlsx` p/ o
+  teste. `npm run build` OK. **Teste visual pendente** (front A–E ligado ponta a ponta).
 
 ### Bloco G — Integração e deploy
 - [ ] **G1 · E2E completo (local).** login→(troca)→contexto→upload→painel→corrige→sucesso→
