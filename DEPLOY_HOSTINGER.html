@@ -70,7 +70,7 @@
   <div class="callout ok"><strong>Opção rápida (script automático).</strong> Em vez de rodar os
     passos 1–9 na mão, há um script que faz tudo: <code>deploy_hostinger.sh</code> (na raiz do
     repo). No servidor, como root, com o DNS já apontando para o VPS:
-    <pre style="margin-top:10px">curl -fsSL https://raw.githubusercontent.com/GiovanniCharret/sistema_gclt_demo/main/deploy_hostinger.sh -o deploy.sh
+    <pre style="margin-top:10px">curl -fsSL https://raw.githubusercontent.com/GiovanniCharret/sistema_gclt/main/deploy_hostinger.sh -o deploy.sh
 sudo DOMINIO=SEU_DOMINIO.com.br ADMIN_EMAIL=voce@exemplo.com bash deploy.sh</pre>
     Ele instala tudo, gera a <code>SECRET_KEY</code>, sobe o serviço, configura o Nginx e o
     HTTPS, e ao final mostra o comando para criar o 1º usuário. Os passos abaixo continuam
@@ -86,7 +86,7 @@ sudo DOMINIO=SEU_DOMINIO.com.br ADMIN_EMAIL=voce@exemplo.com bash deploy.sh</pre
   <ul>
     <li>VPS Hostinger com <strong>Ubuntu 22.04 ou 24.04</strong> e acesso <strong>root via SSH</strong> (painel Hostinger → VPS → dados de acesso).</li>
     <li>Um <strong>domínio (ou subdomínio)</strong> apontando para o IP do VPS: no hPanel/DNS, crie um registro <strong>A</strong> <code>SEU_DOMINIO.com.br → IP_DO_VPS</code>. HTTPS exige domínio (não funciona só com IP).</li>
-    <li>Acesso ao repositório <code>github.com/GiovanniCharret/sistema_gclt_demo</code> (se privado, um token/deploy key).</li>
+    <li>Acesso ao repositório <code>github.com/GiovanniCharret/sistema_gclt</code> (se privado, um token/deploy key).</li>
     <li>(Opcional, para e-mail real) credenciais SMTP de um provedor.</li>
   </ul>
 
@@ -126,16 +126,16 @@ uv --version</pre>
   <h2><span class="num">2</span>Baixar o projeto</h2>
   <pre><span class="c"># como usuário deploy</span>
 cd /opt/anexov
-git clone https://github.com/GiovanniCharret/sistema_gclt_demo.git .
+git clone https://github.com/GiovanniCharret/sistema_gclt.git .
 ls        <span class="c"># deve listar backend/  modelo/  entrada/  base_contratos.json ...</span></pre>
   <div class="callout warn"><strong>Atenção ao ponto final (<code>.</code>)</strong> do
     <code>git clone … .</code> — ele faz o conteúdo cair <strong>direto em <code>/opt/anexov</code></strong>.
-    Sem o <code>.</code>, o git cria uma <strong>subpasta</strong> (ex.: <code>sistema_gclt_demo/</code>)
+    Sem o <code>.</code>, o git cria uma <strong>subpasta</strong> (ex.: <code>sistema_gclt/</code>)
     e todos os caminhos deste guia deixam de bater. Se isso acontecer, corrija:
     <pre style="margin-top:10px"><span class="c"># ainda em /opt/anexov</span>
 ls -a                        <span class="c"># veja o nome exato da subpasta</span>
-rm -rf sistema_gclt_demo     <span class="c"># remova a subpasta (ajuste o nome)</span>
-git clone https://github.com/GiovanniCharret/sistema_gclt_demo.git .
+rm -rf sistema_gclt     <span class="c"># remova a subpasta (ajuste o nome)</span>
+git clone https://github.com/GiovanniCharret/sistema_gclt.git .
 ls                           <span class="c"># deve listar backend/ modelo/ entrada/ ...</span></pre>
     (<code>git clone … .</code> exige a pasta vazia; por isso remova a subpasta antes.)</div>
   <div class="callout info">O <code>entrada/</code> e o <code>base_contratos.json</code> vêm

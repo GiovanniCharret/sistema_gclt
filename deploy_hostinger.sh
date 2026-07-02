@@ -5,7 +5,7 @@
 # em /api, com serviço systemd e (opcional) HTTPS via certbot.
 #
 # COMO USAR (no servidor, como root):
-#   curl -fsSL https://raw.githubusercontent.com/GiovanniCharret/sistema_gclt_demo/main/deploy_hostinger.sh -o deploy.sh
+#   curl -fsSL https://raw.githubusercontent.com/GiovanniCharret/sistema_gclt/main/deploy_hostinger.sh -o deploy.sh
 #   sudo DOMINIO=seu-dominio.com.br ADMIN_EMAIL=voce@exemplo.com bash deploy.sh
 #
 # Requisitos: Ubuntu 22.04/24.04, acesso root, e o DNS do domínio já apontando para o IP
@@ -18,7 +18,7 @@ DOMINIO="${DOMINIO:-}"                        # obrigatório: seu domínio/subdo
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"                # e-mail do certbot (se vazio, pula o HTTPS)
 APP_DIR="${APP_DIR:-/opt/anexov}"             # onde o projeto é instalado
 APP_USER="${APP_USER:-deploy}"               # usuário que roda o serviço (não-root)
-REPO_URL="${REPO_URL:-https://github.com/GiovanniCharret/sistema_gclt_demo.git}"
+REPO_URL="${REPO_URL:-https://github.com/GiovanniCharret/sistema_gclt.git}"
 SERVICO="anexov-api"                          # nome do serviço systemd
 
 # ── Pré-checagens ──
@@ -50,8 +50,12 @@ id "$APP_USER" &>/dev/null || adduser --disabled-password --gecos "" "$APP_USER"
 
 echo ">> [4/9] Código em $APP_DIR"
 mkdir -p "$APP_DIR"
+# Permite ao root operar no repo mesmo pertencendo ao usuário `deploy` (evita
+# "detected dubious ownership" ao re-executar o script para atualizar).
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 if [ -d "$APP_DIR/.git" ]; then
   # Já é um clone — só atualiza (preserva backend/.env e usuarios.json, que são untracked).
+  git -C "$APP_DIR" remote set-url origin "$REPO_URL" 2>/dev/null || true
   git -C "$APP_DIR" pull --ff-only
 else
   # Garante a pasta vazia (resolve o caso de subpasta criada por clone sem ".") e clona.
