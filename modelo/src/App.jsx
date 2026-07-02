@@ -177,8 +177,10 @@ export default function App() {
             uf={uf}
             contrato={contrato}
             linhasLidas={resultado.linhasLidas}
-            enviado={resultado.enviado}
+            totalAvisos={resultado.totalAvisos}
+            grupos={resultado.grupos}
             onNova={() => { setResultado(null); setView("upload"); }}
+            onToast={showToast}
           />
         )}
       </main>

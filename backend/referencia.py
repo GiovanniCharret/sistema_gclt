@@ -29,6 +29,9 @@ import re
 # `Path` manipula caminhos e expõe `stat().st_mtime` para a detecção de mudança.
 from pathlib import Path
 
+# Normalização de ODI/UC (zeros à esquerda / número) — casa planilha × referência.
+from backend.planilha import normalizar_id
+
 # Diretório-base padrão = `entrada/` na raiz do repositório.
 # `__file__` = backend/referencia.py → parent = backend/ → parent.parent = raiz.
 _DIR_PADRAO = Path(__file__).resolve().parent.parent / "entrada"
@@ -124,11 +127,11 @@ class Referencia:
                     # Linha sem contrato não tem como ser indexada — pula.
                     if not contrato:
                         continue
-                    # ODI é comum aos dois tipos de arquivo.
-                    odi = (linha.get("odi") or "").strip()
+                    # ODI é comum aos dois tipos de arquivo (normalizado p/ casar c/ a planilha).
+                    odi = normalizar_id(linha.get("odi"))
                     if eh_ucs:
                         # Arquivo de UCs → adiciona o par (odi, uc) ao set do contrato.
-                        uc = (linha.get("uc") or "").strip()
+                        uc = normalizar_id(linha.get("uc"))
                         chaves_uc.setdefault(contrato, set()).add((odi, uc))
                     elif eh_localizacao:
                         # Arquivo de localização → mapeia odi → (uf, municipio).

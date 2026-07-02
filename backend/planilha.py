@@ -179,6 +179,32 @@ def obter_dominios(caminho=None):
     return _dominios_singleton
 
 
+def normalizar_id(valor):
+    """Normaliza um identificador (ODI/UC) para casar entre planilha e referência (§7).
+
+    Por que existe: o Excel guarda ODI/UC como **número**, perdendo **zeros à esquerda**
+    (ex.: `0102500087` vira `102500087`) e às vezes acrescentando `.0` (float). A
+    referência (CSV, texto) preserva a forma original. Normalizando os dois lados do
+    mesmo jeito, o cruzamento passa a casar. IDs **alfanuméricos** ficam intactos.
+
+    Entrada: `valor` (str/int/float/None).
+    Fase 1: vira texto sem bordas (None → "").
+    Fase 2: remove o sufixo `.0` de números lidos como float.
+    Fase 3: em IDs 100% numéricos, remove zeros à esquerda (mantém "0").
+    Saída: o ID canônico (str).
+    """
+    # Fase 1: texto limpo.
+    s = "" if valor is None else str(valor).strip()
+    # Fase 2: número lido como float (ex.: "789950.0") → tira o ".0".
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    # Fase 3: ID numérico → sem zeros à esquerda (mas "0" continua "0").
+    if s.isdigit():
+        s = s.lstrip("0") or "0"
+    # Saída: forma canônica.
+    return s
+
+
 def normalizar_data(valor):
     """Interpreta uma data de energização de forma defensiva (§7, risco #2).
 

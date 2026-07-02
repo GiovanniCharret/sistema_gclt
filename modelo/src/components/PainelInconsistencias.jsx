@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { PREVIEW_COLS } from "../seedData";
 import { baixarRelatorioCsv } from "../lib/relatorioCsv";
+import RuleGroups, { formatarLoc } from "./RuleGroups";
 
 // Entregável central: resumo + grupos por tipo de regra (expansíveis) ao lado
 // de um preview das primeiras linhas da planilha com as células sinalizadas.
@@ -9,9 +9,8 @@ export default function PainelInconsistencias({
   uf, contrato, grupos, previewRows, totalErros, totalAvisos, linhasLidas, onCorrigir, onToast,
 }) {
   const ucs = linhasLidas;
-  // primeiro grupo aberto por padrão
-  const [open, setOpen] = useState(() => ({ 0: true }));
-  const toggle = (i) => setOpen((o) => ({ ...o, [i]: !o[i] }));
+  // Erros antes de avisos (assim ODI/UC vêm sempre antes das tipologias).
+  const gruposOrdenados = [...grupos].sort((a, b) => (a.sev === "err" ? 0 : 1) - (b.sev === "err" ? 0 : 1));
 
   return (
     <section className="card">
@@ -27,10 +26,12 @@ export default function PainelInconsistencias({
         <div className="assist-avatar">🤖</div>
         <div className="assist-body">
           Recebi a planilha do contrato <strong>{contrato.numero}</strong> ({contrato.sigla} · {uf.sigla}). Li{" "}
-          <strong>{ucs.toLocaleString("pt-BR")} unidades consumidoras</strong>. Encontrei{" "}
-          <strong>{totalErros} erros</strong> e <strong>{totalAvisos} avisos</strong>.
-          Os <strong>erros impedem o salvamento</strong> na base — corrija e reenvie.
-          Os avisos não bloqueiam, mas recomendo revisar.
+          <strong>{ucs.toLocaleString("pt-BR")} unidades consumidoras</strong>.{" "}
+          <span className="assist-erro">
+            Encontrei {totalErros} {totalErros === 1 ? "erro" : "erros"}. Os erros impedem o salvamento na base
+          </span>{" "}
+          — corrija e reenvie.
+          {totalAvisos > 0 && " Recomendo ficar atento aos avisos abaixo também."}
         </div>
       </div>
 
@@ -38,47 +39,18 @@ export default function PainelInconsistencias({
         <span className="val-pill err"><span className="big">{totalErros}</span> erros</span>
         <span className="val-pill warn"><span className="big">{totalAvisos}</span> avisos</span>
         <span className="val-pill">{ucs.toLocaleString("pt-BR")} UCs lidas</span>
-        <span className="val-pill">{grupos.length} regras acionadas</span>
       </div>
 
       <div className="av-split">
         {/* Coluna 1 — inconsistências por regra */}
         <div>
           <p className="av-col-title">Inconsistências por regra</p>
-          {grupos.map((g, i) => (
-            <div key={g.title} className={`rule-group${open[i] ? " is-open" : ""}`}>
-              <button className="rule-head" onClick={() => toggle(i)}>
-                <span className={`sev-badge ${g.sev}`}>{g.sev === "err" ? "Erro" : "Aviso"}</span>
-                <span className="rule-titles">
-                  <span className="rule-title">{g.title}</span><br />
-                  <span className="rule-desc">{g.desc}</span>
-                </span>
-                <span className="rule-count">{g.count}</span>
-                <span className="rule-chevron">▸</span>
-              </button>
-              <div className="rule-body">
-                {g.rows.map((r, j) => (
-                  <div className="issue-row" key={j}>
-                    <span className="issue-loc">{r.loc}</span>
-                    <span className="issue-field">{r.field}</span>
-                    <span className="issue-msg">{r.problem} <span className="sug">→ {r.sug}</span></span>
-                  </div>
-                ))}
-                {g.count > g.rows.length && (
-                  <div className="issue-row">
-                    <span className="issue-loc"></span>
-                    <span className="issue-field"></span>
-                    <span className="issue-msg sug">+ {g.count - g.rows.length} outra(s) ocorrência(s)…</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+          <RuleGroups grupos={gruposOrdenados} />
         </div>
 
-        {/* Coluna 2 — preview da planilha */}
-        <div>
-          <p className="av-col-title">Prévia da planilha (primeiras linhas)</p>
+        {/* Coluna 2 — planilha enviada */}
+        <div className="av-col-preview">
+          <p className="av-col-title">Planilha enviada</p>
           <div className="av-preview-wrap">
             <div className="av-preview-scroll">
               <table className="av-preview">
@@ -94,7 +66,7 @@ export default function PainelInconsistencias({
                         return (
                           <td key={c.key} className={cls}>
                             <span className={flag === "err" ? "cell-err" : flag === "warn" ? "cell-warn" : ""}>
-                              {row[c.key]}
+                              {c.key === "linha" ? formatarLoc(row[c.key]) : row[c.key]}
                             </span>
                           </td>
                         );

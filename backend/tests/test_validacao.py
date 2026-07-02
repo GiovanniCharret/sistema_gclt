@@ -121,6 +121,17 @@ def test_ucs_faltando_e_aviso():
     assert ("warn", "UCs faltando") in _regras(achados)
 
 
+def test_cruzamento_ignora_zero_a_esquerda_do_odi():
+    """ODI lido como número (zero perdido) casa com a referência normalizada.
+
+    Reproduz o bug: planilha traz ODI 102500087 (int); a base tem "0102500087"
+    (normalizada para "102500087"). Não deve acusar 'não consta'.
+    """
+    linhas = [linha_valida(**{"Número ODI": 102500087, "Número da Unidade Consumidora": 789950})]
+    achados = regras_cruzamento(linhas, chaves_uc={("102500087", "789950")}, odi_ref={})
+    assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
+
+
 def test_cruzamento_consistente_sem_achados():
     """Linha que bate 100% com a referência não gera achado."""
     linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",

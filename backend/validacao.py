@@ -11,8 +11,8 @@ Só `sev="err"` bloqueia o envio (§7). Este arquivo (D3) cobre as regras de
 formato/domínio; o cruzamento com `entrada/` (D4) e a montagem (D5) vêm em seguida.
 """
 
-# Normalização defensiva de data/coordenada (do parser).
-from backend.planilha import normalizar_data, normalizar_coordenada
+# Normalização defensiva de data/coordenada e de ID (ODI/UC) — do parser.
+from backend.planilha import normalizar_data, normalizar_coordenada, normalizar_id
 
 # ── Nomes de coluna (cabeçalhos reais do modelo) ──
 COL_ODI = "Número ODI"
@@ -139,7 +139,7 @@ def regras_formato_dominio(linhas, dominios):
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
     for linha in linhas:
-        chave = (_txt(linha, COL_ODI), _txt(linha, COL_UC))
+        chave = (normalizar_id(linha.get(COL_ODI)), normalizar_id(linha.get(COL_UC)))
         # Só considera quando ODI e UC estão ambos preenchidos.
         if chave[0] and chave[1]:
             vistos.setdefault(chave, []).append(linha)
@@ -170,8 +170,8 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
 
     # Fase 1: checagens por linha.
     for linha in linhas:
-        odi = _txt(linha, COL_ODI)
-        uc = _txt(linha, COL_UC)
+        odi = normalizar_id(linha.get(COL_ODI))
+        uc = normalizar_id(linha.get(COL_UC))
         loc = _loc(linha)
         # Par (odi, uc) — existência na referência.
         if odi and uc:

@@ -59,6 +59,18 @@ def test_indice_chaves_uc_monta_pares_odi_uc(tmp_path):
     assert ("ODR001", "2959550") in ref.chaves_uc["ECO 011/2018"]
 
 
+def test_indice_chaves_uc_normaliza_zero_a_esquerda(tmp_path):
+    """ODI numérico com zero à esquerda no CSV é normalizado no índice.
+
+    Assim `("0102500087","789950")` do CSV vira `("102500087","789950")` e casa com
+    a planilha (onde o Excel perdeu o zero). Bug real do contrato ECO 043/2025.
+    """
+    _escrever_csv(tmp_path / "lpt" / "consolidado_ucs.csv",
+                  ["contrato", "odi", "uc"], [["ECO 043/2025", "0102500087", "789950"]])
+    ref = Referencia(tmp_path)
+    assert ("102500087", "789950") in ref.chaves_uc["ECO 043/2025"]
+
+
 def test_indice_odi_ref_mapeia_odi_para_uf_municipio(tmp_path):
     """Um `consolidado.csv` vira `odi_ref[contrato][odi] = (uf, municipio)`.
 

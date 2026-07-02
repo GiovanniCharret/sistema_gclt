@@ -262,6 +262,14 @@ button, input, select, textarea { font: inherit; }
 .av-preview .cell-err { background: var(--err-bg); color: var(--err-tx); font-weight: 600; border-radius: 3px; }
 .av-preview .cell-warn { background: var(--warn-bg); color: var(--warn-tx); font-weight: 600; }
 .av-preview-foot { padding: 8px 12px; font-size: 0.74rem; color: var(--text-muted); background: #f8fafc; border-top: 1px solid var(--border-light); }
+/* trecho vermelho na fala do assistente (erros bloqueantes) */
+.assist-body .assist-erro { color: #dc2626; font-weight: 700; }
+/* divisor hairline entre "inconsistências" e "planilha enviada":
+   empilhado (mobile) = separador horizontal com respiro; lado a lado = vertical */
+.av-col-preview { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-light); }
+@media (min-width: 980px) {
+  .av-col-preview { margin-top: 0; padding-top: 0; border-top: none; padding-left: 24px; border-left: 1px solid var(--border-light); }
+}
 
 .panel-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 
@@ -273,6 +281,10 @@ button, input, select, textarea { font: inherit; }
 .success-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin-bottom: 24px; }
 .success-meta .mi { font-size: 0.84rem; color: var(--text-secondary); }
 .success-meta .mi b { color: var(--text-primary); }
+/* avisos na tela de sucesso: alinhados à esquerda, separados por um divisor */
+.success-avisos { text-align: left; margin-top: 8px; padding-top: 22px; border-top: 1px solid var(--border-light); }
+.success-avisos-hint { margin: -4px 0 14px; font-size: 0.84rem; color: var(--text-secondary); }
+.success-actions { justify-content: center; margin-top: 22px; }
 
 /* ── FOOTER ────────────────────────────────────────────── */
 .app-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: var(--navy); font-size: 0.74rem; color: #94a3b8; font-weight: 500; letter-spacing: 0.02em; }

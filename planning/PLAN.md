@@ -452,6 +452,12 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 - [x] **D4 · Regras de cruzamento com `entrada/`.** ODI+UC inexistente=erro, UF/município
   divergente=erro, UCs faltando=aviso. *Teste: fixtures vs referência mock.*
   ✓ **(2026-07-01)** `validacao.regras_cruzamento(linhas, chaves_uc, odi_ref)` por contrato.
+  **Bug fix (2026-07-02):** 1º arquivo real (ECO 043/2025) acusava ODI+UC "não consta" em quase
+  toda linha — causa: o Excel guarda ODI/UC como **número**, perdendo **zero à esquerda**
+  (`0102500087`→`102500087`), enquanto o CSV preserva. Fix: `planilha.normalizar_id` (tira zeros
+  à esquerda + sufixo `.0`; alfanumérico intacto) aplicado dos dois lados — `referencia.carregar`
+  (índices) e `validacao` (cruzamento + duplicidade). `pytest` → **96 passed** (+3). Validado no
+  arquivo real: 650/660 pares passam a casar (10 restantes são mismatch **genuíno** de UC).
 - [x] **D5 · Montagem da resposta.** `grupos` + `previewRows` + totais + `ok`. *Teste:
   planilha limpa → ok=true, 0 erros; suja → grupos/totais corretos.*
   ✓ **(2026-07-01)** `validacao.validar` agrupa por regra (formato do painel), `previewRows`

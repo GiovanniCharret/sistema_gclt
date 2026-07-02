@@ -16,6 +16,7 @@ from backend.planilha import (
     ler_preenchimento,
     normalizar_data,
     normalizar_coordenada,
+    normalizar_id,
     PlanilhaInvalida,
 )
 # Gerador de .xlsx-fixture.
@@ -94,6 +95,21 @@ def test_normalizar_data_aceita_texto_e_serial_do_excel():
     assert normalizar_data(datetime.datetime(2026, 2, 14)) == datetime.date(2026, 2, 14)
     assert normalizar_data("não é data") is None
     assert normalizar_data(None) is None
+
+
+def test_normalizar_id_tira_zero_a_esquerda_e_sufixo_float():
+    """`normalizar_id` casa IDs que o Excel mangla (zero à esquerda, número, float).
+
+    Motivação: o Excel guarda ODI/UC como número, perdendo zeros à esquerda; a
+    referência (CSV, texto) preserva. Normalizar dos dois lados faz casar.
+    """
+    assert normalizar_id("0102500087") == "102500087"   # zero à esquerda (CSV)
+    assert normalizar_id(102500087) == "102500087"       # int (Excel)
+    assert normalizar_id(102500087.0) == "102500087"     # float (Excel)
+    assert normalizar_id("789950") == "789950"           # sem zero → inalterado
+    assert normalizar_id("ODR142PROJ001") == "ODR142PROJ001"  # alfanumérico intacto
+    assert normalizar_id("0") == "0"                     # zero puro preservado
+    assert normalizar_id(None) == ""                     # vazio
 
 
 def test_normalizar_coordenada_aceita_virgula_e_ponto():
