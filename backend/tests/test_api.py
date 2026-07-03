@@ -98,24 +98,31 @@ def test_health_expoe_contagem_da_referencia(client):
     assert referencia["contratosComOdiRef"] > 0
 
 
-def test_health_lista_integridade_22_sem_referencia(client):
-    """Garante que `GET /api/health` expõe a integridade com os 22 sem UC (A3).
+def test_health_integridade_coerente_com_a_base(client):
+    """Garante que a integridade do `GET /api/health` é coerente com a autoridade (A3).
 
-    Entrada: a fixture `client` (TestClient) — app com `entrada/` e `base_contratos.json` reais.
-    Fase 1: faz `GET /api/health` e lê o bloco `integridade`.
-    Fase 2: confere 19 com referência, 22 sem referência e 0 órfãos (estado atual da base).
-    Fase 3: confere que os 3 LPT pendentes estão entre os sem-referência.
+    Nota: `entrada/` é atualizado diariamente, então este teste NÃO trava contagens
+    absolutas (um snapshot antigo — "22 sem referência" — quebrou quando o
+    `mla/consolidado_ucs.csv` chegou em 2026-07-03). Ele valida a estrutura:
+    com + sem = selecionáveis da autoridade, e zero órfãos.
+
+    Entrada: a fixture `client` — app com `entrada/` e `base_contratos.json` reais.
+    Fase 1: lê a integridade do health e a autoridade real.
+    Fase 2: com referência + sem referência = total de selecionáveis; 0 órfãos.
+    Fase 3: há pelo menos um contrato com referência (sanidade dos dados).
     Saída: asserções.
     """
-    # Fase 1: lê a integridade do health.
+    # Import local: só este teste precisa da autoridade real.
+    from backend.referencia import carregar_base_contratos
+    # Fase 1: integridade exposta + autoridade.
     integridade = client.get("/api/health").json()["integridade"]
-    # Fase 2: classificação esperada hoje (19 com UC; 22 sem — 19 MLA + 3 LPT; 0 órfãos).
-    assert integridade["contratosComReferencia"] == 19
-    assert len(integridade["contratosSemReferencia"]) == 22
+    selecionaveis = carregar_base_contratos()["selecionaveis"]
+    # Fase 2: partição exata dos selecionáveis (nada sobra, nada falta) e sem órfãos.
+    assert integridade["contratosComReferencia"] + len(integridade["contratosSemReferencia"]) == len(selecionaveis)
+    assert set(integridade["contratosSemReferencia"]) <= selecionaveis
     assert integridade["orfaos"] == []
-    # Fase 3: os 3 contratos LPT ainda pendentes devem estar na lista de sem-referência.
-    for contrato in ["ECO 034/2026", "ECO 039/2025", "ECO 042/2025"]:
-        assert contrato in integridade["contratosSemReferencia"]
+    # Fase 3: a referência cobre ao menos um contrato (dados carregados de verdade).
+    assert integridade["contratosComReferencia"] > 0
 
 
 def test_login_senha_correta_retorna_token(client, store_usuarios):

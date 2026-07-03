@@ -544,3 +544,29 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
 
 > Ordem de implementação: **começa pelo Bloco A** (A1). Cada sub-fase concluída é
 > marcada `[x]` aqui com o resultado do teste.
+
+### Melhorias pós-plano (backlog — decisão do usuário 2026-07-03)
+
+Origem: em produção, upload para o **ECM 014/2024** (MLA, sem referência) retornou o 409
+genérico "Não foi possível validar este contrato no momento" (§8 — comportamento projetado).
+O usuário definiu: um cliente não pode ficar sem orientação, e o admin **precisa** ser
+notificado — é problema de manutenção de dados, não culpa do operador. Três pontas:
+
+- [ ] **Alerta crítico chegando de verdade ao admin.** O código já existe
+  (`enviar_alerta_critico`, disparado no 409); falta **ligar o SMTP real** no `.env` do VPS
+  (`SMTP_DRYRUN=0` + credenciais + `ALERTA_EMAIL`) — coincide com o E1-smoke/Bloco G.
+  Sem código novo.
+- [ ] **Mensagem 409 orientadora ao operador.** Trocar a copy genérica por algo que diga o
+  que fazer (ex.: "A base de referência deste contrato ainda não está disponível. Nossa
+  equipe já foi notificada — tente novamente mais tarde."), deixando claro que não é erro
+  dele. Ajuste de copy no backend (detail) e/ou no `UploadAnexoV`.
+- [x] **Raiz: gerar `entrada/mla/consolidado_ucs.csv`.** Pré-condição de produção (spec
+  risco #1): o processo externo que atualiza `entrada/` diariamente precisa cobrir os
+  19 contratos MLA (+ 3 LPT pendentes). Fora do escopo do site — pipeline de dados.
+  ✓ **(2026-07-03)** arquivo gerado pelo projeto `alimentacao_UCs` (~99k pares, mesmo
+  formato do LPT) — carregou **sem nenhuma mudança de código** (o índice por cabeçalho do
+  A2 reconheceu sozinho). Integridade: **22 → 5 sem referência** (restam ECM 025/2026,
+  ECM 029/2026 + os 3 LPT). ECM 014/2024 agora tem 24.106 UCs e valida. Único ajuste:
+  o teste de health travava o snapshot "22 sem" — reescrito para validar **coerência
+  estrutural** (com+sem = selecionáveis; 0 órfãos), imune à atualização diária.
+  `pytest` → **96 passed**.
