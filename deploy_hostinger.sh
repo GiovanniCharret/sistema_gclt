@@ -131,6 +131,12 @@ curl -s http://127.0.0.1:8000/api/health >/dev/null \
   || echo "   AVISO: /api/health não respondeu — veja: journalctl -u $SERVICO -e"
 
 echo ">> [9/9] Nginx (front + proxy /api)"
+# Se o certbot já instalou o SSL neste arquivo, NÃO sobrescrever — regenerá-lo
+# apagaria o bloco 443/redirect e derrubaria o HTTPS até rodar `certbot install`
+# de novo. Para regenerar do zero: remova o arquivo e re-execute o script.
+if grep -q "managed by Certbot" /etc/nginx/sites-available/anexov 2>/dev/null; then
+  echo "   config atual tem SSL do certbot — PRESERVADA (não sobrescrita)."
+else
 cat > /etc/nginx/sites-available/anexov <<EOF
 server {
     listen 80;
@@ -148,6 +154,7 @@ server {
     }
 }
 EOF
+fi
 ln -sf /etc/nginx/sites-available/anexov /etc/nginx/sites-enabled/anexov
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx

@@ -268,6 +268,19 @@ sudo certbot --nginx -d SEU_DOMINIO.com.br</pre>
   <div class="callout warn"><strong>Não pule o HTTPS.</strong> Sem ele, e-mails/senhas trafegam
     em texto puro. O guard de token e o login só devem ir a produção sob TLS.</div>
 
+  <div class="callout warn"><strong>Gotcha real: <code>http://www.…</code> devolve 404 (nginx).</strong>
+    O bloco de redirect que o certbot escreve na porta 80 termina em <code>return 404; # managed
+    by Certbot</code> — qualquer host que não case com os <code>if ($host = …)</code> cai nesse 404.
+    Se o <code>server_name</code> só tem o apex (sem <code>www</code>), <code>http://www.SEU_DOMINIO</code>
+    quebra mesmo com <code>https://www</code> funcionando. Sintoma visto em produção (2026-07-03).
+    Correção:
+    <pre style="margin-top:10px">sudo sed -i 's/server_name SEU_DOMINIO.com.br;/server_name SEU_DOMINIO.com.br www.SEU_DOMINIO.com.br;/' /etc/nginx/sites-available/anexov
+sudo certbot install --cert-name SEU_DOMINIO.com.br --redirect
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx
+curl -sI http://www.SEU_DOMINIO.com.br | head -3   <span class="c"># esperado: 301 → https</span></pre>
+    E atenção: <strong>re-rodar o script de deploy não sobrescreve mais</strong> a config com SSL
+    do certbot (ele detecta o "managed by Certbot" e preserva).</div>
+
   <!-- 8 -->
   <h2><span class="num">8</span>Criar o primeiro usuário (no servidor)</h2>
   <p>Sempre a partir da raiz do projeto (mesmo diretório do serviço):</p>
