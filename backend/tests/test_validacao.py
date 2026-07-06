@@ -70,6 +70,46 @@ def test_chave_odi_uc_duplicada_e_erro():
     assert ("err", "Chave ODI + UC duplicada") in _regras(achados)
 
 
+def test_uc_duplicada_com_odis_diferentes_e_erro():
+    """Mesma UC em duas linhas, mesmo com ODIs diferentes → erro 'UC duplicada'."""
+    linhas = [linha_valida(_linha=3, **{"Número ODI": "210001"}),
+              linha_valida(_linha=4, **{"Número ODI": "210002"})]  # mesma UC, ODIs distintos
+    achados = regras_formato_dominio(linhas, DOM)
+    assert ("err", "UC duplicada") in _regras(achados)
+
+
+def test_uc_duplicada_aponta_todas_as_linhas():
+    """Cada linha com a UC repetida vira um achado; o problema lista as linhas envolvidas."""
+    linhas = [linha_valida(_linha=3, **{"Número ODI": "210001"}),
+              linha_valida(_linha=4, **{"Número ODI": "210002"}),
+              linha_valida(_linha=7, **{"Número ODI": "210003"})]  # mesma UC em 3 linhas
+    duplicadas = [a for a in regras_formato_dominio(linhas, DOM) if a["regra"] == "UC duplicada"]
+    # Um achado por linha repetida, cada um na sua localização.
+    assert [a["loc"] for a in duplicadas] == ["L3", "L4", "L7"]
+    # O texto do problema mostra em quais linhas a UC se repete.
+    assert all("linhas 3, 4, 7" in a["problema"] for a in duplicadas)
+
+
+def test_uc_duplicada_normaliza_id():
+    """UC lida como número (70012345) e como texto com zero à esquerda ('070012345')
+    são a mesma UC → erro 'UC duplicada'."""
+    linhas = [linha_valida(_linha=3, **{"Número ODI": "210001",
+                                        "Número da Unidade Consumidora": 70012345}),
+              linha_valida(_linha=4, **{"Número ODI": "210002",
+                                        "Número da Unidade Consumidora": "070012345"})]
+    achados = regras_formato_dominio(linhas, DOM)
+    assert ("err", "UC duplicada") in _regras(achados)
+
+
+def test_ucs_distintas_nao_geram_erro_de_duplicidade():
+    """Linhas com UCs diferentes não acionam 'UC duplicada'."""
+    linhas = [linha_valida(_linha=3),
+              linha_valida(_linha=4, **{"Número ODI": "210002",
+                                        "Número da Unidade Consumidora": "70099999"})]
+    achados = regras_formato_dominio(linhas, DOM)
+    assert ("err", "UC duplicada") not in _regras(achados)
+
+
 def test_coordenada_invalida_e_aviso():
     """Latitude fora da faixa (91.5) → aviso 'Coordenadas inválidas' (não bloqueia)."""
     achados = regras_formato_dominio([linha_valida(**{"Latitude": "91.5"})], DOM)

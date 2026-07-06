@@ -72,13 +72,47 @@ def _colunas_tipologia(linha):
     return [c for c in linha if c not in COLS_IDENTIFICACAO and c != "_linha"]
 
 
+def _ucs_duplicadas(linhas):
+    """Detecta a mesma UC em mais de uma linha, independentemente do ODI (erro).
+
+    Por que existe: a chave composta ODI+UC não captura a repetição da UC com ODIs
+    diferentes — sem esta regra, a mesma UC poderia ser enviada duas vezes e passar.
+    Entrada: `linhas` (lista de dicts do parser).
+    Fase 1: agrupa as linhas por UC normalizada (ignora UCs vazias).
+    Fase 2: para cada UC com 2+ linhas, gera um achado de erro por linha, listando no
+            texto todas as linhas onde a UC se repete.
+    Saída: lista de achados.
+    """
+    # Acumulador de achados.
+    achados = []
+    # Fase 1: dict UC normalizada → linhas onde ela aparece.
+    vistas = {}
+    for linha in linhas:
+        # Normaliza a UC (Excel int vs texto, zeros à esquerda).
+        uc = normalizar_id(linha.get(COL_UC))
+        # Só considera quando a UC está preenchida (vazia já é erro de obrigatório).
+        if uc:
+            vistas.setdefault(uc, []).append(linha)
+    # Fase 2: cada UC repetida gera um achado por linha envolvida.
+    for uc, repetidas in vistas.items():
+        if len(repetidas) > 1:
+            # Lista das linhas envolvidas ("3, 4, 7") — vai no texto do problema.
+            numeros = ", ".join(str(l.get("_linha", "?")) for l in repetidas)
+            for linha in repetidas:
+                achados.append(_achado("err", "UC duplicada", _loc(linha), COL_UC,
+                                        f'UC "{uc}" repetida (linhas {numeros})',
+                                        "cada UC deve aparecer em uma única linha"))
+    # Saída: achados de UC duplicada.
+    return achados
+
+
 def regras_formato_dominio(linhas, dominios):
     """Aplica as regras de formato/domínio (D3) a todas as linhas.
 
     Entrada: `linhas` (lista de dicts do parser) e `dominios` (dict de listas válidas).
     Fase 1: por linha — campos obrigatórios vazios (erro), domínio (erro), coordenadas
             (aviso), data fora de 2026 (aviso), tipologia ≠ Sim/Não (aviso), "0"+outra (aviso).
-    Fase 2: entre linhas — chave ODI+UC duplicada (erro).
+    Fase 2: entre linhas — chave ODI+UC duplicada (erro) e UC duplicada (erro).
     Saída: lista de achados.
     """
     # Acumulador de achados.
@@ -150,6 +184,9 @@ def regras_formato_dominio(linhas, dominios):
                                         "ODI + UC", f'ODI "{odi}" + UC "{uc}" repetida',
                                         "cada UC deve aparecer uma única vez"))
 
+    # Fase 2 (cont.): UC duplicada, independentemente do ODI (erro).
+    achados.extend(_ucs_duplicadas(linhas))
+
     # Saída: todos os achados de formato/domínio.
     return achados
 
@@ -206,6 +243,7 @@ _DESCRICOES = {
     "Campos obrigatórios vazios": "Colunas obrigatórias vazias em linhas preenchidas",
     "Valor fora do domínio": "Valor não consta na lista de domínios válidos (aba Dominios)",
     "Chave ODI + UC duplicada": "Mesma combinação Número ODI + Número da UC em mais de uma linha",
+    "UC duplicada": "Mesma Unidade Consumidora em mais de uma linha, mesmo com ODIs diferentes",
     "ODI + UC não consta na referência": "A combinação não existe em entrada/ para o contrato",
     "UF / município divergente": "Não bate com a referência de entrada/ para aquele ODI",
     "Coordenadas inválidas": "Latitude/Longitude fora da faixa geográfica ou não numéricas",

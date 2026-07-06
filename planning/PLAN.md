@@ -570,3 +570,10 @@ notificado — é problema de manutenção de dados, não culpa do operador. Tr�
   o teste de health travava o snapshot "22 sem" — reescrito para validar **coerência
   estrutural** (com+sem = selecionáveis; 0 órfãos), imune à atualização diária.
   `pytest` → **96 passed**.
+- [x] **Regra nova: UC duplicada (erro).** ✓ **(2026-07-06)** A chave composta ODI+UC não
+  pegava a mesma UC repetida com ODIs diferentes. Nova sub-função `_ucs_duplicadas` em
+  `backend/validacao.py` (chamada na Fase 2 de `regras_formato_dominio`): agrupa por UC
+  normalizada (`normalizar_id`) e gera **erro** por linha envolvida, com o texto listando
+  todas as linhas da repetição (ex.: `UC "70012345" repetida (linhas 3, 4, 7)`). TDD:
+  4 testes novos em `test_validacao.py` → `pytest` **100 passed**. Obs.: quando a
+  duplicata é ODI+UC idênticos, as duas regras disparam (dois grupos no painel).
