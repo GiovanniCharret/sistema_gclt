@@ -285,7 +285,8 @@ async def validar_rota(
     if contrato_norm not in referencia.chaves_uc:
         enviar_alerta_critico(contrato, uf, arquivo.filename or "(sem nome)")
         raise HTTPException(status_code=409,
-                            detail="Não foi possível validar este contrato no momento.")
+                            detail="Sem ODIs/UCs cadastradas. "
+                                   "Por favor, atualize os dados no gerenciador antes.")
     # Fase 3: lê os bytes e parseia a aba Preenchimento.
     conteudo = await arquivo.read()
     try:

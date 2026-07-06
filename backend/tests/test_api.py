@@ -442,12 +442,15 @@ def test_validar_contrato_fora_do_grupo_403(client, validar_env):
 
 
 def test_validar_contrato_sem_referencia_409_e_alerta(client, validar_env):
-    """Contrato sem referência → 409 e alerta crítico ao admin."""
+    """Contrato sem referência → 409 com mensagem orientadora e alerta crítico ao admin."""
     conteudo = gerar_xlsx([_LINHA_LIMPA])
     r = client.post("/api/validar", headers=_headers(),
                     files={"arquivo": ("Anexo.xlsx", conteudo)},
                     data={"contrato": "CTR SEMREF", "uf": "AM"})
     assert r.status_code == 409
+    # A mensagem diz ao operador o que aconteceu e o que fazer (backlog item 2).
+    assert r.json()["detail"] == ("Sem ODIs/UCs cadastradas. "
+                                  "Por favor, atualize os dados no gerenciador antes.")
     assert validar_env["alerta"].called is True
 
 

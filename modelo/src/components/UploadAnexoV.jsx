@@ -71,7 +71,7 @@ export default function UploadAnexoV({ uf, contrato, token, onComplete }) {
       const msg = {
         401: "Sua sessão expirou. Entre novamente.",
         403: dados?.detail || "Este contrato está fora do seu acesso.",
-        409: dados?.detail || "Não foi possível validar este contrato no momento.",
+        409: dados?.detail || "Sem ODIs/UCs cadastradas. Por favor, atualize os dados no gerenciador antes.",
         400: dados?.detail || "Arquivo inválido. Envie o .xlsx do Anexo V.",
       }[status] || "Não foi possível validar. Tente novamente.";
       setErro(msg);

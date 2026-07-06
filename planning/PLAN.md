@@ -556,10 +556,11 @@ notificado — é problema de manutenção de dados, não culpa do operador. Tr�
   (`enviar_alerta_critico`, disparado no 409); falta **ligar o SMTP real** no `.env` do VPS
   (`SMTP_DRYRUN=0` + credenciais + `ALERTA_EMAIL`) — coincide com o E1-smoke/Bloco G.
   Sem código novo.
-- [ ] **Mensagem 409 orientadora ao operador.** Trocar a copy genérica por algo que diga o
-  que fazer (ex.: "A base de referência deste contrato ainda não está disponível. Nossa
-  equipe já foi notificada — tente novamente mais tarde."), deixando claro que não é erro
-  dele. Ajuste de copy no backend (detail) e/ou no `UploadAnexoV`.
+- [x] **Mensagem 409 orientadora ao operador.** ✓ **(2026-07-06)** Causa confirmada pelo
+  engenheiro: contrato sem ODIs/UCs cadastradas. Copy nova (definida pelo usuário):
+  **"Sem ODIs/UCs cadastradas. Por favor, atualize os dados no gerenciador antes."** —
+  trocada no `detail` do 409 (`backend/app.py`) e no fallback 409 do `UploadAnexoV.jsx`.
+  TDD: asserção do texto adicionada ao teste do 409 → `pytest` **100 passed**.
 - [x] **Raiz: gerar `entrada/mla/consolidado_ucs.csv`.** Pré-condição de produção (spec
   risco #1): o processo externo que atualiza `entrada/` diariamente precisa cobrir os
   19 contratos MLA (+ 3 LPT pendentes). Fora do escopo do site — pipeline de dados.
