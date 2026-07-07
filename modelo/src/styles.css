@@ -56,6 +56,9 @@ button, input, select, textarea { font: inherit; }
 .auth-title { margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: var(--navy); }
 .auth-subtitle { margin: 10px 0 0; color: var(--text-secondary); line-height: 1.6; font-size: 0.875rem; }
 .login-form { display: grid; gap: 14px; margin-top: 24px; }
+/* Ações fora de formulário no auth-card (ex.: Voltar da tela de senha resetada) —
+   mesmo respiro vertical do .login-form para manter o ritmo de 8pt. */
+.auth-actions { margin-top: 24px; }
 .field { display: grid; gap: 5px; }
 .field-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .field input {

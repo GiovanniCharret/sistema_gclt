@@ -312,16 +312,18 @@ def trocar_senha(email, senha_atual, nova_senha, caminho=None, config=None):
     return {"ok": True, "token": gerar_token(chave, config)}
 
 
-def resetar_senha(email, caminho=None):
+def resetar_senha(email, caminho=None, senha=None):
     """Gera uma nova senha temporária para o usuário (self-service "esqueci senha", B4).
 
     Por que existe: o reset é self-service (§5.2); gera nova senha temporária, religa a
     flag de troca e devolve a senha em texto para a rota enviá-la por e-mail. Não revela
     ao chamador se o e-mail existia além do retorno (a rota responde genericamente).
 
-    Entrada: `email` (str), `caminho` (store opcional).
+    Entrada: `email` (str), `caminho` (store opcional), `senha` (str opcional — fixa a
+             senha resetada em vez de gerar aleatória; usado no workaround MVP).
     Fase 1: busca o usuário; inexistente/inativo → None.
-    Fase 2: gera nova senha temporária, deriva hash+salt e religa `precisa_trocar_senha`.
+    Fase 2: define a nova senha (a informada, ou temporária aleatória), deriva
+            hash+salt e religa `precisa_trocar_senha`.
     Fase 3: persiste.
     Saída: tupla `(email_canonico, senha_nova)` ou None.
     """
@@ -329,8 +331,8 @@ def resetar_senha(email, caminho=None):
     usuario = obter_usuario(email, caminho)
     if usuario is None or not usuario.get("ativo"):
         return None
-    # Fase 2: nova senha temporária + hash; religa a flag de troca.
-    nova = gerar_senha_temporaria()
+    # Fase 2: senha fixa (se informada) ou temporária aleatória; religa a flag de troca.
+    nova = senha if senha is not None else gerar_senha_temporaria()
     novo_hash, salt = gerar_hash(nova)
     dados = carregar_usuarios(caminho)
     chave = _norm_email(email)

@@ -535,12 +535,30 @@ Resumo das decisões (perguntas respondidas em 2026-06-26):
   teste. `npm run build` OK. **Teste visual pendente** (front A–E ligado ponta a ponta).
 
 ### Bloco G — Integração e deploy
-- [ ] **G1 · E2E completo (local).** login→(troca)→contexto→upload→painel→corrige→sucesso→
+- [x] **G1 · E2E completo (local).** login→(troca)→contexto→upload→painel→corrige→sucesso→
   e-mail (dry-run). *Teste: roteiro ponta a ponta no navegador.*
+  ✓ **(2026-07-06)** Roteiro executado ponta a ponta em navegador automatizado (Playwright)
+  com dados REAIS: usuário `op@equatorialenergia.com.br` (senha temporária → tela
+  TrocarSenha), contexto filtrado (5 UFs EQUATORIAL), contrato **ECM 005/2021** (MA,
+  1.825 UCs reais no seletor), planilha suja → painel com **4 erros** (inclui a regra nova
+  "UC duplicada" apontando `linhas 3, 4`) + 1 aviso; "Corrigir e reenviar" → planilha
+  limpa → **sucesso** com seção de avisos (UCs faltando: 1.819) e export CSV. Backend:
+  `login→trocar-senha→contexto→validar×2` todos 200; e-mail em dry-run. Evidências:
+  `.playwright-mcp/g1-painel-inconsistencias.png`, `g1-sucesso-avisos.png`; planilhas do
+  roteiro em `.playwright-mcp/e2e_{limpa,suja}.xlsx` (gitignored).
 - [ ] **G2 · Deploy + smoke real.** `DEPLOY.md`: uvicorn (systemd) + Nginx `/api` +
   `client_max_body_size` + `.env` + onde fica `usuarios.json`. *Teste: build + smoke no
   VPS, **com 1 envio real** (planilha validada + credenciais) para destinatário de
   homologação.*
+  ⏳ **(2026-07-06)** Deploy em si **já está no ar** desde 2026-07-01 (`gerenciador-gclt.com`,
+  HTTPS apex+www, systemd `anexov-api`, Nginx `/api`, `deploy_hostinger.sh` idempotente +
+  `DEPLOY_HOSTINGER.html`) — smoke de produção validado (health, login das 7 empresas,
+  validação real). **Falta só o envio real de e-mail**: configurar SMTP no
+  `/opt/anexov/backend/.env` (`SMTP_DRYRUN=0`, host/porta/usuário/senha, `DESTINATARIOS`,
+  `ALERTA_EMAIL`) + restart, e disparar 1 planilha validada + 1 credencial + 1 alerta 409
+  para destinatário de homologação (roteiro em `planning/TESTES.md`). Bloqueado por:
+  credenciais SMTP (decisão do usuário). Fechar este item também fecha o backlog
+  "alerta crítico chegando de verdade ao admin".
 
 > Ordem de implementação: **começa pelo Bloco A** (A1). Cada sub-fase concluída é
 > marcada `[x]` aqui com o resultado do teste.
@@ -578,3 +596,14 @@ notificado — é problema de manutenção de dados, não culpa do operador. Tr�
   todas as linhas da repetição (ex.: `UC "70012345" repetida (linhas 3, 4, 7)`). TDD:
   4 testes novos em `test_validacao.py` → `pytest` **100 passed**. Obs.: quando a
   duplicata é ODI+UC idênticos, as duas regras disparam (dois grupos no painel).
+- [x] **Workaround MVP: "esqueci minha senha" sem e-mail.** ✓ **(2026-07-07)** Decisão do
+  usuário para lançar o MVP: `POST /api/esqueci-senha` reseta a senha para o **padrão de
+  inicialização "Senha123"** (constante `_SENHA_PADRAO_MVP` em `backend/app.py`) com
+  `precisa_trocar_senha=true`, e **não envia e-mail** de credenciais. `resetar_senha`
+  ganhou o parâmetro opcional `senha=` (None mantém a temporária aleatória). No front,
+  `AuthScreen.jsx` mostra a tela crua "Sua senha foi resetada para o padrão de
+  inicialização" + botão **Voltar**. TDD: teste da rota reescrito (assert **sem** envio +
+  senha padrão confere) + teste unitário do parâmetro → `pytest` **101 passed**; E2E no
+  navegador: reset → aviso → Voltar → login Senha123 → troca obrigatória → menu.
+  **Reverter quando o envio real de credenciais entrar** (voltar a rota ao fluxo
+  `resetar_senha()` aleatória + `enviar_credenciais()`).

@@ -8,6 +8,7 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");     // mensagem genérica do "esqueci senha"
+  const [resetado, setResetado] = useState(false); // reset MVP feito → tela de aviso
   const [carregando, setCarregando] = useState(false);
 
   async function handleSubmit(e) {
@@ -54,12 +55,35 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
       return;
     }
     try {
-      // Resposta é sempre genérica (não revela se o e-mail existe).
+      // Resposta é sempre genérica (não revela se o e-mail existe). No MVP o backend
+      // reseta para a senha padrão de inicialização, sem enviar e-mail.
       await api.esqueciSenha(alvo);
-      setAviso("Se o e-mail estiver cadastrado, enviamos uma nova senha temporária.");
+      setResetado(true);
     } catch {
       setErro("Não foi possível conectar ao servidor.");
     }
+  }
+
+  // Tela de aviso do reset (workaround MVP): mensagem crua + botão de voltar ao login.
+  if (resetado) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <p className="eyebrow">ENBPar - Diretoria de Gestão de Programas - GCLT</p>
+          <h1 className="auth-title">Senha resetada</h1>
+          <p className="auth-subtitle">Sua senha foi resetada para o padrão de inicialização</p>
+          <div className="auth-actions">
+            <button
+              type="button"
+              className="btn-primary full"
+              onClick={() => { setResetado(false); setSenha(""); }}
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

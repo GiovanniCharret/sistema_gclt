@@ -221,6 +221,11 @@ def usuario_do_token(authorization: str = Header(default=None)):
 # Rate-limiter do esqueci-senha (compartilhado no processo; tempo real via time.time()).
 _limitador_reset = LimitadorReset()
 
+# Senha padrão de inicialização do workaround MVP do esqueci-senha (troca obrigatória
+# no 1º acesso). Quando o envio de credenciais por e-mail entrar, remova a constante e
+# volte a rota ao fluxo `resetar_senha()` + `enviar_credenciais()`.
+_SENHA_PADRAO_MVP = "Senha123"
+
 
 class EsqueciSenhaIn(BaseModel):
     """Corpo do `POST /api/esqueci-senha`: apenas o e-mail."""
@@ -231,24 +236,25 @@ class EsqueciSenhaIn(BaseModel):
 
 @app.post("/api/esqueci-senha")
 def esqueci_senha_rota(dados: EsqueciSenhaIn, caminho=Depends(caminho_usuarios)):
-    """Reset self-service: gera nova senha temporária e a envia (B4, §5.2/§6).
+    """Reset self-service — workaround MVP: senha fixa, SEM e-mail (B4, §5.2/§6).
+
+    Por que assim: no MVP não enviamos e-mail de credenciais; a senha volta ao padrão
+    de inicialização (`Senha123`) com troca obrigatória no próximo login, e o front
+    exibe a mensagem informando o padrão.
 
     Segurança: resposta **genérica** (não revela se o e-mail existe) e **rate-limited**
     por e-mail (mitiga abuso).
 
     Entrada: `dados` (email) e `caminho` (store, injetado).
     Fase 1: consulta o rate-limiter (silenciosamente ignora se estourou).
-    Fase 2: se permitido, tenta resetar; se o usuário existe, envia a nova senha por e-mail.
+    Fase 2: se permitido, reseta para a senha padrão (religa `precisa_trocar_senha`).
     Fase 3: responde sempre `{ok: true}` (genérico).
     Saída: JSON `{ok: true}`.
     """
     # Fase 1: respeita o rate-limit (sem revelar nada ao chamador).
     if _limitador_reset.permitido(dados.email, time.time()):
-        # Fase 2: reseta (None se não existe/inativo) e, se resetou, envia o e-mail.
-        resultado = resetar_senha(dados.email, caminho=caminho)
-        if resultado is not None:
-            email_canonico, nova_senha = resultado
-            enviar_credenciais(email_canonico, nova_senha)
+        # Fase 2: reseta para a senha padrão do MVP (None se não existe/inativo).
+        resetar_senha(dados.email, caminho=caminho, senha=_SENHA_PADRAO_MVP)
     # Fase 3/Saída: resposta genérica (não revela existência do e-mail).
     return {"ok": True}
 

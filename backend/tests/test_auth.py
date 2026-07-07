@@ -362,6 +362,27 @@ def test_resetar_senha_gera_nova_e_liga_flag(tmp_path):
     assert verificar_senha("Antiga1", usuario["senha_hash"], usuario["salt"]) is False
 
 
+def test_resetar_senha_com_senha_fixa_usa_a_informada(tmp_path):
+    """`resetar_senha(senha=...)` usa a senha informada em vez de gerar aleatória (MVP).
+
+    Entrada: store temp com um usuário.
+    Fase 1: cria o usuário com outra senha.
+    Fase 2: reseta informando a senha fixa "Senha123".
+    Fase 3: devolve ("a@b.com", "Senha123"); a fixa confere no store; flag religada.
+    Saída: asserções.
+    """
+    caminho = tmp_path / "usuarios.json"
+    # Fase 1: usuário com senha conhecida.
+    criar_usuario("a@b.com", senha="Antiga1", caminho=caminho)
+    # Fase 2: reset com senha fixa (workaround MVP do esqueci-senha).
+    resultado = resetar_senha("a@b.com", caminho=caminho, senha="Senha123")
+    # Fase 3: devolve exatamente a senha informada e a grava no store.
+    assert resultado == ("a@b.com", "Senha123")
+    usuario = obter_usuario("a@b.com", caminho=caminho)
+    assert usuario["precisa_trocar_senha"] is True
+    assert verificar_senha("Senha123", usuario["senha_hash"], usuario["salt"]) is True
+
+
 def test_resetar_senha_inexistente_devolve_none(tmp_path):
     """`resetar_senha` de e-mail inexistente devolve None (resposta genérica na rota)."""
     caminho = tmp_path / "usuarios.json"

@@ -20,7 +20,7 @@ from fastapi import HTTPException
 # App, dependência do caminho do store e guard de token (para os testes).
 from backend.app import app, caminho_usuarios, usuario_do_token
 # Criação de usuário, verificação de token e geração de token nos testes.
-from backend.auth import criar_usuario, verificar_token, gerar_token, obter_usuario
+from backend.auth import criar_usuario, verificar_token, gerar_token, obter_usuario, verificar_senha
 # Gerador de .xlsx-fixture para os testes de validar.
 from backend.tests.fixtures import gerar_xlsx
 
@@ -263,12 +263,12 @@ def test_guard_token_valido_retorna_email():
 
 # --- Esqueci minha senha (B4) ---
 
-def test_esqueci_senha_envia_nova_credencial(client, store_usuarios):
-    """`POST /api/esqueci-senha` gera nova senha temporária e a envia ao usuário.
+def test_esqueci_senha_reseta_para_senha_padrao_sem_email(client, store_usuarios):
+    """`POST /api/esqueci-senha` (workaround MVP) reseta para "Senha123" SEM enviar e-mail.
 
-    Fase 1: cria o usuário; espiona o envio de e-mail.
+    Fase 1: cria o usuário com outra senha; espiona o envio de e-mail.
     Fase 2: chama esqueci-senha → 200 genérico `{ok: true}`.
-    Fase 3: e-mail de credenciais disparado ao usuário; flag religada.
+    Fase 3: NENHUM e-mail enviado; senha vira "Senha123"; flag de troca religada.
     """
     # Fase 1: usuário no store + spy do envio.
     criar_usuario("op@equatorialenergia.com.br", senha="Antiga1", caminho=store_usuarios)
@@ -279,11 +279,12 @@ def test_esqueci_senha_envia_nova_credencial(client, store_usuarios):
     # Resposta genérica de sucesso.
     assert resposta.status_code == 200
     assert resposta.json() == {"ok": True}
-    # Fase 3: e-mail enviado ao usuário e flag de troca religada.
-    assert mock_env.called is True
-    assert mock_env.call_args.args[0] == "op@equatorialenergia.com.br"
-    assert obter_usuario("op@equatorialenergia.com.br",
-                         caminho=store_usuarios)["precisa_trocar_senha"] is True
+    # Fase 3: MVP não envia e-mail nenhum.
+    assert mock_env.called is False
+    # A senha guardada agora é a padrão de inicialização e a troca é obrigatória.
+    usuario = obter_usuario("op@equatorialenergia.com.br", caminho=store_usuarios)
+    assert verificar_senha("Senha123", usuario["senha_hash"], usuario["salt"]) is True
+    assert usuario["precisa_trocar_senha"] is True
 
 
 def test_esqueci_senha_email_inexistente_resposta_generica(client, store_usuarios):
