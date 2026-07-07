@@ -9,7 +9,7 @@ export default function SucessoEnvio({ uf, contrato, linhasLidas, totalAvisos, g
   return (
     <section className="card success-card">
       <div className="success-icon">✓</div>
-      <h2 className="success-title">Planilha validada e salva na base</h2>
+      <h2 className="success-title">Planilha enviada.</h2>
       <p className="success-sub">
         Nenhuma inconsistência bloqueante. As unidades consumidoras foram registradas sob o
         contrato e estão disponíveis para o Painel de Monitoramento do MME.

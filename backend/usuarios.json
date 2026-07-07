@@ -36,8 +36,8 @@
   },
   "op@enbpar.gov.br": {
     "email": "op@enbpar.gov.br",
-    "senha_hash": "dd07ef799d27a240ba1c4b510ac40536f1ef9c4f89776b58d0d188bb072640ad",
-    "salt": "4b6705b0756503b14e1dada1dccccc5f",
+    "senha_hash": "7537d39806c59df485b147bc42afc3b611e87456c4824cdcb92c4a461ba667e9",
+    "salt": "45b5978f2df9692fbdab74437c0a4fe9",
     "precisa_trocar_senha": false,
     "ativo": true
   }
