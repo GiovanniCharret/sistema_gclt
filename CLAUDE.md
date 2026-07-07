@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   are recorded in **`planning/PLAN.md`**.
 - All documentation lives in the **`planning/`** directory; the key document is
   **`planning/PLAN.md`** — read it first for current state and decisions.
+- **Product versioning (since 2026-07-07): V0 DELIVERED** (production live at
+  `gerenciador-gclt.com`); **V1 in planning**. Version scope, known limitations and
+  the V1 backlog live in **`planning/VERSOES.md`** — V1 work is tracked there
+  (dated decisions still go to PLAN.md). Each closed version gets a git tag (`v0`, …).
 - Deliver in **small, individually human-testable parts** (see PLAN.md "Fases").
 - `planning/BEHAVIORAL_GUIDELINES.md` applies: state assumptions, prefer the minimum
   code that solves the problem, make surgical changes, no speculative abstractions.

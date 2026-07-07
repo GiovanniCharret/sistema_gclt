@@ -1,5 +1,11 @@
 # PLAN.md — Site mock "Classificação de Beneficiários do Programa"
 
+> **📦 STATUS DO PRODUTO (2026-07-07): V0 ENTREGUE.** O produto está em produção em
+> `gerenciador-gclt.com`. O controle de versões do produto (V0 entregue → V1 em
+> planejamento) vive em **`planning/VERSOES.md`** — leia-o junto com este arquivo.
+> Este PLAN.md é o histórico de construção do V0; o trabalho da V1 é registrado na
+> seção V1 do VERSOES.md (decisões pontuais continuam sendo datadas aqui).
+
 > **Diretrizes de governança (não remover)**
 > - **Não faça alterações em `PROJECT_BUILDING.md`.** As fases e controles de
 >   progresso devem ser feitos e registrados **aqui em `PLAN.md`**.
@@ -613,3 +619,21 @@ notificado — é problema de manutenção de dados, não culpa do operador. Tr�
   `.gitignore` (commit `2394c22`); o `.env` continua segredo fora do git. Trade-off
   aceito: hashes pbkdf2 (200k iterações) ficam no repositório — manter o repo **privado**.
   Reverter se/quando os usuários virarem dados reais de terceiros.
+
+---
+
+## Encerramento do V0 — produto entregue (2026-07-07)
+
+Decisão do usuário: **"O projeto está finalizado. O produto foi entregue."** O MVP está
+em produção em `gerenciador-gclt.com` (repo GitHub privado + token read-only no VPS).
+Últimos ajustes da entrega: texto de sucesso trocado para **"Planilha enviada."**
+(`SucessoEnvio.jsx`); margem do botão Voltar na tela de senha resetada
+(`.auth-actions`, 24px).
+
+- O que ficou de fora do V0 (envio real de e-mail/G2, UX do upload grande, 5 contratos
+  sem referência, domínios provisórios, reversão dos workarounds) foi **transferido
+  formalmente para a V1** — lista completa em `planning/VERSOES.md`.
+- O item G2 permanece `⏳` acima como registro histórico; seu fechamento agora é
+  rastreado no backlog da V1.
+- A partir daqui o produto segue **controle de versões** (V0, V1, …) em
+  `planning/VERSOES.md`, com tag git por versão fechada.
