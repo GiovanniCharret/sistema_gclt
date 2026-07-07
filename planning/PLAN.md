@@ -607,3 +607,9 @@ notificado — é problema de manutenção de dados, não culpa do operador. Tr�
   navegador: reset → aviso → Voltar → login Senha123 → troca obrigatória → menu.
   **Reverter quando o envio real de credenciais entrar** (voltar a rota ao fluxo
   `resetar_senha()` aleatória + `enviar_credenciais()`).
+- [x] **`backend/usuarios.json` versionado no git.** ✓ **(2026-07-07)** Decisão do usuário
+  para o MVP: o store de usuários é "stack" (logins `ae@` por grupo + `op@enbpar`, senha
+  padrão `Senha123`) e sobe junto no deploy via `git pull` — sem `scp` manual. Saiu do
+  `.gitignore` (commit `2394c22`); o `.env` continua segredo fora do git. Trade-off
+  aceito: hashes pbkdf2 (200k iterações) ficam no repositório — manter o repo **privado**.
+  Reverter se/quando os usuários virarem dados reais de terceiros.
