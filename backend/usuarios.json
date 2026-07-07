@@ -1,0 +1,44 @@
+{
+  "ae@equatorialenergia.com.br": {
+    "email": "ae@equatorialenergia.com.br",
+    "senha_hash": "70be7bdd2bc9c23f4eeced004b79bb44c97392fea1cfe275e766b4c9951c1b51",
+    "salt": "202f5100bfc92dc83204fdb62f1d2445",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "ae@energisa.com.br": {
+    "email": "ae@energisa.com.br",
+    "senha_hash": "c843df637541e77ea3f9d4e2de0f273562be93414a5151fb0b4d795578e15807",
+    "salt": "8d431aabe915482490fcdf584027ea8e",
+    "precisa_trocar_senha": false,
+    "ativo": true
+  },
+  "ae@neoenergia.com.br": {
+    "email": "ae@neoenergia.com.br",
+    "senha_hash": "f741be038dcf72b6f554f9f577912481552427af24f4fd6519af41aeeca00556",
+    "salt": "7c3b1ded972afb7b23cdc36beb9ec254",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "ae@ambarenergia.com.br": {
+    "email": "ae@ambarenergia.com.br",
+    "senha_hash": "d132697064e4d8eb5a916a6303cf6d9c205bedffd914c3788471f637eacd5ea8",
+    "salt": "acb0a0e4111f39ee04e31d8021557222",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "ae@cerci.com.br": {
+    "email": "ae@cerci.com.br",
+    "senha_hash": "ef48ce6ec997346f4d66ebd3ad58d0cbf47868a04d913480245a948a17961eae",
+    "salt": "69a242f8721f900e71eb93307a8eea75",
+    "precisa_trocar_senha": false,
+    "ativo": true
+  },
+  "op@enbpar.gov.br": {
+    "email": "op@enbpar.gov.br",
+    "senha_hash": "dd07ef799d27a240ba1c4b510ac40536f1ef9c4f89776b58d0d188bb072640ad",
+    "salt": "4b6705b0756503b14e1dada1dccccc5f",
+    "precisa_trocar_senha": false,
+    "ativo": true
+  }
+}

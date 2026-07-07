@@ -19,11 +19,11 @@ minhas_notas/
 bug_fix/
 
 # ── Segredos (NÃO versionar) ─────────────────────────────
+# Obs.: `backend/usuarios.json` é versionado por decisão do MVP (2026-07-07):
+# guarda apenas hashes pbkdf2 (nunca senha em texto) e faz parte do "stack".
 .env
 .env.*
 !.env.example
-usuarios.json
-backend/usuarios.json
 
 # ── Logs ─────────────────────────────────────────────────
 logs/
