@@ -39,10 +39,12 @@ systemd `anexov-api` em `/opt/anexov`; HTTPS apex+www via certbot).
 1. **"Esqueci minha senha" sem e-mail:** reseta para a senha padrão de inicialização
    (`Senha123`, constante `_SENHA_PADRAO_MVP`) com troca obrigatória; tela crua
    "Sua senha foi resetada para o padrão de inicialização" + Voltar.
-2. **`backend/usuarios.json` versionado no git** (hashes pbkdf2 apenas): usuários
-   `ae@<grupo>` + `op@enbpar.gov.br` sobem no deploy via `git pull`. Requisito:
-   repositório GitHub **privado** (confirmado em 2026-07-07) e token fine-grained
-   read-only no remoto do VPS.
+2. ~~**`backend/usuarios.json` versionado no git**~~ — **REVERTIDO em 2026-07-08**:
+   com o `git pull` diário de `entrada/` no VPS, o arquivo versionado sobrescreveria
+   os usuários reais de produção a cada pull. Voltou ao `.gitignore`; o arquivo de
+   produção é gerido só no VPS. Os hashes antigos permanecem no histórico do git →
+   o repositório **continua tendo que ser privado** (token fine-grained read-only
+   no remoto do VPS).
 3. **Mensagem 409 orientadora:** "Sem ODIs/UCs cadastradas. Por favor, atualize os
    dados no gerenciador antes." + alerta crítico ao admin.
 
@@ -61,8 +63,8 @@ systemd `anexov-api` em `/opt/anexov`; HTTPS apex+www via certbot).
   ECO 039/2025, ECO 042/2025) — dependem do pipeline externo `alimentacao_UCs`.
 - **Domínios de e-mail provisórios** no mapa de acesso (amazonasenergia.com.br /
   roraimaenergia.com.br pendentes de decisão dos engenheiros).
-- Workarounds 1 e 2 acima devem ser revertidos quando o envio de credenciais por
-  e-mail entrar.
+- Workaround 1 acima deve ser revertido quando o envio de credenciais por e-mail
+  entrar (o 2 já foi revertido em 2026-07-08, ver acima).
 
 ---
 

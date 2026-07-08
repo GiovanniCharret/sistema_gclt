@@ -19,8 +19,11 @@ minhas_notas/
 bug_fix/
 
 # ── Segredos (NÃO versionar) ─────────────────────────────
-# Obs.: `backend/usuarios.json` é versionado por decisão do MVP (2026-07-07):
-# guarda apenas hashes pbkdf2 (nunca senha em texto) e faz parte do "stack".
+# `backend/usuarios.json` VOLTOU ao gitignore em 2026-07-08 (revertida a decisão de
+# 2026-07-07): com o `git pull` diário de entrada/ no VPS, versioná-lo sobrescreveria
+# os usuários reais de produção (senhas trocadas lá seriam desfeitas a cada pull).
+usuarios.json
+backend/usuarios.json
 .env
 .env.*
 !.env.example

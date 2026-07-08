@@ -31,3 +31,19 @@ CSVs por mtime (atenção: `base_contratos.json` NÃO recarrega — se mudar, re
 de upload autenticado — backlog da V1+ em `VERSOES.md`). O desenvolvimento do script
 de sync é feito no projeto `atualizacao_clientes`; orientações escritas em
 `atualizacao_clientes/planning/2026-07-08-atualizacao-diaria-entrada-site.md`.
+
+## Decisão (2026-07-08) — `backend/usuarios.json` volta ao .gitignore (reversão)
+
+Consequência direta da decisão acima: com o `git pull` diário no VPS, o
+`usuarios.json` versionado (decisão MVP de 2026-07-07) **sobrescreveria os usuários
+reais de produção a cada pull** (senhas trocadas pelos operadores seriam desfeitas).
+Revertido: `git rm --cached backend/usuarios.json` + ignore restaurado. O arquivo de
+produção passa a ser gerido exclusivamente no VPS (criação de usuário via CLI
+`criar_usuario`, reset via "esqueci minha senha"). Os hashes antigos permanecem no
+histórico do git — o repositório **segue obrigatoriamente privado**; recomendado
+trocar as senhas de produção que coincidirem com as do histórico.
+
+⚠️ Operacional: o primeiro `git pull` no VPS após essa reversão **apaga**
+`/opt/anexov/backend/usuarios.json` do working tree (o commit remove o arquivo
+rastreado). Procedimento: backup antes do pull, restaurar depois (sem restart — o
+arquivo é lido a cada requisição).

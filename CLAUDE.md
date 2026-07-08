@@ -195,9 +195,12 @@ is entirely under `modelo/src/`.
 committed** (versioned; an external process refreshes it daily). It is **not** front app
 code — don't import it into `modelo/src/`. The backend reads it via `backend/referencia.py`.
 
-Backend **secrets stay out of git** (already in `.gitignore`): `.env` / `backend/.env`.
-**`backend/usuarios.json` IS versioned** (MVP decision 2026-07-07: pbkdf2 hashes only,
-treated as part of the stack). `.venv/`, `__pycache__/`, `.pytest_cache/` are gitignored too. The committable backend source is under **`backend/`** (see the
+Backend **secrets stay out of git** (already in `.gitignore`): `.env` / `backend/.env`,
+and **`backend/usuarios.json`** — it was briefly versioned (MVP decision 2026-07-07) but
+that was **reverted on 2026-07-08**: with the daily `git pull` of `entrada/` on the VPS,
+a versioned usuarios.json would overwrite the real production users on every pull. The
+production file is managed only on the VPS (note: old hashes remain in git history, so
+the repo must stay private). `.venv/`, `__pycache__/`, `.pytest_cache/` are gitignored too. The committable backend source is under **`backend/`** (see the
 "Backend" section above).
 
 ## Coding Style
