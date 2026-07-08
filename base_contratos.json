@@ -1196,7 +1196,9 @@
     "valor_cde": 0,
     "participacao_cde": 0.0,
     "tipo_contrato": "LPT",
-    "vigente": "Encerrado"
+    "vigente": "Encerrado",
+    "metas": false,
+    "data_termo": "2025-25-11"
   },
   "ECO 034/2026": {
     "sigla": "ÂMBAR",

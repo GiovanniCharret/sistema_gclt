@@ -83,6 +83,9 @@ itens a confirmar/priorizar com o usuário; novos itens entram aqui.
       rotativas + tempo decorrido).
 - [ ] Completar a referência dos **5 contratos** pendentes (pipeline externo).
 - [ ] Definir domínios reais dos grupos (mapa `acesso.py`).
+- [ ] Substituir a sincronização diária de `entrada/` **via git** (decisão provisória
+      de 2026-07-08, ver PLAN.md; desenvolvida no projeto `atualizacao_clientes`) por
+      mecanismo mais robusto — candidata: endpoint de upload autenticado na API.
 
 ### Novas melhorias da V1 (a definir pelo usuário)
 
