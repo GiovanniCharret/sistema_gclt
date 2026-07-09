@@ -14,7 +14,7 @@ export default function MenuPrincipal({ onClassificacao }) {
           <button type="button" className="modulo-card" onClick={onClassificacao}>
             <Ilustracao />
             <div className="modulo-card-body">
-              <h2 className="modulo-card-title">Classificação de Beneficiários do Programa</h2>
+              <h2 className="modulo-card-title">Monitoramento dos Beneficiários do Programa</h2>
               <p className="modulo-card-desc">
                 Upload de Informações Sobre Unidades Consumidoras — Decreto Nº 12.964, de 8 de Maio de 2026
               </p>

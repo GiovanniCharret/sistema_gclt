@@ -1,5 +1,4 @@
-1 - Monitoramento de Beneficiários
-2 - Atualização da data do termo json dos contratos - "ECOT 016/2017": {
+1 - Atualização da data do termo json dos contratos - "ECOT 016/2017": {
     "sigla": "EQUATORIAL",
     "cnpj": "01543032000104",
     "tranche": "3ª Tranche",
@@ -47,3 +46,100 @@ trocar as senhas de produção que coincidirem com as do histórico.
 `/opt/anexov/backend/usuarios.json` do working tree (o commit remove o arquivo
 rastreado). Procedimento: backup antes do pull, restaurar depois (sem restart — o
 arquivo é lido a cada requisição).
+
+## Decisão (2026-07-09) — sincronização diária de `entrada/` muda de git para SSH/scp
+
+Substitui a decisão de 2026-07-08 (transporte via git). O script diário do projeto
+`atualizacao_clientes` passará a enviar os 4 CSVs por **scp direto** para
+`/opt/anexov/entrada/` no VPS (host `gerenciador-gclt.com` = `82.25.68.143`, porta 22;
+login alvo `deploy` com chave ed25519 — setup único pendente: gerar chave no DEV,
+que ainda não tem `~/.ssh`, e instalar a `.pub` em `/home/deploy/.ssh/authorized_keys`).
+Sem restart (recarga por mtime); envio com rename atômico (`.new` → `mv`).
+
+Consequência: os CSVs enviados por scp divergem do HEAD no working tree do VPS —
+antes de qualquer `git pull` de deploy, rodar `git checkout -- entrada/` primeiro;
+o cron de pull planejado em 2026-07-08 **não será criado**. Em aberto: tirar os CSVs
+de `entrada/` do versionamento (gitignore + `git rm --cached`) para eliminar a
+divergência. Orientações completas (perguntas de infra respondidas) em
+`atualizacao_clientes/planning/2026-07-08-atualizacao-diaria-entrada-site.md`.
+Continua **provisória** até o mecanismo robusto da V1+ (endpoint de upload autenticado).
+
+## Decisão (2026-07-09) — regra "Data de energização fora de 2026" excluída
+
+Mudança crítica 1/2 pedida pelo usuário: a data de energização deixa de ser restrita a
+2026 — **qualquer data é aceita**; a única restrição que permanece é **data em branco**,
+que continua erro por já ser campo obrigatório (`OBRIGATORIOS` em `validacao.py`).
+
+- `backend/validacao.py`: removido o bloco do aviso, a entrada em `_DESCRICOES` e o
+  import de `normalizar_data` (que segue existindo em `planilha.py`, com testes).
+- `backend/tests/test_validacao.py`: teste da regra antiga substituído por dois novos —
+  data de outro ano não gera achado; data vazia continua erro. **Suíte: 102 verdes.**
+- `modelo/src/components/UploadAnexoV.jsx`: removido do hint do dropzone o trecho
+  "unidades consumidoras ligadas em 2026" (build do front OK).
+- `modelo/src/seedData.js` ainda cita a regra em `RULE_GROUPS`, mas é código morto da
+  era mock (não é importado por ninguém desde o Bloco F) — deixado como está.
+
+Pendente para valer em produção: commit/push + no VPS `git pull` + `systemctl restart
+anexov-api` (regra vive no processo Python) + `npm run build` (texto do front).
+
+## Decisão (2026-07-09) — classificação "0 - Não é prioridade" vira ERRO com 2 cláusulas
+
+Mudança crítica 2/2 pedida pelo usuário: a antiga regra de aviso "“0 - Não é
+prioridade” + outra tipologia" passa a ser **erro** (bloqueia o envio), desdobrada em
+duas cláusulas sobre as colunas de tipologia (O = "0 - Não é prioridade"; P–AZ = demais):
+
+1. **"0" = "Sim"** → todas as demais tipologias devem ser "Não". Qualquer outra com
+   "Sim" gera o erro "“0 - Não é prioridade” + outra tipologia" (o achado lista as
+   colunas em conflito).
+2. **"0" = "Não"** → pelo menos uma das demais tipologias deve ser "Sim". Linha toda
+   "Não" (ou sem nenhum "Sim", mesmo com células em branco) gera o erro novo
+   "Nenhuma tipologia assinalada" ("Todas as células de classificação não podem ser
+   assinaladas como “Não”").
+
+Premissas assumidas (confirmar com o usuário se necessário): na cláusula 1, células em
+branco não disparam o erro (só "Sim" explícito conflita — branco não é "assinalada");
+com a coluna "0" em branco, nenhuma das duas cláusulas se aplica.
+
+Implementação: `backend/validacao.py` (bloco reescrito + `_DESCRICOES`);
+`backend/tests/test_validacao.py` — teste do aviso antigo substituído por 4 novos
+(cláusula 1 erro; "0"=Sim com demais "Não" ok; cláusula 2 erro com tudo "Não";
+cláusula 2 erro com demais em branco). **Suíte: 105 verdes.** Mesma pendência de
+produção da decisão anterior (pull + restart; front não mudou nesta).
+
+## Decisão (2026-07-09) — modelo oficial do Anexo V substituído (versão 09/07/2026)
+
+A planilha nova (entregue em `manuais/nova/`) substituiu a antiga em
+`manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.xlsx` (mesmo nome;
+a antiga foi apagada na sobrescrita, a pedido do usuário). Comparação estrutural antes
+da troca: **idêntica** em tudo que o backend consome — mesmas 4 abas, mesmos 52
+cabeçalhos da aba Preenchimento (mesma ordem), aba Dominios igual → nenhuma mudança
+de código no parser/validação. `VERSAO_DATA` do front atualizada de 23/06/2026 para
+**09/07/2026** (`VersaoPlanilha.jsx` e `relatorioCsv.js`). Suíte 105 verdes + build OK.
+
+⚠️ Produção: `manuais/` está FORA do git — o `git pull` no VPS **não** leva o modelo
+novo. É preciso enviá-lo por scp (ver comando atualizado na decisão seguinte).
+O download `/api/modelo` serve o arquivo do disco a cada requisição (atualiza sem
+restart), mas o restart já é exigido pelas outras duas mudanças do dia.
+
+## Decisão (2026-07-09) — nome do modelo passa a ser VERSIONADO (`.v070926.xlsx`)
+
+Complemento da troca acima, após o usuário reportar que o download "sempre baixa a
+versão anterior": (a) produção ainda não recebeu o modelo (deploy pendente) e (b) o
+front fixava o nome do arquivo baixado — versões novas chegariam com o mesmo nome,
+indistinguíveis das antigas. O usuário renomeou o arquivo em `manuais/` para
+**`Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v070926.xlsx`** e o nome
+versionado virou o padrão em toda a cadeia:
+
+- `backend/planilha.py` — `_MODELO_PADRAO` aponta para o nome versionado (docstring
+  instrui o que atualizar a cada versão nova).
+- `backend/app.py` — `/api/modelo` serve com `filename=_MODELO_PADRAO.name` (deixa de
+  duplicar o nome).
+- `modelo/src/lib/api.js` — `a.download` com o nome versionado (deve acompanhar o back).
+- `backend/tests/test_api.py` — teste do download agora exige `v070926` no
+  Content-Disposition; `test_dominios.py` passou a importar `_MODELO_PADRAO` em vez de
+  duplicar o caminho (o skip silencioso pós-rename foi o sintoma). **Suíte: 105 verdes.**
+
+A cada modelo novo: renomear com `vDDMMAA` novo + atualizar os 3 pontos acima +
+`VERSAO_DATA` do front + scp ao VPS:
+`scp "manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v070926.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`
+(o arquivo antigo em `/opt/anexov/manuais/` pode ser removido depois).

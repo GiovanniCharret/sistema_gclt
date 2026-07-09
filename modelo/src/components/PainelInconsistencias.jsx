@@ -2,8 +2,9 @@ import { PREVIEW_COLS } from "../seedData";
 import { baixarRelatorioCsv } from "../lib/relatorioCsv";
 import RuleGroups, { formatarLoc } from "./RuleGroups";
 
-// Entregável central: resumo + grupos por tipo de regra (expansíveis) ao lado
-// de um preview das primeiras linhas da planilha com as células sinalizadas.
+// Entregável central: resumo + grupos por tipo de regra (expansíveis), seguidos
+// do preview das primeiras linhas da planilha com as células sinalizadas
+// (sempre empilhado — lado a lado espremia a coluna de regras; 09/07/2026).
 // Dados vêm do /api/validar (via props). Avisos NÃO bloqueiam — só erros impedem o salvamento.
 export default function PainelInconsistencias({
   uf, contrato, grupos, previewRows, totalErros, totalAvisos, linhasLidas, onCorrigir, onToast,

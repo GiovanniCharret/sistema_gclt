@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atualização diária da base — Hostinger (gerenciador-gclt.com)</title>
+<style>
+  :root {
+    --navy: #123a63;
+    --blue: #1d6fd6;
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --text: #1c2b3a;
+    --muted: #5b6b7c;
+    --ok: #1e7e46;
+    --warn-bg: #fff6e5;
+    --warn-border: #e6a23c;
+    --code-bg: #0f2238;
+    --code-text: #d9e6f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 24px 32px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; opacity: .85; font-size: 14px; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  .card {
+    background: var(--card);
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(18,58,99,.10);
+    padding: 20px 24px;
+    margin-top: 20px;
+  }
+  .card h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    color: var(--navy);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    white-space: nowrap;
+  }
+  .badge.done { background: var(--ok); }
+  .card p { margin: 6px 0; font-size: 14.5px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  pre {
+    position: relative;
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    overflow-x: auto;
+    margin: 10px 0;
+  }
+  pre code { font-family: Consolas, "Cascadia Mono", monospace; }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,.12);
+    color: #cfe0f2;
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,.22); }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 4px solid var(--warn-border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 10px 0;
+  }
+  code.inline {
+    background: #e8eef6;
+    color: var(--navy);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 13px;
+    font-family: Consolas, monospace;
+  }
+  ul { margin: 6px 0; padding-left: 22px; font-size: 14.5px; }
+  footer { text-align: center; margin-top: 32px; font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Atualização diária da base — Hostinger</h1>
+  <p>Site: <strong>gerenciador-gclt.com</strong> · VPS: <code>/opt/anexov</code> · Serviço: <code>anexov-api</code> · Solução provisória via git (decisão de 2026-07-08)</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2><span class="badge">Passo 1</span> Local (Windows) — commit e push dos CSVs</h2>
+    <p>Depois da rodada diária, no repo do site (<code class="inline">site_classificacao_beneficiarios_programa</code>).
+       Add <strong>cirúrgico</strong>: somente os 4 caminhos — nunca <code class="inline">git add -A</code> / <code class="inline">git add .</code>.</p>
+    <pre><button class="copy-btn">Copiar</button><code>git add entrada/lpt/consolidado.csv entrada/lpt/consolidado_ucs.csv entrada/mla/consolidado.csv entrada/mla/consolidado_ucs.csv
+git commit -m "base csv mla e lpt atualizada"
+git pull --rebase --autostash
+git push</code></pre>
+    <p class="muted">Se não houve mudança nos arquivos, o commit falha com "nothing to commit" — tudo bem, nada a fazer.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge">Passo 2</span> VPS — pull como usuário <code class="inline">deploy</code></h2>
+    <p>Conecte no VPS (ssh) e rode:</p>
+    <pre><button class="copy-btn">Copiar</button><code>sudo -u deploy git -C /opt/anexov pull --ff-only</code></pre>
+    <div class="warn">
+      ⚠️ Git no <code class="inline">/opt/anexov</code> <strong>sempre</strong> com <code class="inline">sudo -u deploy</code>.
+      Rodar como root planta arquivos root-owned em <code class="inline">.git/</code> e quebra pulls futuros
+      (<code class="inline">FETCH_HEAD: Permission denied</code>). Se acontecer, corrija com:
+      <code class="inline">chown -R deploy:deploy /opt/anexov</code>
+    </div>
+    <p><strong>Sem restart:</strong> o backend recarrega os CSVs de <code class="inline">entrada/</code> automaticamente quando o mtime muda.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge">Passo 3</span> Verificação</h2>
+    <p>Confirme as datas dos arquivos e a saúde da API:</p>
+    <pre><button class="copy-btn">Copiar</button><code>ls -la /opt/anexov/entrada/lpt /opt/anexov/entrada/mla
+curl -s https://gerenciador-gclt.com/api/health</code></pre>
+    <ul>
+      <li>As datas dos 4 CSVs devem ser as de hoje.</li>
+      <li>O <code class="inline">/api/health</code> mostra as contagens da referência (<code class="inline">chaves_uc</code>, <code class="inline">odi_ref</code>) e a integridade (contratos com/sem referência) — os números devem refletir a base nova.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge done">Só se necessário</span> Casos especiais</h2>
+    <p><strong>Se <code class="inline">base_contratos.json</code> também mudou</strong> (ele NÃO recarrega sozinho — cache por processo):</p>
+    <pre><button class="copy-btn">Copiar</button><code>systemctl restart anexov-api</code></pre>
+    <p>E se a cópia do front (<code class="inline">modelo/src/base_contratos.json</code>) mudou, rebuild:</p>
+    <pre><button class="copy-btn">Copiar</button><code>cd /opt/anexov/modelo
+sudo -u deploy npm run build</code></pre>
+    <p><strong>Se o pull abortar com "local changes would be overwritten":</strong> algum arquivo rastreado foi alterado direto no VPS. Veja qual com
+       <code class="inline">sudo -u deploy git -C /opt/anexov status</code> e resolva com cuidado (backup antes de qualquer <code class="inline">git checkout --</code>, que é irreversível).</p>
+    <div class="warn">
+      🔒 <strong>Nunca</strong> versionar/commitar: <code class="inline">backend/usuarios.json</code> (usuários reais de produção — só existem no VPS),
+      <code class="inline">.env</code>, <code class="inline">backend/.env</code>, <code class="inline">senha e-mail hostinger</code>.
+      O repo GitHub deve permanecer <strong>privado</strong>.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Cheat sheet — dia normal (tudo em sequência)</h2>
+    <p>Local:</p>
+    <pre><button class="copy-btn">Copiar</button><code>git add entrada/lpt/consolidado.csv entrada/lpt/consolidado_ucs.csv entrada/mla/consolidado.csv entrada/mla/consolidado_ucs.csv &amp;&amp; git commit -m "base csv mla e lpt atualizada" &amp;&amp; git pull --rebase --autostash &amp;&amp; git push</code></pre>
+    <p>VPS:</p>
+    <pre><button class="copy-btn">Copiar</button><code>sudo -u deploy git -C /opt/anexov pull --ff-only &amp;&amp; ls -la /opt/anexov/entrada/lpt /opt/anexov/entrada/mla &amp;&amp; curl -s https://gerenciador-gclt.com/api/health</code></pre>
+    <p class="muted">Alternativa para dispensar o passo manual no VPS: cron do usuário deploy —
+       <code class="inline">crontab -u deploy -e</code> →
+       <code class="inline">0 8 * * * git -C /opt/anexov pull --ff-only &gt;&gt; /home/deploy/pull_entrada.log 2&gt;&amp;1</code></p>
+  </div>
+
+  <footer>
+    Solução provisória (decisão de 2026-07-08, ver <code>planning/PLAN.md</code>) até o mecanismo robusto da V1+
+    (candidato: endpoint de upload autenticado). Gerado em 2026-07-09.
+  </footer>
+
+</main>
+
+<script>
+  // Botões "Copiar": copiam o texto do <code> irmão para a área de transferência.
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.parentElement.querySelector('code').innerText;
+      navigator.clipboard.writeText(code).then(function () {
+        btn.textContent = 'Copiado ✓';
+        setTimeout(function () { btn.textContent = 'Copiar'; }, 1500);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

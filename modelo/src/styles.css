@@ -229,8 +229,9 @@ button, input, select, textarea { font: inherit; }
 .val-pill.err { background: var(--err-bg); border-color: var(--err-bd); color: var(--err-tx); }
 .val-pill.warn { background: var(--warn-bg); border-color: var(--warn-bd); color: var(--warn-tx); }
 
+/* sempre empilhado: "Planilha enviada" abaixo das inconsistencias (09/07/2026 —
+   o lado a lado em telas largas espremia a coluna de regras; bug_fix/erro_responsividade.jpg) */
 .av-split { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 980px) { .av-split { grid-template-columns: 1.05fr 0.95fr; align-items: start; } }
 .av-col-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 700; margin: 0 0 10px; }
 
 .rule-group { border: 1px solid var(--border-light); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
@@ -267,12 +268,9 @@ button, input, select, textarea { font: inherit; }
 .av-preview-foot { padding: 8px 12px; font-size: 0.74rem; color: var(--text-muted); background: #f8fafc; border-top: 1px solid var(--border-light); }
 /* trecho vermelho na fala do assistente (erros bloqueantes) */
 .assist-body .assist-erro { color: #dc2626; font-weight: 700; }
-/* divisor hairline entre "inconsistências" e "planilha enviada":
-   empilhado (mobile) = separador horizontal com respiro; lado a lado = vertical */
+/* divisor hairline entre "inconsistências" e "planilha enviada" (layout sempre
+   empilhado): separador horizontal com respiro */
 .av-col-preview { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-light); }
-@media (min-width: 980px) {
-  .av-col-preview { margin-top: 0; padding-top: 0; border-top: none; padding-left: 24px; border-left: 1px solid var(--border-light); }
-}
 
 .panel-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 

@@ -45,7 +45,7 @@ from backend.validacao import validar
 # Fase 1: instancia o app com título/versão (aparecem na doc OpenAPI em /docs).
 app = FastAPI(
     # Nome exibido na documentação automática da API.
-    title="Backend — Classificação de Beneficiários do Programa",
+    title="Backend — Monitoramento dos Beneficiários do Programa",
     # Versão da API; incrementar conforme o backend evolui pelos Blocos A–G.
     version="0.1.0",
 )
@@ -333,11 +333,12 @@ def modelo(email=Depends(usuario_do_token)):
     # Fase 1: o modelo precisa estar presente (em `manuais/`, no servidor).
     if not _MODELO_PADRAO.exists():
         raise HTTPException(status_code=404, detail="Modelo não encontrado no servidor.")
-    # Fase 2/Saída: download com o nome oficial.
+    # Fase 2/Saída: download com o nome oficial versionado (o mesmo do arquivo em disco,
+    # para o operador distinguir de versões antigas já baixadas).
     return FileResponse(
         str(_MODELO_PADRAO),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename="Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.xlsx",
+        filename=_MODELO_PADRAO.name,
     )
 
 

@@ -133,7 +133,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <span className="topbar-brand">Classificação de Beneficiários</span>
+        <span className="topbar-brand">Monitoramento dos Beneficiários</span>
         <nav className="topbar-nav">
           <button
             className={`topbar-link${view === "upload" ? " is-active" : ""}`}
@@ -186,7 +186,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <span>Mock · Classificação de Beneficiários do Programa</span>
+        <span>Mock · Monitoramento dos Beneficiários do Programa</span>
         <span>Programa Luz para Todos · MME · ENBPar</span>
       </footer>
 

@@ -116,10 +116,17 @@ def test_coordenada_invalida_e_aviso():
     assert ("warn", "Coordenadas inválidas") in _regras(achados)
 
 
-def test_data_fora_de_2026_e_aviso():
-    """Data com ano ≠ 2026 → aviso 'Data de energização fora de 2026'."""
+def test_data_de_qualquer_ano_e_aceita():
+    """Qualquer ano é aceito (regra 'fora de 2026' excluída em 2026-07-09) → nenhum achado."""
     achados = regras_formato_dominio([linha_valida(**{"Data de Energização da UC": "12/11/2025"})], DOM)
-    assert ("warn", "Data de energização fora de 2026") in _regras(achados)
+    assert achados == []
+
+
+def test_data_em_branco_continua_erro():
+    """Data vazia segue sendo erro de campo obrigatório (única restrição de data)."""
+    achados = regras_formato_dominio([linha_valida(**{"Data de Energização da UC": ""})], DOM)
+    assert ("err", "Campos obrigatórios vazios") in _regras(achados)
+    assert any(a["campo"] == "Data de Energização da UC" for a in achados)
 
 
 def test_tipologia_diferente_de_sim_nao_e_aviso():
@@ -128,11 +135,31 @@ def test_tipologia_diferente_de_sim_nao_e_aviso():
     assert ("warn", "Valor de tipologia ≠ Sim/Não") in _regras(achados)
 
 
-def test_zero_nao_e_prioridade_com_outra_tipologia_e_aviso():
-    """'0 - Não é prioridade' = Sim junto de outra tipologia = Sim → aviso."""
+def test_zero_sim_com_outra_tipologia_sim_e_erro():
+    """Cláusula 1 (erro desde 2026-07-09): '0' = Sim exige todas as demais tipologias = Não."""
     linha = linha_valida(**{"0 - Não é prioridade": "Sim", "I - Baixa renda": "Sim"})
     achados = regras_formato_dominio([linha], DOM)
-    assert ("warn", "“0 - Não é prioridade” + outra tipologia") in _regras(achados)
+    assert ("err", "“0 - Não é prioridade” + outra tipologia") in _regras(achados)
+
+
+def test_zero_sim_com_demais_nao_e_ok():
+    """'0' = Sim com as demais tipologias = Não é uma linha válida (nenhum achado)."""
+    linha = linha_valida(**{"0 - Não é prioridade": "Sim", "I - Baixa renda": "Não"})
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_zero_nao_sem_nenhum_sim_e_erro():
+    """Cláusula 2 (erro desde 2026-07-09): '0' = Não exige pelo menos uma tipologia = Sim."""
+    linha = linha_valida(**{"0 - Não é prioridade": "Não", "I - Baixa renda": "Não"})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Nenhuma tipologia assinalada") in _regras(achados)
+
+
+def test_zero_nao_com_tipologias_em_branco_e_erro():
+    """'0' = Não com as demais em branco também viola a cláusula 2 (não há nenhum Sim)."""
+    linha = linha_valida(**{"0 - Não é prioridade": "Não", "I - Baixa renda": ""})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Nenhuma tipologia assinalada") in _regras(achados)
 
 
 # ── D4 · Cruzamento com entrada/ (chaves_uc / odi_ref por contrato) ──

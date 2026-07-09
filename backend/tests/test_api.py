@@ -469,8 +469,11 @@ def test_modelo_sem_token_retorna_401(client):
 
 
 def test_modelo_baixa_o_arquivo(client):
-    """`GET /api/modelo` com token → 200 + Content-Disposition + bytes."""
+    """`GET /api/modelo` com token → 200 + Content-Disposition com o nome versionado + bytes."""
     r = client.get("/api/modelo", headers=_headers())
     assert r.status_code == 200
     assert "attachment" in r.headers.get("content-disposition", "").lower()
+    # O nome do download carrega a versão do modelo (v070926 desde 2026-07-09) para o
+    # operador distinguir de versões antigas já baixadas.
+    assert "v070926" in r.headers.get("content-disposition", "")
     assert len(r.content) > 0

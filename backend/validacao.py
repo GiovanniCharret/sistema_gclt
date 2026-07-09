@@ -11,8 +11,8 @@ Só `sev="err"` bloqueia o envio (§7). Este arquivo (D3) cobre as regras de
 formato/domínio; o cruzamento com `entrada/` (D4) e a montagem (D5) vêm em seguida.
 """
 
-# Normalização defensiva de data/coordenada e de ID (ODI/UC) — do parser.
-from backend.planilha import normalizar_data, normalizar_coordenada, normalizar_id
+# Normalização defensiva de coordenada e de ID (ODI/UC) — do parser.
+from backend.planilha import normalizar_coordenada, normalizar_id
 
 # ── Nomes de coluna (cabeçalhos reais do modelo) ──
 COL_ODI = "Número ODI"
@@ -111,7 +111,11 @@ def regras_formato_dominio(linhas, dominios):
 
     Entrada: `linhas` (lista de dicts do parser) e `dominios` (dict de listas válidas).
     Fase 1: por linha — campos obrigatórios vazios (erro), domínio (erro), coordenadas
-            (aviso), data fora de 2026 (aviso), tipologia ≠ Sim/Não (aviso), "0"+outra (aviso).
+            (aviso), tipologia ≠ Sim/Não (aviso), consistência da classificação (erro,
+            2 cláusulas: "0"="Sim" exige demais tipologias "Não"; "0"="Não" exige ao
+            menos uma tipologia "Sim"). Data de energização: qualquer ano é aceito
+            (regra "fora de 2026" excluída em 2026-07-09); vazia continua erro por ser
+            campo obrigatório.
     Fase 2: entre linhas — chave ODI+UC duplicada (erro) e UC duplicada (erro).
     Saída: lista de achados.
     """
@@ -147,13 +151,6 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("warn", "Coordenadas inválidas", loc, coluna,
                                         f'valor "{v}" inválido', f"deve estar entre {minimo} e {maximo}"))
 
-        # (aviso) Data de energização fora de 2026.
-        if _txt(linha, COL_DATA) != "":
-            data = normalizar_data(linha.get(COL_DATA))
-            if data is not None and data.year != 2026:
-                achados.append(_achado("warn", "Data de energização fora de 2026", loc, COL_DATA,
-                                        f"ano {data.year}", "enviar apenas UCs energizadas em 2026"))
-
         # (aviso) Tipologia ≠ Sim/Não.
         for coluna in _colunas_tipologia(linha):
             v = _txt(linha, coluna)
@@ -161,14 +158,24 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("warn", "Valor de tipologia ≠ Sim/Não", loc, coluna,
                                         f'valor "{v}" inválido', 'usar "Sim" ou "Não"'))
 
-        # (aviso) "0 - Não é prioridade" = Sim junto de outra tipologia = Sim.
-        if _txt(linha, COL_TIPOLOGIA_ZERO) == "Sim":
-            outras = [c for c in _colunas_tipologia(linha)
-                      if c != COL_TIPOLOGIA_ZERO and _txt(linha, c) == "Sim"]
-            if outras:
-                achados.append(_achado("warn", "“0 - Não é prioridade” + outra tipologia", loc,
-                                        "Tipologia", "marcada junto de outra tipologia",
-                                        'desmarcar "0" quando houver outra tipologia'))
+        # (erro) Consistência da classificação — "0 - Não é prioridade" vs demais
+        # tipologias (colunas P–AZ do modelo). Erro desde 2026-07-09 (antes era aviso).
+        # Valor da coluna "0" e lista das demais colunas de tipologia da linha.
+        zero = _txt(linha, COL_TIPOLOGIA_ZERO)
+        demais = [c for c in _colunas_tipologia(linha) if c != COL_TIPOLOGIA_ZERO]
+        if zero == "Sim":
+            # Cláusula 1: com "0" = "Sim", nenhuma outra tipologia pode estar "Sim".
+            conflitos = [c for c in demais if _txt(linha, c) == "Sim"]
+            if conflitos:
+                achados.append(_achado("err", "“0 - Não é prioridade” + outra tipologia", loc,
+                                        "Tipologia", f'“Sim” também em: {", ".join(conflitos)}',
+                                        'se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser “Não”'))
+        elif zero == "Não":
+            # Cláusula 2: com "0" = "Não", pelo menos uma outra tipologia deve estar "Sim".
+            if not any(_txt(linha, c) == "Sim" for c in demais):
+                achados.append(_achado("err", "Nenhuma tipologia assinalada", loc,
+                                        "Tipologia", "nenhuma tipologia marcada com “Sim”",
+                                        'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
 
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
@@ -248,8 +255,8 @@ _DESCRICOES = {
     "UF / município divergente": "Não bate com a referência de entrada/ para aquele ODI",
     "Coordenadas inválidas": "Latitude/Longitude fora da faixa geográfica ou não numéricas",
     "UCs faltando": "UCs da referência do contrato ausentes da planilha",
-    "“0 - Não é prioridade” + outra tipologia": "Marcar “0” só quando nenhuma outra tipologia se aplica",
-    "Data de energização fora de 2026": "A planilha deve conter apenas UCs ligadas em 2026",
+    "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
+    "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }

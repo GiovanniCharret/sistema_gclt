@@ -5,20 +5,17 @@ modelo (§7). Estes testes cobrem a leitura por coluna (fixture) e, se o modelo 
 presente, uma checagem de sanidade das colunas esperadas.
 """
 
-# `Path` verifica a presença do modelo real (opcional).
-from pathlib import Path
-
 # `pytest` para o skip condicional.
 import pytest
 
-# Funções sob teste.
-from backend.planilha import ler_dominios, obter_dominios
+# Funções sob teste + caminho canônico do modelo (única fonte do nome versionado).
+from backend.planilha import ler_dominios, obter_dominios, _MODELO_PADRAO
 # Gerador de fixture da aba Dominios.
 from backend.tests.fixtures import gerar_xlsx_dominios
 
-# Caminho do modelo real (gitignored) — usado só se existir.
-_MODELO = Path(__file__).resolve().parent.parent.parent / "manuais" / \
-    "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.xlsx"
+# Caminho do modelo real (gitignored) — usado só se existir. Reutiliza o do módulo para
+# não duplicar o nome do arquivo (que agora muda a cada versão do modelo).
+_MODELO = _MODELO_PADRAO
 
 
 def test_ler_dominios_le_cada_coluna():
