@@ -47,6 +47,7 @@ r - Rollback - falhou
 [n] - Reproduzir o site atual como um mock não-funcional (cópia React/Vite, dados, hardcoded) para servir de base/canvas no desenho/design de uma futura nova página.
 A nova página (que conectará a esta, herdará os estilos e compartilhará o mesmo BD).
 [x] - Criar o "claude resume.txt"
+[ ] - https://github.com/b-open-io/statusline instalado?
 
 ### Python env
 1 - powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
