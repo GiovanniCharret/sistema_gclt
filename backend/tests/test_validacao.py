@@ -162,6 +162,22 @@ def test_zero_nao_com_tipologias_em_branco_e_erro():
     assert ("err", "Nenhuma tipologia assinalada") in _regras(achados)
 
 
+def test_zero_em_branco_e_erro():
+    """'0 - Não é prioridade' em branco → erro (obrigatório desde 2026-07-14), mesmo
+    com a linha classificada em outra tipologia (caso do arquivo ECO-030-A-2025)."""
+    linha = linha_valida(**{"0 - Não é prioridade": "", "I - Baixa renda": "Sim"})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "“0 - Não é prioridade” em branco") in _regras(achados)
+
+
+def test_zero_em_branco_fecha_furo_da_linha_sem_classificacao():
+    """Linha sem nenhuma classificação ('0' e demais em branco) agora é erro: o '0'
+    obrigatório fecha o furo em que a linha toda vazia passava calada."""
+    linha = linha_valida(**{"0 - Não é prioridade": "", "I - Baixa renda": ""})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "“0 - Não é prioridade” em branco") in _regras(achados)
+
+
 # ── D4 · Cruzamento com entrada/ (chaves_uc / odi_ref por contrato) ──
 
 def test_odi_uc_nao_consta_na_referencia_e_erro():

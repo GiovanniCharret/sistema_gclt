@@ -12,6 +12,14 @@
     "data_termo": "2025-25-11"
   }
 
+  2 - Validação de GPS por estado
+  3 - Ucs com data de Meta Excepcional (refere-se ao item 1)
+  4 - Coluna CPF/CNPJ
+  5 - Filtros de latitute e longitude
+    a. número errado
+    b. por estado
+
+
 ---
 
 ## Decisão (2026-07-08) — atualização diária de `entrada/` via git (provisória)
@@ -143,3 +151,35 @@ A cada modelo novo: renomear com `vDDMMAA` novo + atualizar os 3 pontos acima +
 `VERSAO_DATA` do front + scp ao VPS:
 `scp "manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v070926.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`
 (o arquivo antigo em `/opt/anexov/manuais/` pode ser removido depois).
+
+## Decisão (2026-07-14) — coluna "0 - Não é prioridade" em branco vira ERRO (obrigatório)
+
+Bug reportado a partir do arquivo `bug_fix/…ECO-030-A-2025_.xlsx`: a planilha (654
+linhas, contrato ECO 030/2024, AC) foi **aceita sem bloqueio** mesmo com a coluna "0 -
+Não é prioridade" (col O) **em branco em 100% das linhas**. Diagnóstico com os dados
+reais: as linhas **estão classificadas** (toda linha tem ≥1 "Sim" numa tipologia
+prioritária — dominante col AA "IV.7 - Família de agricultores familiares", "Sim" em
+650/654), então a aceitação era substantivamente correta quanto à classificação. O que
+escapava era a própria célula "0" em branco: a condicional de consistência só tratava
+`"0"="Sim"` (cláusula 1) e `"0"="Não"` (cláusula 2), e "0" **não** estava em
+`OBRIGATORIOS` — então "0" vazio não acionava nada. Isso contradizia a premissa
+documentada em 2026-07-09 ("com a coluna '0' em branco, nenhuma das duas cláusulas se
+aplica"), que **fica revertida** aqui.
+
+Decisão do usuário: **"0" em branco = erro bloqueante** (a coluna passa a ser de
+preenchimento obrigatório, Sim/Não). Efeito colateral positivo: fecha o furo em que uma
+linha **totalmente sem classificação** ("0" e demais em branco) passava calada — agora
+o "0" obrigatório já a bloqueia. As duas cláusulas anteriores seguem inalteradas.
+
+- `backend/validacao.py`: nova cláusula 0 (`if zero == ""` → erro
+  `"“0 - Não é prioridade” em branco"`) antes das cláusulas 1/2; entrada em `_DESCRICOES`;
+  docstring de `regras_formato_dominio` atualizada (3 cláusulas).
+- `backend/tests/test_validacao.py`: +2 testes (`test_zero_em_branco_e_erro` reproduz o
+  arquivo; `test_zero_em_branco_fecha_furo_da_linha_sem_classificacao`). **Suíte: 107 verdes.**
+- Verificado no arquivo real: antes 0 achados de "0 em branco" → depois **654 erros** (bloqueia).
+
+Pendente para produção: commit/push + no VPS `git pull` + `systemctl restart anexov-api`
+(regra vive no processo Python; front não mudou). ⚠️ Impacto operacional: planilhas com a
+coluna "0" em branco (prática atual de alguns operadores, como este arquivo) passam a ser
+**rejeitadas** — avisar os operadores a preencher "Não" na coluna "0" quando a UC tiver
+outra tipologia.

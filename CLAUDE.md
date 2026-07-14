@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Do not edit `planning/PROJECT_BUILDING.md`.** All phases and progress tracking
   are recorded in **`planning/PLAN.md`**.
 - All documentation lives in the **`planning/`** directory; the key document is
-  **`planning/PLAN.md`** — read it first for current state and decisions.
+  **`planning/PLAN.md`** — read it first for current state and dated decisions.
 - **Product versioning (since 2026-07-07): V0 DELIVERED** (production live at
   `gerenciador-gclt.com`); **V1 in planning**. Version scope, known limitations and
   the V1 backlog live in **`planning/VERSOES.md`** — V1 work is tracked there
@@ -19,68 +19,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-A **non-functional static mock** of a web app called **"Classificação de
-Beneficiários do Programa"** (a.k.a. *Anexo V — Painel de Monitoramento*). It exists
-to demo the upload-and-validation UX to managers before any real validation engine is
-built. There is **no backend and no real file parsing** — validation is fully
-**scripted/routed** ("roteirada").
+A **real, deployed web app** called **"Classificação de Beneficiários do Programa"**
+(a.k.a. *Anexo V — Painel de Monitoramento*). An operator uploads the monthly "Anexo V"
+spreadsheet of energized consumer units (UCs) for a given **contract**; the backend
+**parses and validates it for real** against domain rules + reference data, shows an
+inconsistency panel if there are errors, and — when clean — **emails the validated
+`.xlsx`** to a configurable recipient list.
 
-Domain (Programa Luz para Todos / MME / ENBPar): an operator uploads the monthly
-"Anexo V" spreadsheet of energized consumer units (UCs) for a given **contract**; the
-app would validate completeness against domain rules and either show an inconsistency
-panel asking for corrections or save to the base. Here, that whole interaction is
-faked with hardcoded data.
+Domain: Programa Luz para Todos / MME / ENBPar.
 
-> Note: the all-source app lives under `modelo/`. An **earlier, unrelated NF/GFIP
-> mock** used to occupy `modelo/` and was deleted (PLAN.md "Consolidação de pastas").
-> If you find references anywhere to "Recebimento de Notas Fiscais", SSE uploads, or a
-> `installMockApi.js` fetch interceptor, they belong to that dead project — they do
-> **not** describe this one.
+> **History (important — avoids confusion):** this project **began as a non-functional
+> static mock** (routed/faked validation, no backend). That mock was approved to become
+> a real backend on 2026-06-27 and shipped as **V0** (Blocos A–G, all done). Vestiges of
+> the mock era survive and are **dead code** — see "Front architecture" below. Also: an
+> **earlier, unrelated NF/GFIP mock** used to occupy `modelo/` and was deleted. Any
+> reference anywhere to "Recebimento de Notas Fiscais", SSE uploads, or an
+> `installMockApi.js` fetch interceptor belongs to that dead project — it does **not**
+> describe this one.
 
-## Backend (approved 2026-06-27 — Bloco A done; B–G pending)
+## Backend — FastAPI (V0 delivered; spec in `planning/specs/2026-06-26-…-design.md`)
 
-The mock is approved to evolve into a real backend. **Read the spec first:**
-`planning/specs/2026-06-26-backend-validacao-envio-anexo-v-design.md` (and `planning/PLAN.md`).
+The backend is **real and complete** (Blocos A–G). FastAPI + uvicorn behind the same
+Nginx at **`/api`** in production (`/opt/anexov`, systemd unit `anexov-api`). Modules
+under `backend/`:
 
-**What exists now (as of 2026-06-30 — Bloco A "fundação" complete, 16 pytest tests green):**
-- `backend/app.py` — FastAPI app + dev CORS + `GET /api/health` (exposes referência
-  counts + integridade).
-- `backend/referencia.py` — loads `entrada/**/*.csv` into memory (`chaves_uc`, `odi_ref`),
-  reloads on mtime change; `carregar_base_contratos` reads the authority `base_contratos.json`
-  (root); `integridade()` classifies contracts com/sem referência + órfãos. Singletons
-  `obter_referencia` / `obter_base_contratos`.
-- `backend/acesso.py` — two-layer access filter maps (`grupo_do_email`, `siglas_do_grupo`,
-  `contratos_visiveis`); ÂMBAR sigla is U+00C2; **domain→grupo map is provisional** (real
-  email domains still pending, spec risk #3).
-- `backend/tests/` — pytest (`test_api.py`, `test_referencia.py`, `test_acesso.py`).
-- `.venv` at repo **root** (uv, CPython 3.12); deps in `backend/requirements.txt`
-  (note: TestClient needs **`httpx2`**, not `httpx`, on starlette 1.3+).
+- **`app.py`** — the ASGI `app`; dev CORS (Vite :5175); all routes:
+  `GET /api/health`, `POST /api/login`, `POST /api/trocar-senha`,
+  `POST /api/esqueci-senha`, `POST /api/validar` (multipart upload → painel),
+  `GET /api/modelo` (download the official model), `GET /api/contexto` (grupo → UFs/contratos).
+- **`auth.py`** — real login/senha; signed token on protected routes; first-access
+  password change; self-service reset. `admin_usuarios.py` is the CLI that provisions
+  users (`criar_usuario`) and **emails the temporary password**. Users live in
+  **`backend/usuarios.json`** (pbkdf2 hashes, **gitignored**, VPS-only — see secrets below).
+- **`acesso.py`** — two-layer access filter: email domain → grupo econômico
+  (EQUATORIAL, ENERGISA, NEOENERGISA, ÂMBAR, CERCI, ENBPAR) → visible UFs/contratos.
+  ENBPAR sees all. `montar_contexto` builds `/api/contexto`. (ÂMBAR sigla uses U+00C2;
+  the domain→grupo map may still be provisional — check the spec.)
+- **`referencia.py`** — loads `entrada/**/*.csv` into memory (`chaves_uc`, `odi_ref`),
+  **reloads on mtime change** (no restart). `carregar_base_contratos` reads the authority
+  `base_contratos.json` (repo root) — **cached once per process, so a restart is needed
+  if it changes.** `integridade()` classifies contracts com/sem referência + órfãos.
+  Singletons `obter_referencia` / `obter_base_contratos`.
+- **`planilha.py`** — `.xlsx` parser (`ler_preenchimento` reads the **`Preenchimento`**
+  sheet, header on row 2, maps columns **by header name**, keeps only rows with ODI/UC).
+  `ler_dominios`/`obter_dominios` read the model's **`Dominios`** sheet. Structural errors
+  → `PlanilhaInvalida` (→ HTTP 400). Defensive `normalizar_id` / `normalizar_coordenada`
+  / `normalizar_data`. `_MODELO_PADRAO` is the path to the versioned model file (see below).
+- **`validacao.py`** — the validation core (see "Validation rules" below) + panel assembly.
+- **`email_envio.py`** — the 4 email types (validated spreadsheet → recipients;
+  critical alert → admin; credentials/temp password → user on creation and reset).
+  Automated tests **mock SMTP**; real sending is a **manual smoke test** (`planning/TESTES.md`).
+- **`config.py`** — process config (user store path, SMTP/secrets via `.env`).
 
-Still **not built** (don't assume it exists): auth (B), `/api/contexto` (C), `.xlsx`
-parsing + validation rules (D), email send + `/api/validar` + `/api/modelo` (E), front
-rewiring + TrocarSenha screen (F), deploy (G). Summary of what those will do:
+### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
 
-- **`backend/`** — FastAPI + uvicorn behind the same Nginx at **`/api`**. Validates the
-  uploaded Anexo V **for real** against the CSVs in **`entrada/`**, then **emails** the
-  validated `.xlsx` (as-is, attachment `Anexo V preenchido - {contrato}.xlsx`) to a
-  configurable list. SMTP/secrets via `.env`.
-- **Auth (real):** login/senha; admin provisions users via CLI; the system **emails the
-  temporary password to the user** (change on first access); "esqueci minha senha" is
-  self-service (emails a new temporary password). Users in **`backend/usuarios.json`**
-  (pbkdf2 hashes, gitignored); signed token on protected routes. Adds **one new screen**
-  (TrocarSenha) reusing the design.
-- **Emails (4 types):** validated spreadsheet (→ recipients), critical alert (→ admin),
-  credentials/temp password (→ user, on creation and reset). Automated tests **mock SMTP**;
-  real sending is a **manual smoke test** (`planning/TESTES.md`).
-- **Two-layer access filter:** email domain → grupo econômico (EQUATORIAL, ENERGISA,
-  NEOENERGISA, ÂMBAR, CERCI, ENBPAR) → visible UFs/contratos. ENBPAR sees all.
-- **Validation:** ODI+UC cross-check + UF/município vs `entrada/` + format/domain rules
-  (domains read from the model's `Dominios` sheet). Coordenadas inválidas = **aviso**;
-  empty required cells in filled rows (with ODI/UC) = **erro**; zero data rows = erro.
-- **Front rewiring keeps the approved visual unchanged** — only behavior changes
-  (real upload, real painel data via props, auto-email).
-- Tests are **pytest** under `backend/tests/` (see `planning/TESTES.md`). Implementation
-  is split into human-testable sub-phases (Blocos A–G, §17 of the spec).
+Per-line: empty required cells (**err**), value out of domain vs `Dominios` sheet
+(**err**), invalid/out-of-range coordinates (**warn**), tipologia ≠ Sim/Não (**warn**),
+and **"0 - Não é prioridade" consistency (err, 3 clauses)**: (0) column "0" is mandatory
+— **blank "0" = err** (since 2026-07-14; also closes the "row with nothing marked" hole);
+(1) if "0" = "Sim", all other tipologia columns must be "Não"; (2) if "0" = "Não",
+at least one other tipologia must be "Sim" (clauses 1–2 err since 2026-07-09).
+Cross-line: duplicate ODI+UC key (**err**),
+duplicate UC regardless of ODI (**err**). Cross-check vs `entrada/`: ODI+UC not in the
+contract's reference (**err**), UF/município divergent from the ODI's reference (**err**),
+reference UCs missing from the sheet (**warn**). Zero data rows → "Planilha sem dados" (**err**).
+
+> **The old "Data de energização fora de 2026" rule was removed (2026-07-09)** — any date
+> is accepted; a **blank** date is still an error (it's a required field).
 
 ## Commands
 
@@ -94,80 +99,72 @@ npm run preview
 ```
 
 The **front** has **no tests, linter, or type-checker** — don't claim front test/lint
-results. `DEPLOY.md` (repo root) covers hosting `modelo/dist/` on an Nginx VPS.
+results. `DEPLOY.md` (repo root) covers hosting `modelo/dist/` on the Nginx VPS.
 
 **Backend** commands run from the **repo root** (`.venv` lives at root, created with `uv`):
 
 ```bash
 uv venv                                    # create .venv (CPython 3.12) — first time only
 uv pip install -r backend/requirements.txt
-.venv\Scripts\python.exe -m pytest backend/tests/ -v          # run the suite (16 green)
-.venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000   # run the API
+.venv\Scripts\python.exe -m pytest backend/tests/ -v            # run the suite (105 green)
+.venv\Scripts\python.exe -m pytest backend/tests/test_validacao.py -v -k tipologia   # single file / -k filter
+.venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000 # run the API
 ```
 
-The **backend HAS pytest tests** (`backend/tests/`, see `planning/TESTES.md`) — run them
-and report real results. On Windows, kill stray `python` before a uvicorn smoke test (an
-orphan holding the port silently serves stale code); prefer a fresh port.
+The **backend HAS pytest tests** (`backend/tests/`, ~105 green; see `planning/TESTES.md`)
+— run them and report real results. `TestClient` needs **`httpx2`**, not `httpx`, on
+starlette 1.3+. On Windows, kill stray `python` before a uvicorn smoke test (an orphan
+holding the port silently serves stale code); prefer a fresh port.
 
 ## Architecture
 
-### Pure local-state mock — no fetch interceptor
+### Front ↔ backend (real API)
 
-Unlike the old NF mock, this project does **not** intercept `window.fetch`. Because
-validation is 100% routed and there is no real frontend counterpart to mirror, the app
-drives everything from **React state + routed data in `src/seedData.js`** directly
-(PLAN.md "Simplificação de implementação"). A page reload resets to the login screen.
+The React SPA (`modelo/src/`) talks to the backend through **`src/lib/api.js`** (the
+single fetch layer: base URL `/api` in prod, `http://127.0.0.1:8000/api` in dev; Bearer
+token on protected routes). There is **no fetch interceptor** and **no mock** — every
+call is real.
 
-### App flow (`src/App.jsx`)
+**`src/App.jsx`** is the single stateful container and orchestrator. Gating sequence,
+each guard a full-screen step until satisfied:
 
-`App.jsx` is the single stateful container. Gating sequence, each guard returning a
-full-screen step until satisfied:
+`AuthScreen` (real login) → *(first access →)* `TrocarSenha` → `MenuPrincipal` →
+**fetch `/api/contexto`** (grupo → UFs/contratos) → `UfSelector` → `ContratoSelector`
+→ `VersaoPlanilha` (Passo 3) → **logged-in shell** (`upload` → `painel` → `sucesso`).
 
-`AuthScreen` (login, mock) → `MenuPrincipal` (module hub) → `UfSelector` (pick UF) →
-`ContratoSelector` (pick a non-"Encerrado" contract) → `VersaoPlanilha` (Passo 3:
-confirm spreadsheet version) → **logged-in shell**.
+Inside the shell: `UploadAnexoV` posts the **real file** to `/api/validar`; the response
+(`{ok, grupos, previewRows, totalErros, totalAvisos, linhasLidas}`) drives `onValidated`
+→ `sucesso` if `ok`, else `painel`. `PainelInconsistencias` and `SucessoEnvio` render
+directly from that response (props). The **contract is the primary key** of the flow;
+UF is just the grouping above it.
 
-Inside the shell, `view` switches between `upload` → `painel` → `sucesso`. The
-**contract is the primary key** of the flow; UF is just the grouping above it. The
-topbar shows `UF · contrato.numero` and offers "Trocar Contrato" (clears both).
+### Legacy mock vestiges (dead code — don't wire new work to them)
 
-### The scripted two-attempt validation loop
+`src/seedData.js` still exports mock routed data — **`RULE_GROUPS`, `PREVIEW_ROWS`,
+`TOTAL_ERROS`, `TOTAL_AVISOS`, `CONTRATOS`, `UFS`** — but **nothing imports them anymore**
+(superseded by `/api/contexto` and `/api/validar` in Bloco F). Only two exports survive:
+**`descreverContrato(c)`** (canonical contract label, used by `App.jsx`) and
+**`PREVIEW_COLS`** (column headers, used by `PainelInconsistencias`). The footer still
+reads "Mock · …" — a cosmetic leftover, not a description of behavior. Treat the dead
+exports as removable, not as source of truth.
 
-This is the core illusion and it lives in two places:
+### The official model file is VERSIONED
 
-- `UploadAnexoV.jsx` **ignores the real dropped/selected file** — it synthesizes a
-  filename (`Anexo V - …_{UF}.xlsx`), runs a fixed 3-phase progress timer
-  (① Leitura · ② Validação · ③ Conferência), then calls `onComplete()`.
-- `App.handleValidated()` routes by attempt number: **attempt 1 → `painel`**
-  (show errors), then "Corrigir e reenviar" bumps to **attempt 2 → `sucesso`**
-  ("validada e salva na base"). The 2nd upload is always treated as clean.
-
-So the inconsistency panel always shows the same routed findings on the first pass and
-never on the second.
-
-### Data: real contracts, faked everything else (`src/seedData.js`)
-
-- `src/base_contratos.json` is **real** contract data (≈113 contracts). `seedData.js`
-  derives the exported `CONTRATOS` (filtered to `vigente !== "Encerrado"`) and `UFS`
-  (only UFs that have a selectable contract) from it. **Treat `base_contratos.json` as
-  source data — don't hand-edit it to change UI behavior.**
-- `mockUcsContrato(numero)` — the "N UCs cadastradas" count shown per contract is
-  **MOCK**, a stable hash of the contract number, *not* from the real base. In the real
-  system it comes from the backend.
-- `RULE_GROUPS`, `PREVIEW_COLS`, `PREVIEW_ROWS`, `LINHAS_LIDAS`, `TOTAL_ERROS`,
-  `TOTAL_AVISOS` — the entire inconsistency panel and spreadsheet preview are routed
-  here. Severity `"err"` blocks saving; `"warn"` does not. The rule names mirror the
-  real Anexo V domains (empty required fields, value out of domain, invalid
-  coordinates, duplicate ODI+UC key, "0 - Não é prioridade" conflicts, energization
-  date outside 2026, tipologia ≠ Sim/Não) but the rows are illustrative, not computed.
+The Anexo V model lives in **`manuais/`** (gitignored) with a **version-stamped name**:
+`Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
+`.v070926.xlsx` = 09/07/2026). `GET /api/modelo` serves it from disk each request (no
+restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
+(`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
+(`VersaoPlanilha.jsx` + `relatorioCsv.js`), and **scp the file to the VPS** (`manuais/` is
+gitignored, so `git pull` does NOT carry it). See PLAN.md 2026-07-09 for the exact steps.
 
 ### Real client-side download (`src/lib/relatorioCsv.js`)
 
-The panel's "Baixar relatório (.csv)" actually generates and downloads a file in the
-browser (Blob + anchor): UTF-8 BOM, `;` separator (Excel pt-BR), quotes only when a
-field contains `;`/`"`, ObjectURL revocation deferred via `setTimeout(0)` (revoking
-immediately cancels the download). `modelo_relatorio_inconsistencias.csv` at the repo
-root is the model/reference for what that download should produce.
+The panel's "Baixar relatório (.csv)" generates and downloads a file in the browser
+(Blob + anchor): UTF-8 BOM, `;` separator (Excel pt-BR), quotes only when a field
+contains `;`/`"`, ObjectURL revocation deferred via `setTimeout(0)` (revoking immediately
+cancels the download). `modelo_relatorio_inconsistencias.csv` at the repo root is the
+reference for what that download should produce.
 
 ## Conventions when editing
 
@@ -175,33 +172,40 @@ root is the model/reference for what that download should produce.
   (`"ECM 018/2025 - MLA, 2ª Tranche"`). Reuse it; don't re-format inline.
 - Reuse the existing design system in `src/styles.css` (blue/navy, 8pt spacing rhythm,
   `.card`/`.topbar`/`.dropzone`/`.status-*`/`.auth-shell` etc.) rather than inventing
-  new visual patterns.
-- "Baixar modelo" in `VersaoPlanilha.jsx` is a deliberate stub (no real download); the
-  version date is a constant in the component. Keep stubs as stubs unless asked.
-- After completing a phase or making a notable design decision, record it in
-  `planning/PLAN.md` (not in PROJECT_BUILDING.md).
+  new visual patterns. **Front rewiring keeps the approved visual unchanged** — change
+  behavior, not the look, unless asked.
+- After completing a phase or making a notable decision, record it in **`planning/PLAN.md`**
+  (dated), not in PROJECT_BUILDING.md.
 
 ## Repo layout & ignored paths
 
 This **is** a git repository; `origin` is
 `github.com/GiovanniCharret/sistema_gclt_demo.git` (default branch `main`). Gitignored
 (treat as personal/out-of-scope inputs, not app code): **`manuais/`** (domain source
-material), **`minhas_notas/`**, **`planning/`**, **`bug_fix/`**, plus `node_modules/`,
-`dist/`, this `CLAUDE.md`, and `plano_classificacao_beneficiarios.html`. The app source
-is entirely under `modelo/src/`.
+material + the official model), **`minhas_notas/`**, **`planning/`**, **`bug_fix/`**, plus
+`node_modules/`, `dist/`, this `CLAUDE.md`, `.venv/`, `__pycache__/`, `.pytest_cache/`,
+and `plano_classificacao_beneficiarios.html`. The front app source is under `modelo/src/`;
+the backend under `backend/`.
 
 **`entrada/`** holds the backend's reference data (`entrada/lpt/`, `entrada/mla/` with
-`consolidado*.csv`; BOM UTF-8, `;`-separated). Per the backend spec (§12) it **is now
-committed** (versioned; an external process refreshes it daily). It is **not** front app
-code — don't import it into `modelo/src/`. The backend reads it via `backend/referencia.py`.
+`consolidado*.csv`; BOM UTF-8, `;`-separated). It **is committed** (versioned). It is
+**not** front code — don't import it into `modelo/src/`. `backend/referencia.py` reads it.
 
-Backend **secrets stay out of git** (already in `.gitignore`): `.env` / `backend/.env`,
-and **`backend/usuarios.json`** — it was briefly versioned (MVP decision 2026-07-07) but
-that was **reverted on 2026-07-08**: with the daily `git pull` of `entrada/` on the VPS,
-a versioned usuarios.json would overwrite the real production users on every pull. The
-production file is managed only on the VPS (note: old hashes remain in git history, so
-the repo must stay private). `.venv/`, `__pycache__/`, `.pytest_cache/` are gitignored too. The committable backend source is under **`backend/`** (see the
-"Backend" section above).
+**Daily update of `entrada/` (provisional):** the reference CSVs are refreshed daily in
+production. As of **2026-07-09** the transport moved from git-pull to **SSH/scp** (script
+lives in the neighboring `atualizacao_clientes` project; see PLAN.md + `VERSOES.md`).
+Consequence: scp'ed CSVs diverge from the VPS working tree — **before any `git pull` on
+the VPS, run `git checkout -- entrada/` first**; there is no VPS pull cron.
+
+### Secrets — never commit
+
+`.env` / `backend/.env`, **`backend/usuarios.json`** (production users live **only** on the
+VPS; provisioned via the `criar_usuario` CLI / reset via "esqueci minha senha"), the SSH
+private key (only the `.pub` goes to the VPS), and `senha e-mail hostinger` (repo root).
+`usuarios.json` was briefly versioned (MVP 2026-07-07) then reverted 2026-07-08 — a
+versioned copy would overwrite real production users. Old hashes remain in git history, so
+**the repo must stay PRIVATE**. On the VPS, always run git/npm as `sudo -u deploy`; the
+git remote uses a read-only PAT; no force-push, no touching tags.
 
 ## Coding Style
 

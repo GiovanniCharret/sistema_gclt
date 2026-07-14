@@ -112,8 +112,9 @@ def regras_formato_dominio(linhas, dominios):
     Entrada: `linhas` (lista de dicts do parser) e `dominios` (dict de listas válidas).
     Fase 1: por linha — campos obrigatórios vazios (erro), domínio (erro), coordenadas
             (aviso), tipologia ≠ Sim/Não (aviso), consistência da classificação (erro,
-            2 cláusulas: "0"="Sim" exige demais tipologias "Não"; "0"="Não" exige ao
-            menos uma tipologia "Sim"). Data de energização: qualquer ano é aceito
+            3 cláusulas: "0" em branco é obrigatório e bloqueia; "0"="Sim" exige demais
+            tipologias "Não"; "0"="Não" exige ao menos uma tipologia "Sim"). Data de
+            energização: qualquer ano é aceito
             (regra "fora de 2026" excluída em 2026-07-09); vazia continua erro por ser
             campo obrigatório.
     Fase 2: entre linhas — chave ODI+UC duplicada (erro) e UC duplicada (erro).
@@ -163,7 +164,15 @@ def regras_formato_dominio(linhas, dominios):
         # Valor da coluna "0" e lista das demais colunas de tipologia da linha.
         zero = _txt(linha, COL_TIPOLOGIA_ZERO)
         demais = [c for c in _colunas_tipologia(linha) if c != COL_TIPOLOGIA_ZERO]
-        if zero == "Sim":
+        if zero == "":
+            # Cláusula 0 (erro desde 2026-07-14): a coluna "0" é de preenchimento
+            # obrigatório (Sim/Não). Em branco bloqueia — antes escapava das duas
+            # cláusulas abaixo (nem "Sim" nem "Não"), deixando a linha sem crítica de
+            # classificação; isto também fecha o furo da linha totalmente sem marcação.
+            achados.append(_achado("err", "“0 - Não é prioridade” em branco", loc,
+                                    COL_TIPOLOGIA_ZERO, "célula em branco",
+                                    'preencher “Sim” ou “Não” na coluna “0 - Não é prioridade”'))
+        elif zero == "Sim":
             # Cláusula 1: com "0" = "Sim", nenhuma outra tipologia pode estar "Sim".
             conflitos = [c for c in demais if _txt(linha, c) == "Sim"]
             if conflitos:
@@ -255,6 +264,7 @@ _DESCRICOES = {
     "UF / município divergente": "Não bate com a referência de entrada/ para aquele ODI",
     "Coordenadas inválidas": "Latitude/Longitude fora da faixa geográfica ou não numéricas",
     "UCs faltando": "UCs da referência do contrato ausentes da planilha",
+    "“0 - Não é prioridade” em branco": "A coluna “0 - Não é prioridade” é obrigatória: preencher com “Sim” ou “Não”",
     "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
     "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
