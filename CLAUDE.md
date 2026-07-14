@@ -152,11 +152,12 @@ exports as removable, not as source of truth.
 
 The Anexo V model lives in **`manuais/`** (gitignored) with a **version-stamped name**:
 `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
-`.v070926.xlsx` = 09/07/2026). `GET /api/modelo` serves it from disk each request (no
+`.v260714.xlsx` = 14/07/2026). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
-(`VersaoPlanilha.jsx` + `relatorioCsv.js`), and **scp the file to the VPS** (`manuais/` is
-gitignored, so `git pull` does NOT carry it). See PLAN.md 2026-07-09 for the exact steps.
+(`VersaoPlanilha.jsx` + `relatorioCsv.js`), the download test (`backend/tests/test_api.py`
+asserts the version string), and **scp the file to the VPS** (`manuais/` is gitignored, so
+`git pull` does NOT carry it). See the latest dated model-swap decision in PLAN.md.
 
 ### Real client-side download (`src/lib/relatorioCsv.js`)
 

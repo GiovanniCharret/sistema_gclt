@@ -27,11 +27,11 @@ _ABA = "Preenchimento"
 _ABA_DOMINIOS = "Dominios"
 _LINHA_CABECALHO = 2
 # Modelo oficial (aba Dominios). Fica em `manuais/` (fora do git; presente no servidor).
-# O nome carrega a versão (v070926 = modelo de 09/07/2026): a cada modelo novo, atualizar
+# O nome carrega a versão (v260714 = modelo de 14/07/2026): a cada modelo novo, atualizar
 # este caminho, o `filename` de `/api/modelo` (app.py) e o `a.download` do front (api.js).
 _MODELO_PADRAO = (
     Path(__file__).resolve().parent.parent
-    / "manuais" / "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v070926.xlsx"
+    / "manuais" / "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260714.xlsx"
 )
 # Colunas-chave que definem uma "linha de dados" (§7: tem ODI e/ou UC).
 _COL_ODI = "Número ODI"

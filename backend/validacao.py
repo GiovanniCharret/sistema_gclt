@@ -27,6 +27,21 @@ COL_TIPO_ATEND = "Tipo de Atendimento"
 COL_TIPO_COM = "Tipo de Comunidade"
 COL_ENQUAD = "Enquadramento do beneficiário"
 COL_TIPOLOGIA_ZERO = "0 - Não é prioridade"
+# Tipologias de família dos povos tradicionais (colunas U/V/W do modelo) — usadas na
+# regra de coerência com o Tipo de Comunidade (avisos).
+COL_FAM_INDIGENA = "IV.1 - Família indígena"
+COL_FAM_QUILOMBOLA = "IV.2 - Família quilombola"
+COL_FAM_RIBEIRINHA = "IV.3 - Família ribeirinha"
+
+# Tipo de Comunidade tradicional → coluna de tipologia de família que deve casar (regra 2).
+# Só estes três tipos disparam as duas regras de coerência (avisos, desde 2026-07-14).
+_COMUNIDADE_FAMILIA = {
+    "1 - Comunidade indígena": COL_FAM_INDIGENA,
+    "2 - Comunidade quilombola": COL_FAM_QUILOMBOLA,
+    "3 - Comunidade ribeirinha": COL_FAM_RIBEIRINHA,
+}
+# Enquadramento exigido para comunidades tradicionais (regra 1).
+_ENQUAD_POVOS_TRADICIONAIS = "4 - Povos tradicionais"
 
 # Campos obrigatórios em toda linha preenchida (§7).
 OBRIGATORIOS = [COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF, COL_LAT, COL_LON, COL_DATA]
@@ -113,7 +128,9 @@ def regras_formato_dominio(linhas, dominios):
     Fase 1: por linha — campos obrigatórios vazios (erro), domínio (erro), coordenadas
             (aviso), tipologia ≠ Sim/Não (aviso), consistência da classificação (erro,
             3 cláusulas: "0" em branco é obrigatório e bloqueia; "0"="Sim" exige demais
-            tipologias "Não"; "0"="Não" exige ao menos uma tipologia "Sim"). Data de
+            tipologias "Não"; "0"="Não" exige ao menos uma tipologia "Sim"), e coerência
+            do Tipo de Comunidade tradicional (1/2/3) com o Enquadramento "4 - Povos
+            tradicionais" e com a família IV.1/IV.2/IV.3 (dois avisos). Data de
             energização: qualquer ano é aceito
             (regra "fora de 2026" excluída em 2026-07-09); vazia continua erro por ser
             campo obrigatório.
@@ -185,6 +202,28 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("err", "Nenhuma tipologia assinalada", loc,
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
+
+        # (aviso) Coerência do Tipo de Comunidade tradicional (indígena/quilombola/
+        # ribeirinha) com o Enquadramento e a tipologia de família (colunas U/V/W).
+        # Só se aplica quando "Tipo de Comunidade" é uma das três (pedido 2026-07-14);
+        # não bloqueia o envio (severidade "warn").
+        tipo_com = _txt(linha, COL_TIPO_COM)
+        if tipo_com in _COMUNIDADE_FAMILIA:
+            # Regra 1: comunidade tradicional exige Enquadramento "4 - Povos tradicionais".
+            if _txt(linha, COL_ENQUAD) != _ENQUAD_POVOS_TRADICIONAIS:
+                achados.append(_achado("warn", "Enquadramento ≠ Povos tradicionais", loc, COL_ENQUAD,
+                                        f'“{tipo_com}” exige Enquadramento “{_ENQUAD_POVOS_TRADICIONAIS}”',
+                                        f'preencher Enquadramento com “{_ENQUAD_POVOS_TRADICIONAIS}”'))
+            # Regra 2: a família correspondente deve estar "Sim" e as outras duas ≠ "Sim"
+            # (célula em branco conta como "não marcada" para as outras duas).
+            esperada = _COMUNIDADE_FAMILIA[tipo_com]
+            familias = (COL_FAM_INDIGENA, COL_FAM_QUILOMBOLA, COL_FAM_RIBEIRINHA)
+            coincide = (_txt(linha, esperada) == "Sim"
+                        and all(_txt(linha, c) != "Sim" for c in familias if c != esperada))
+            if not coincide:
+                achados.append(_achado("warn", "Tipologia de família ≠ Tipo de Comunidade", loc, esperada,
+                                        f'“{tipo_com}” deve ter “{esperada}” = “Sim” e as demais famílias = “Não”',
+                                        "alinhar IV.1/IV.2/IV.3 ao Tipo de Comunidade"))
 
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
@@ -268,6 +307,8 @@ _DESCRICOES = {
     "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
     "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
+    "Enquadramento ≠ Povos tradicionais": "Comunidade tradicional (indígena/quilombola/ribeirinha) exige Enquadramento “4 - Povos tradicionais”",
+    "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3 deve refletir em Família indígena/quilombola/ribeirinha (IV.1/IV.2/IV.3)",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 

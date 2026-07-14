@@ -2,7 +2,7 @@
 // reais do /api/validar (gerado no navegador).
 // Separador ";" e BOM UTF-8 para abrir certo no Excel em pt-BR.
 
-const VERSAO_DATA = "09/07/2026";
+const VERSAO_DATA = "14/07/2026";
 
 // Aspas só quando necessário (campo com ; " ou quebra de linha).
 function campo(v) {

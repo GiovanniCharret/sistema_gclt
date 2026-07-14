@@ -13,13 +13,21 @@ DOM = {
     "TIPO_ATENDIMENTO": ["Extensão de Rede"],
     "UF": ["AM", "PA", "RR"],
     "SIM_NAO": ["Sim", "Não"],
-    "TIPO_COMUNIDADE": ["1 - Comunidade indígena"],
-    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade"],
+    "TIPO_COMUNIDADE": [
+        "1 - Comunidade indígena", "2 - Comunidade quilombola", "3 - Comunidade ribeirinha",
+        "11 - Rural geral / demais comunidades rurais",
+    ],
+    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade", "4 - Povos tradicionais"],
 }
 
 
 def linha_valida(**over):
-    """Monta uma linha 100% válida; `over` sobrescreve campos para acionar uma regra."""
+    """Monta uma linha 100% válida; `over` sobrescreve campos para acionar uma regra.
+
+    O `Tipo de Comunidade` base é NÃO-tradicional (11) de propósito: as regras de
+    coerência comunidade×enquadramento/família (avisos) só valem para 1/2/3, então a
+    linha base não as aciona — cada teste dessas regras seta o tipo tradicional.
+    """
     base = {
         "_linha": 3,
         "Número ODI": "210001",
@@ -31,7 +39,7 @@ def linha_valida(**over):
         "Longitude": "-60.0",
         "Data de Energização da UC": "14/02/2026",
         "Tipo de Atendimento": "Extensão de Rede",
-        "Tipo de Comunidade": "1 - Comunidade indígena",
+        "Tipo de Comunidade": "11 - Rural geral / demais comunidades rurais",
         "Enquadramento do beneficiário": "0 - Não é prioridade",
         "0 - Não é prioridade": "Não",
         "I - Baixa renda": "Sim",
@@ -176,6 +184,73 @@ def test_zero_em_branco_fecha_furo_da_linha_sem_classificacao():
     linha = linha_valida(**{"0 - Não é prioridade": "", "I - Baixa renda": ""})
     achados = regras_formato_dominio([linha], DOM)
     assert ("err", "“0 - Não é prioridade” em branco") in _regras(achados)
+
+
+# ── D3 (cont.) · Coerência Tipo de Comunidade × Enquadramento / tipologia de família ──
+# Duas regras de AVISO (não bloqueiam), válidas só p/ comunidade tradicional (1/2/3).
+
+def test_comunidade_tradicional_enquadramento_diferente_e_aviso():
+    """Regra 1 (aviso desde 2026-07-14): comunidade tradicional (1/2/3) exige
+    Enquadramento '4 - Povos tradicionais'; qualquer outro valor → aviso (não bloqueia)."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "1 - Comunidade indígena",
+        "Enquadramento do beneficiário": "0 - Não é prioridade",      # ≠ "4 - Povos tradicionais"
+        "IV.1 - Família indígena": "Sim", "IV.2 - Família quilombola": "Não",
+        "IV.3 - Família ribeirinha": "Não",
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("warn", "Enquadramento ≠ Povos tradicionais") in _regras(achados)
+
+
+def test_comunidade_tradicional_coerente_nao_gera_aviso():
+    """Linha tradicional coerente (Povos tradicionais + família casando) → sem achados."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "2 - Comunidade quilombola",
+        "Enquadramento do beneficiário": "4 - Povos tradicionais",
+        "IV.1 - Família indígena": "Não", "IV.2 - Família quilombola": "Sim",
+        "IV.3 - Família ribeirinha": "Não",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_comunidade_tradicional_familia_incompativel_e_aviso():
+    """Regra 2 (aviso): Tipo de Comunidade 1/2/3 deve refletir em IV.1/IV.2/IV.3.
+    Indígena com Família indígena='Não' (e outra família='Sim') → aviso."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "1 - Comunidade indígena",
+        "Enquadramento do beneficiário": "4 - Povos tradicionais",    # regra 1 ok
+        "IV.1 - Família indígena": "Não", "IV.2 - Família quilombola": "Sim",
+        "IV.3 - Família ribeirinha": "Não",
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("warn", "Tipologia de família ≠ Tipo de Comunidade") in _regras(achados)
+    # A regra 1 não dispara (enquadramento correto) — isola a regra 2.
+    assert "Enquadramento ≠ Povos tradicionais" not in {a["regra"] for a in achados}
+
+
+def test_comunidade_tradicional_familia_esperada_em_branco_e_aviso():
+    """Regra 2: a família esperada sem 'Sim' (em branco) também gera aviso."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "3 - Comunidade ribeirinha",
+        "Enquadramento do beneficiário": "4 - Povos tradicionais",
+        "IV.1 - Família indígena": "Não", "IV.2 - Família quilombola": "Não",
+        "IV.3 - Família ribeirinha": "",                              # deveria ser "Sim"
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("warn", "Tipologia de família ≠ Tipo de Comunidade") in _regras(achados)
+
+
+def test_comunidade_nao_tradicional_nao_aciona_regras_novas():
+    """Escopo: as duas regras só valem p/ Tipo de Comunidade 1/2/3. Comunidade
+    não-tradicional não gera aviso, mesmo com uma família 'Sim' (não há direção reversa)."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "11 - Rural geral / demais comunidades rurais",
+        "Enquadramento do beneficiário": "0 - Não é prioridade",
+        "IV.1 - Família indígena": "Sim",
+    })
+    titulos = {a["regra"] for a in regras_formato_dominio([linha], DOM)}
+    assert "Enquadramento ≠ Povos tradicionais" not in titulos
+    assert "Tipologia de família ≠ Tipo de Comunidade" not in titulos
 
 
 # ── D4 · Cruzamento com entrada/ (chaves_uc / odi_ref por contrato) ──

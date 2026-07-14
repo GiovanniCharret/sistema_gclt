@@ -183,3 +183,55 @@ Pendente para produção: commit/push + no VPS `git pull` + `systemctl restart a
 coluna "0" em branco (prática atual de alguns operadores, como este arquivo) passam a ser
 **rejeitadas** — avisar os operadores a preencher "Não" na coluna "0" quando a UC tiver
 outra tipologia.
+
+## Decisão (2026-07-14) — modelo oficial atualizado para a versão v260714 (14/07/2026)
+
+Nova planilha-modelo entregue em `manuais/Anexo V - Planilha - Painel de Monitoramento -
+MME-CC_UF.v260714.xlsx` (1.637.721 bytes), substituindo a `v070926`. Seguindo o checklist
+de troca de versão (decisão 2026-07-09), atualizados **todos** os pontos da cadeia do nome
+versionado:
+
+- `backend/planilha.py` — `_MODELO_PADRAO` → `…v260714.xlsx` (+ comentário).
+- `modelo/src/lib/api.js` — `a.download` → `…v260714.xlsx` (+ comentário).
+- `modelo/src/components/VersaoPlanilha.jsx` e `modelo/src/lib/relatorioCsv.js` —
+  `VERSAO_DATA` de "09/07/2026" → **"14/07/2026"**.
+- `backend/tests/test_api.py` — `test_modelo_baixa_o_arquivo` agora exige `v260714` no
+  Content-Disposition. `test_dominios.py` lê o modelo real via `_MODELO_PADRAO` (sem
+  mudança) e passou contra o arquivo novo. **Suíte: 107 verdes + build do front OK.**
+
+`/api/modelo` serve o arquivo do disco a cada requisição (troca de conteúdo não exige
+restart), mas o restart já é exigido pela mudança de regra "0 em branco" do mesmo dia.
+⚠️ Produção: `manuais/` está FORA do git — o `git pull` no VPS **não** leva o modelo novo;
+é preciso enviá-lo por scp:
+`scp "manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260714.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`
+(o `v070926` no VPS pode ser removido depois).
+
+## Decisão (2026-07-14) — 2 avisos de coerência do "Tipo de Comunidade" tradicional
+
+Pedido do usuário: duas regras **não-bloqueantes (avisos)**, aplicáveis **somente** quando
+a coluna M "Tipo de Comunidade" é uma comunidade tradicional — `1 - Comunidade indígena`,
+`2 - Comunidade quilombola` ou `3 - Comunidade ribeirinha` (referência: 4 linhas
+propositais no modelo `v260714`, todas coerentes):
+
+1. **Enquadramento ≠ Povos tradicionais** — comunidade tradicional exige coluna N
+   "Enquadramento do beneficiário" = `4 - Povos tradicionais`; qualquer outro valor
+   (inclusive em branco) gera aviso.
+2. **Tipologia de família ≠ Tipo de Comunidade** — a família correspondente deve casar:
+   indígena→`IV.1 - Família indígena` (col U), quilombola→`IV.2` (V), ribeirinha→`IV.3`
+   (W). A esperada deve ser "Sim" e as outras duas ≠ "Sim"; senão, aviso.
+
+Premissas assumidas (avisos, então liberais): (a) escopo **só na direção M→N/U/V/W** — não
+há checagem reversa (ex.: `Família indígena=Sim` numa comunidade não-tradicional **não**
+gera aviso); (b) na regra 2, célula em branco nas duas famílias "não-esperadas" é tolerada
+(conta como "não marcada"), mas a família esperada em branco (sem "Sim") gera aviso.
+
+Implementação: `backend/validacao.py` (constantes `COL_FAM_*`, mapa `_COMUNIDADE_FAMILIA`,
+`_ENQUAD_POVOS_TRADICIONAIS`; bloco de avisos no loop por linha; 2 entradas em
+`_DESCRICOES`; docstring). `backend/tests/test_validacao.py`: base `linha_valida`/`DOM`
+ajustada (Tipo base agora é `11 - Rural geral`, não-tradicional, p/ não disparar as novas
+regras) + **5 testes novos**. **Suíte: 112 verdes.** Front **não muda** — o painel e o
+sucesso já renderizam os `grupos`/avisos vindos do backend.
+
+Verificado contra o arquivo real: as 4 linhas corretas → 0 avisos novos; enquadramento
+errado → aviso 1; família trocada → aviso 2. Pendente p/ produção: commit/push + `git pull`
+no VPS + `systemctl restart anexov-api` (regra vive no processo Python).
