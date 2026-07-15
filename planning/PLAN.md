@@ -124,10 +124,11 @@ cabeçalhos da aba Preenchimento (mesma ordem), aba Dominios igual → nenhuma m
 de código no parser/validação. `VERSAO_DATA` do front atualizada de 23/06/2026 para
 **09/07/2026** (`VersaoPlanilha.jsx` e `relatorioCsv.js`). Suíte 105 verdes + build OK.
 
-⚠️ Produção: `manuais/` está FORA do git — o `git pull` no VPS **não** leva o modelo
-novo. É preciso enviá-lo por scp (ver comando atualizado na decisão seguinte).
-O download `/api/modelo` serve o arquivo do disco a cada requisição (atualiza sem
-restart), mas o restart já é exigido pelas outras duas mudanças do dia.
+⚠️❌ **Corrigido em 2026-07-14:** este parágrafo estava errado — `manuais/` **está
+rastreado** no git (política "commitar tudo"); o `git pull` no VPS **leva** o modelo.
+Não há scp do modelo. (O erro veio de um CLAUDE.md desatualizado.) O download
+`/api/modelo` serve o arquivo do disco a cada requisição (atualiza sem restart), mas o
+restart já é exigido pelas outras duas mudanças do dia.
 
 ## Decisão (2026-07-09) — nome do modelo passa a ser VERSIONADO (`.v070926.xlsx`)
 
@@ -148,8 +149,9 @@ versionado virou o padrão em toda a cadeia:
   duplicar o caminho (o skip silencioso pós-rename foi o sintoma). **Suíte: 105 verdes.**
 
 A cada modelo novo: renomear com `vDDMMAA` novo + atualizar os 3 pontos acima +
-`VERSAO_DATA` do front + scp ao VPS:
-`scp "manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v070926.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`
+`VERSAO_DATA` do front + **commitar o `.xlsx`** (não scp — corrigido em 2026-07-14:
+`manuais/` é rastreado, o `git pull` no VPS leva o modelo).
+~~`scp "manuais/…v070926.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`~~ (obsoleto)
 (o arquivo antigo em `/opt/anexov/manuais/` pode ser removido depois).
 
 ## Decisão (2026-07-14) — coluna "0 - Não é prioridade" em branco vira ERRO (obrigatório)
@@ -201,10 +203,11 @@ versionado:
 
 `/api/modelo` serve o arquivo do disco a cada requisição (troca de conteúdo não exige
 restart), mas o restart já é exigido pela mudança de regra "0 em branco" do mesmo dia.
-⚠️ Produção: `manuais/` está FORA do git — o `git pull` no VPS **não** leva o modelo novo;
-é preciso enviá-lo por scp:
-`scp "manuais/Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260714.xlsx" root@gerenciador-gclt.com:/opt/anexov/manuais/`
-(o `v070926` no VPS pode ser removido depois).
+✅ Produção: **`manuais/` está RASTREADO no git** (política "commitar tudo"), então o
+modelo já foi commitado (`db5db17`) e pushado — o `git pull` no VPS **leva o `.xlsx`
+junto**. **Sem scp.** (Correção 2026-07-14: as menções a scp do modelo nas decisões de
+2026-07-09 abaixo vieram de um CLAUDE.md desatualizado que dizia `manuais/` gitignored —
+está errado; ver também CLAUDE.md corrigido.) O `v070926` no VPS pode ser removido depois.
 
 ## Decisão (2026-07-14) — 2 avisos de coerência do "Tipo de Comunidade" tradicional
 
@@ -235,3 +238,78 @@ sucesso já renderizam os `grupos`/avisos vindos do backend.
 Verificado contra o arquivo real: as 4 linhas corretas → 0 avisos novos; enquadramento
 errado → aviso 1; família trocada → aviso 2. Pendente p/ produção: commit/push + `git pull`
 no VPS + `systemctl restart anexov-api` (regra vive no processo Python).
+
+## Decisão (2026-07-15) — comparações de preenchimento ignoram caixa alta/baixa
+
+Bug reportado (arquivo `bug_fix/modelo revisado_…MME-CC_UF..xlsx`, linha 5, coluna
+"II-A - Família chefiada por mulher (CadÚnico)" = `SIM` em caixa alta): o backend gerava
+aviso "Valor de tipologia ≠ Sim/Não" porque comparava texto com distinção de caixa
+(`"SIM" != "Sim"`). Pedido do usuário: **ignorar caixa em todos os preenchimentos de todas
+as colunas**.
+
+Solução: todas as comparações de **vocabulário** em `backend/validacao.py` passam a usar
+`casefold` (mais robusto que `lower` p/ acentos): Sim/Não (aviso de tipologia), domínios
+(UF/Tipo de Atendimento/Tipo de Comunidade/Enquadramento), as 3 cláusulas do "0 - Não é
+prioridade", e as 2 regras de comunidade tradicional (tipo, enquadramento, famílias
+IV.1/2/3). Novo helper `_eh(linha, coluna, alvo)` (igualdade sem caixa) + conjuntos/maps
+casefolded (`sim_nao`, `dominios_cf`, `_COMUNIDADE_FAMILIA_CF`). Escopo: **só a caixa** —
+acentos NÃO são ignorados ("NAO" sem til continua inválido). O cruzamento com `entrada/`
+(UF/município) já era case-insensitive (`.upper()`); ODI/UC seguem via `normalizar_id`.
+
+`backend/tests/test_validacao.py`: **+5 testes** (Sim maiúsculo sem aviso; cláusula 1 com
+"SIM"; cláusula 2 reconhece "SIM"; domínio "am"=="AM"; comunidade coerente toda em CAIXA
+ALTA). **Suíte: 117 verdes.** Verificado no arquivo real (6289 linhas): avisos de tipologia
+por caixa caíram a **0**. Front não muda. Pendente p/ produção: commit/push + `git pull` +
+`systemctl restart anexov-api`.
+
+## Decisão (2026-07-15) — nome de município/UF comparado por forma canônica (acento/espaço)
+
+Bug reportado (arquivo `bug_fix/20260623_…ECO-032-2025_RR_6ª Tranche.xlsx`, coluna F): a
+planilha traz **"RORAINÓPOLIS"** (com acento) e a base de `entrada/` guarda **"RORAINOPOLIS"**
+(sem acento) → o cruzamento acusava "UF / município divergente". O usuário apontou que o
+ruído está **na própria base** e é inviável mapear caso a caso.
+
+Solução: nova função `normalizar_nome(valor)` em `backend/planilha.py` — reduz o nome a uma
+**forma canônica** para comparação: remove acentos (NFKD + descarta marcas combinantes),
+remove **todos** os espaços (início, fim e **meio** — "SANTA LUZ" == "SANTALUZ") e unifica a
+caixa (casefold). `regras_cruzamento` (`validacao.py`) passa a comparar UF e município por
+`normalizar_nome` em vez de só `.upper()`. Nomes de fato diferentes continuam divergindo
+(não afrouxa a checagem). Escopo: **só** a comparação de nome no cruzamento; ODI/UC seguem
+via `normalizar_id`.
+
+- `backend/tests/test_planilha.py`: teste de `normalizar_nome` (acento, caixa, espaços no
+  meio/bordas, None, nomes distintos não colidem).
+- `backend/tests/test_validacao.py`: +3 testes de cruzamento (município só-acento e
+  só-espaço não divergem; município realmente diferente ainda diverge). **Suíte: 121 verdes.**
+- Verificado nos dados reais: "RORAINÓPOLIS"→`rorainopolis`, "CANTÁ"→`canta`, "MUCAJAÍ"→
+  `mucajai`; casa com a base sem acento. Front não muda. Pendente p/ produção: commit/push +
+  `git pull` + `systemctl restart anexov-api`.
+
+## Decisão (2026-07-15) — login por "operador" (fallback temporário; e-mail adiado p/ V1/V2)
+
+A pedido dos engenheiros, o login por e-mail foi adiado para V1/V2; por ora o usuário entra
+com um **operador** simples = o rótulo do domínio (sai `nome@`, `.com.br`/`.gov.br`):
+`ae@equatorialenergia.com.br` → **equatorialenergia**, `ae@energisa.com.br` → **energisa**,
+etc. Operadores cadastrados: equatorialenergia, energisa, neoenergia, ambarenergia, cerci,
+enbpar (curinga).
+
+Rename `email → operador` na superfície de auth:
+- `backend/usuarios.json`: chaves e campo `"email"` → `"operador"` (mesmos hashes/salts).
+- `backend/acesso.py`: `MAPA_DOMINIO_GRUPO` → `MAPA_OPERADOR_GRUPO` (operador→grupo, sem
+  parse de `@`); `grupo_do_email` → `grupo_do_operador`; `montar_contexto` devolve
+  `{operador,…}`.
+- `backend/auth.py`: registro grava campo `"operador"`; `autenticar` gera token do
+  `usuario["operador"]`. Funções seguem genéricas (identificador opaco).
+- `backend/app.py`: corpos `LoginIn/TrocarSenhaIn/EsqueciSenhaIn` usam `operador`; rotas
+  usam `grupo_do_operador`; token `sub` = operador; 403 "Operador não registrado".
+- `backend/admin_usuarios.py`: sem e-mail no fallback — `add` passa a **imprimir** a senha
+  temporária (arg `operador`).
+- Front: `AuthScreen` (label "E-mail"→"Operador", input `type=text`, textos), `api.js`
+  (corpos `{operador,…}`), `App.jsx`/`TrocarSenha.jsx` (prop/estado `operador`).
+- `esqueci-senha` inalterado (já reseta p/ `Senha123` sem e-mail).
+
+Testes atualizados (acesso/auth/api) para operador. **Suíte: 121 verdes + build do front OK.**
+Reversível quando o login por e-mail entrar (V1/V2). Pendente p/ produção: commit/push +
+`git pull` + `systemctl restart anexov-api` (⚠️ `usuarios.json` é gitignored/VPS-only — os
+operadores precisam ser (re)provisionados no VPS via `admin_usuarios add <operador>` ou
+`esqueci-senha`; o `git pull` não leva o store).

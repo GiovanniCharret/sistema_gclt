@@ -17,6 +17,10 @@ não de formato.
 import io
 # `datetime` interpreta datas (texto ou serial do Excel).
 import datetime
+# `re` remove os espaços (inclusive no meio) na normalização de nomes.
+import re
+# `unicodedata` decompõe e remove os acentos na normalização de nomes.
+import unicodedata
 # `Path` resolve o caminho do modelo (para a aba Dominios).
 from pathlib import Path
 # `openpyxl` lê o .xlsx.
@@ -232,6 +236,34 @@ def normalizar_data(valor):
             continue
     # Saída: não reconhecida.
     return None
+
+
+def normalizar_nome(valor):
+    """Normaliza um nome (município/UF) para comparação tolerante (cruzamento §7, D4).
+
+    Por que existe: os nomes na planilha e na referência de `entrada/` divergem por
+    detalhes que **não são erro real** do operador — acentos ("RORAINÓPOLIS" vs
+    "RORAINOPOLIS"), caixa e espaços (inclusive no meio: "SANTA LUZ" vs "SANTALUZ"). A
+    própria base de comparação carrega esses ruídos e é inviável mapear caso a caso, então
+    a comparação reduz os dois lados a uma forma canônica antes de comparar. Nomes de fato
+    diferentes continuam diferentes (não afrouxa a checagem).
+
+    Entrada: `valor` (str/int/None).
+    Fase 1: vira texto ("" se None).
+    Fase 2: decompõe (NFKD) e descarta as marcas combinantes (acentos, cedilha).
+    Fase 3: remove TODO espaço em branco — início, fim e meio.
+    Fase 4: unifica a caixa (casefold).
+    Saída: a forma canônica (str) usada só para comparar.
+    """
+    # Fase 1: texto base (None → "").
+    s = "" if valor is None else str(valor)
+    # Fase 2: separa letra e acento, depois joga fora os caracteres combinantes.
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    # Fase 3: remove qualquer whitespace (espaços, tabs) em qualquer posição.
+    s = re.sub(r"\s+", "", s)
+    # Fase 4/Saída: caixa unificada (casefold é mais robusto que lower p/ Unicode).
+    return s.casefold()
 
 
 def normalizar_coordenada(valor):

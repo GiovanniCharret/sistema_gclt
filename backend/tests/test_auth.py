@@ -9,8 +9,8 @@ do store (criar com flag de troca, obter case-insensitive, desativar). O store u
 
 # `json` inspeciona o arquivo persistido pelo store.
 import json
-# `patch` espiona o envio de e-mail no teste da CLI (sem enviar de verdade).
-from unittest.mock import patch
+# `re` extrai a senha impressa pela CLI no teste do `add`.
+import re
 
 # Funções sob teste do módulo de autenticação.
 from backend.auth import (
@@ -98,8 +98,8 @@ def test_criar_usuario_grava_hash_e_flag_de_troca(tmp_path):
     caminho = tmp_path / "usuarios.json"
     # Fase 1: cria o usuário; devolve o registro e a senha temporária em texto.
     registro, senha = criar_usuario("Fulano@Equatorialenergia.com.br", caminho=caminho)
-    # Fase 2: e-mail normalizado para minúsculas.
-    assert registro["email"] == "fulano@equatorialenergia.com.br"
+    # Fase 2: identificador normalizado para minúsculas (campo `operador`).
+    assert registro["operador"] == "fulano@equatorialenergia.com.br"
     # Precisa trocar no 1º acesso e está ativo.
     assert registro["precisa_trocar_senha"] is True
     assert registro["ativo"] is True
@@ -126,7 +126,7 @@ def test_obter_usuario_case_insensitive(tmp_path):
     # Fase 2: busca case-insensitive encontra o registro.
     encontrado = obter_usuario("A@B.COM", caminho=caminho)
     assert encontrado is not None
-    assert encontrado["email"] == "a@b.com"
+    assert encontrado["operador"] == "a@b.com"
     # Fase 3: e-mail inexistente devolve None.
     assert obter_usuario("nao@existe.com", caminho=caminho) is None
 
@@ -146,31 +146,32 @@ def test_desativar_usuario(tmp_path):
     assert obter_usuario("a@b.com", caminho=caminho)["ativo"] is False
 
 
-def test_cli_add_cria_usuario_e_envia_credenciais(tmp_path):
-    """`admin_usuarios add <email>` cria o usuário e dispara o e-mail de credenciais.
+def test_cli_add_cria_usuario_e_imprime_senha(tmp_path, capsys):
+    """`admin_usuarios add <operador>` cria o usuário e IMPRIME a senha temporária.
 
-    Entrada: store temporário; e-mail novo; envio de e-mail espionado (mock).
-    Fase 1: executa a CLI `add` com o SMTP-layer mockado.
+    (Fallback temporário: sem e-mail; a senha é impressa para o admin repassar.)
+
+    Entrada: store temporário; operador novo.
+    Fase 1: executa a CLI `add` e captura o stdout.
     Fase 2: o usuário foi criado com `precisa_trocar_senha=True`.
-    Fase 3: `enviar_credenciais` foi chamado com (e-mail, senha) e a senha confere
-            com o hash gravado (ou seja, é a senha temporária real do usuário).
+    Fase 3: a senha impressa confere com o hash gravado (é a senha temporária real).
     Fase 4: a CLI retornou código 0 (sucesso).
     Saída: asserções.
     """
     # Store temporário.
     caminho = tmp_path / "usuarios.json"
-    # Fase 1: espiona o envio de credenciais e roda a CLI.
-    with patch("backend.admin_usuarios.enviar_credenciais") as mock_env:
-        codigo = executar(["add", "Novo@Equatorialenergia.com.br"], caminho=caminho)
-    # Fase 2: usuário criado com a flag de troca.
-    usuario = obter_usuario("novo@equatorialenergia.com.br", caminho=caminho)
+    # Fase 1: roda a CLI (caixa mista no operador para checar a normalização).
+    codigo = executar(["add", "NovoOperador"], caminho=caminho)
+    saida = capsys.readouterr().out
+    # Fase 2: usuário criado (chave normalizada) com a flag de troca.
+    usuario = obter_usuario("novooperador", caminho=caminho)
     assert usuario is not None
     assert usuario["precisa_trocar_senha"] is True
-    # Fase 3: e-mail de credenciais disparado com a senha temporária correta.
-    assert mock_env.called is True
-    email_arg, senha_arg = mock_env.call_args.args[0], mock_env.call_args.args[1]
-    assert email_arg == "novo@equatorialenergia.com.br"
-    assert verificar_senha(senha_arg, usuario["senha_hash"], usuario["salt"]) is True
+    # Fase 3: a senha impressa ("senha temporária: <senha>") confere com o hash gravado.
+    assert "novooperador" in saida
+    achado = re.search(r"senha temporária:\s*(\S+)", saida)
+    assert achado is not None
+    assert verificar_senha(achado.group(1), usuario["senha_hash"], usuario["salt"]) is True
     # Fase 4: código de saída 0.
     assert codigo == 0
 
@@ -249,7 +250,7 @@ def test_autenticar_senha_correta_emite_token(tmp_path):
     registro["precisa_trocar_senha"] = False
     # regrava o store com a flag desligada
     import json as _json
-    caminho.write_text(_json.dumps({registro["email"]: registro}), encoding="utf-8")
+    caminho.write_text(_json.dumps({registro["operador"]: registro}), encoding="utf-8")
     # Fase 2: autentica.
     resultado = autenticar("a@b.com", "MinhaSenha1", caminho=caminho, config=cfg)
     # Fase 3: autenticado e com token válido.

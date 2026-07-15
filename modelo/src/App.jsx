@@ -15,9 +15,9 @@ import * as api from "./lib/api";
 // Orquestrador. Telas: login → menu → UF → contrato → versão → shell
 // (upload → painel → sucesso). Auth + contexto + validação são reais (backend).
 export default function App() {
-  const [user, setUser] = useState(null);          // null = não autenticado (e-mail quando logado)
+  const [user, setUser] = useState(null);          // null = não autenticado (operador quando logado)
   const [token, setToken] = useState(null);        // token de sessão (JWT) — usado nas rotas protegidas
-  const [trocaPendente, setTrocaPendente] = useState(null); // { email, senha } aguardando troca no 1º acesso
+  const [trocaPendente, setTrocaPendente] = useState(null); // { operador, senha } aguardando troca no 1º acesso
   const [contexto, setContexto] = useState(null);  // { grupo, ufs, contratos } vindo de /api/contexto
   const [moduloOk, setModuloOk] = useState(false); // menu principal escolhido
   const [uf, setUf] = useState(null);              // UF selecionada
@@ -89,9 +89,9 @@ export default function App() {
     if (trocaPendente) {
       return (
         <TrocarSenha
-          email={trocaPendente.email}
+          operador={trocaPendente.operador}
           senhaAtual={trocaPendente.senha}
-          onTrocada={(email, tok) => { setToken(tok); setTrocaPendente(null); setUser(email); }}
+          onTrocada={(operador, tok) => { setToken(tok); setTrocaPendente(null); setUser(operador); }}
           onVoltar={() => setTrocaPendente(null)}
         />
       );
@@ -99,8 +99,8 @@ export default function App() {
     // Login real: onAutenticado (com token) entra; onPrecisaTrocar abre a tela de troca.
     return (
       <AuthScreen
-        onAutenticado={(email, tok) => { setToken(tok); setUser(email); }}
-        onPrecisaTrocar={(email, senha) => setTrocaPendente({ email, senha })}
+        onAutenticado={(operador, tok) => { setToken(tok); setUser(operador); }}
+        onPrecisaTrocar={(operador, senha) => setTrocaPendente({ operador, senha })}
       />
     );
   }

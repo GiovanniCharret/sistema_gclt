@@ -11,8 +11,8 @@ Só `sev="err"` bloqueia o envio (§7). Este arquivo (D3) cobre as regras de
 formato/domínio; o cruzamento com `entrada/` (D4) e a montagem (D5) vêm em seguida.
 """
 
-# Normalização defensiva de coordenada e de ID (ODI/UC) — do parser.
-from backend.planilha import normalizar_coordenada, normalizar_id
+# Normalização defensiva de coordenada, de ID (ODI/UC) e de nome (município/UF) — do parser.
+from backend.planilha import normalizar_coordenada, normalizar_id, normalizar_nome
 
 # ── Nomes de coluna (cabeçalhos reais do modelo) ──
 COL_ODI = "Número ODI"
@@ -40,6 +40,8 @@ _COMUNIDADE_FAMILIA = {
     "2 - Comunidade quilombola": COL_FAM_QUILOMBOLA,
     "3 - Comunidade ribeirinha": COL_FAM_RIBEIRINHA,
 }
+# Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
+_COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
 # Enquadramento exigido para comunidades tradicionais (regra 1).
 _ENQUAD_POVOS_TRADICIONAIS = "4 - Povos tradicionais"
 
@@ -67,6 +69,21 @@ def _txt(linha, coluna):
     # Normaliza None/valor para string sem bordas.
     v = linha.get(coluna)
     return "" if v is None else str(v).strip()
+
+
+def _eh(linha, coluna, alvo):
+    """Diz se a célula `coluna` vale `alvo`, ignorando a caixa (maiúsc./minúsc.) e bordas.
+
+    Por que existe: os preenchimentos de vocabulário (Sim/Não, domínios, enquadramento,
+    tipo de comunidade) podem chegar em qualquer caixa ("SIM"/"sim"/"Sim"); as regras
+    comparam com o texto canônico, então a comparação precisa ser case-insensitive
+    (pedido 2026-07-15). `casefold` é mais robusto que `lower` para acentos/Unicode.
+
+    Entrada: `linha` (dict), `coluna` (nome) e `alvo` (texto esperado).
+    Saída: True se iguais ignorando a caixa; False caso contrário.
+    """
+    # Compara os dois lados normalizados por casefold (o lado da célula já vem sem bordas).
+    return _txt(linha, coluna).casefold() == alvo.casefold()
 
 
 def _loc(linha):
@@ -136,11 +153,18 @@ def regras_formato_dominio(linhas, dominios):
             campo obrigatório.
     Fase 2: entre linhas — chave ODI+UC duplicada (erro) e UC duplicada (erro).
     Saída: lista de achados.
+
+    Observação: todas as comparações de vocabulário (Sim/Não, domínios, enquadramento,
+    tipo de comunidade) **ignoram a caixa** (maiúsc./minúsc.) via `casefold` — "SIM",
+    "sim" e "Sim" são equivalentes (pedido 2026-07-15).
     """
     # Acumulador de achados.
     achados = []
-    # Conjunto de valores Sim/Não válidos (para as tipologias).
-    sim_nao = set(dominios.get("SIM_NAO", ["Sim", "Não"]))
+    # Vocabulário Sim/Não e domínios normalizados por casefold — todas as comparações de
+    # preenchimento ignoram a caixa (maiúsc./minúsc.), pedido de 2026-07-15.
+    sim_nao = {v.casefold() for v in dominios.get("SIM_NAO", ["Sim", "Não"])}
+    dominios_cf = {chave: {d.casefold() for d in dominios.get(chave, [])}
+                   for chave in _MAPA_DOMINIO.values()}
 
     # Fase 1: regras por linha.
     for linha in linhas:
@@ -152,10 +176,10 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("err", "Campos obrigatórios vazios", loc, coluna,
                                         "célula vazia", "preencher o campo obrigatório"))
 
-        # (erro) Valor fora do domínio (só quando a célula tem valor).
+        # (erro) Valor fora do domínio (só quando a célula tem valor; ignora a caixa).
         for coluna, chave in _MAPA_DOMINIO.items():
             v = _txt(linha, coluna)
-            if v != "" and v not in dominios.get(chave, []):
+            if v != "" and v.casefold() not in dominios_cf[chave]:
                 achados.append(_achado("err", "Valor fora do domínio", loc, coluna,
                                         f'valor "{v}" fora do domínio', "usar um valor da aba Dominios"))
 
@@ -169,10 +193,10 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("warn", "Coordenadas inválidas", loc, coluna,
                                         f'valor "{v}" inválido', f"deve estar entre {minimo} e {maximo}"))
 
-        # (aviso) Tipologia ≠ Sim/Não.
+        # (aviso) Tipologia ≠ Sim/Não (ignora a caixa: "SIM"/"sim" valem como "Sim").
         for coluna in _colunas_tipologia(linha):
             v = _txt(linha, coluna)
-            if v != "" and v not in sim_nao:
+            if v != "" and v.casefold() not in sim_nao:
                 achados.append(_achado("warn", "Valor de tipologia ≠ Sim/Não", loc, coluna,
                                         f'valor "{v}" inválido', 'usar "Sim" ou "Não"'))
 
@@ -189,16 +213,16 @@ def regras_formato_dominio(linhas, dominios):
             achados.append(_achado("err", "“0 - Não é prioridade” em branco", loc,
                                     COL_TIPOLOGIA_ZERO, "célula em branco",
                                     'preencher “Sim” ou “Não” na coluna “0 - Não é prioridade”'))
-        elif zero == "Sim":
+        elif _eh(linha, COL_TIPOLOGIA_ZERO, "Sim"):
             # Cláusula 1: com "0" = "Sim", nenhuma outra tipologia pode estar "Sim".
-            conflitos = [c for c in demais if _txt(linha, c) == "Sim"]
+            conflitos = [c for c in demais if _eh(linha, c, "Sim")]
             if conflitos:
                 achados.append(_achado("err", "“0 - Não é prioridade” + outra tipologia", loc,
                                         "Tipologia", f'“Sim” também em: {", ".join(conflitos)}',
                                         'se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser “Não”'))
-        elif zero == "Não":
+        elif _eh(linha, COL_TIPOLOGIA_ZERO, "Não"):
             # Cláusula 2: com "0" = "Não", pelo menos uma outra tipologia deve estar "Sim".
-            if not any(_txt(linha, c) == "Sim" for c in demais):
+            if not any(_eh(linha, c, "Sim") for c in demais):
                 achados.append(_achado("err", "Nenhuma tipologia assinalada", loc,
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
@@ -208,18 +232,19 @@ def regras_formato_dominio(linhas, dominios):
         # Só se aplica quando "Tipo de Comunidade" é uma das três (pedido 2026-07-14);
         # não bloqueia o envio (severidade "warn").
         tipo_com = _txt(linha, COL_TIPO_COM)
-        if tipo_com in _COMUNIDADE_FAMILIA:
+        # Casa o Tipo de Comunidade ignorando a caixa; None se não for tradicional (1/2/3).
+        esperada = _COMUNIDADE_FAMILIA_CF.get(tipo_com.casefold())
+        if esperada is not None:
             # Regra 1: comunidade tradicional exige Enquadramento "4 - Povos tradicionais".
-            if _txt(linha, COL_ENQUAD) != _ENQUAD_POVOS_TRADICIONAIS:
+            if not _eh(linha, COL_ENQUAD, _ENQUAD_POVOS_TRADICIONAIS):
                 achados.append(_achado("warn", "Enquadramento ≠ Povos tradicionais", loc, COL_ENQUAD,
                                         f'“{tipo_com}” exige Enquadramento “{_ENQUAD_POVOS_TRADICIONAIS}”',
                                         f'preencher Enquadramento com “{_ENQUAD_POVOS_TRADICIONAIS}”'))
             # Regra 2: a família correspondente deve estar "Sim" e as outras duas ≠ "Sim"
             # (célula em branco conta como "não marcada" para as outras duas).
-            esperada = _COMUNIDADE_FAMILIA[tipo_com]
             familias = (COL_FAM_INDIGENA, COL_FAM_QUILOMBOLA, COL_FAM_RIBEIRINHA)
-            coincide = (_txt(linha, esperada) == "Sim"
-                        and all(_txt(linha, c) != "Sim" for c in familias if c != esperada))
+            coincide = (_eh(linha, esperada, "Sim")
+                        and all(not _eh(linha, c, "Sim") for c in familias if c != esperada))
             if not coincide:
                 achados.append(_achado("warn", "Tipologia de família ≠ Tipo de Comunidade", loc, esperada,
                                         f'“{tipo_com}” deve ter “{esperada}” = “Sim” e as demais famílias = “Não”',
@@ -277,7 +302,10 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
             uf_ref, mun_ref = odi_ref[odi]
             uf = _txt(linha, COL_UF)
             mun = _txt(linha, COL_MUNICIPIO)
-            if uf.upper() != (uf_ref or "").upper() or mun.upper() != (mun_ref or "").upper():
+            # Compara UF e município por forma canônica (ignora acento, caixa e espaços —
+            # inclusive no meio): a base e a planilha divergem nesses ruídos sem ser erro.
+            if (normalizar_nome(uf) != normalizar_nome(uf_ref)
+                    or normalizar_nome(mun) != normalizar_nome(mun_ref)):
                 achados.append(_achado("err", "UF / município divergente", loc, "UF/Município",
                                         f"linha: {uf}/{mun} · referência: {uf_ref}/{mun_ref}",
                                         "corrigir para bater com a referência do ODI"))

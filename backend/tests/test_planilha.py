@@ -17,6 +17,7 @@ from backend.planilha import (
     normalizar_data,
     normalizar_coordenada,
     normalizar_id,
+    normalizar_nome,
     PlanilhaInvalida,
 )
 # Gerador de .xlsx-fixture.
@@ -110,6 +111,26 @@ def test_normalizar_id_tira_zero_a_esquerda_e_sufixo_float():
     assert normalizar_id("ODR142PROJ001") == "ODR142PROJ001"  # alfanumérico intacto
     assert normalizar_id("0") == "0"                     # zero puro preservado
     assert normalizar_id(None) == ""                     # vazio
+
+
+def test_normalizar_nome_ignora_acento_caixa_e_espacos():
+    """`normalizar_nome` casa nomes que divergem só por acento, caixa e espaços
+    (inclusive no meio): 'RORAINÓPOLIS' == 'RORAINOPOLIS', 'SANTA LUZ' == 'SANTALUZ'."""
+    # Acento (caso reportado: planilha com acento, base sem).
+    assert normalizar_nome("RORAINÓPOLIS") == normalizar_nome("RORAINOPOLIS")
+    # Bordas + acento + caixa.
+    assert normalizar_nome(" Rorainópolis ") == normalizar_nome("RORAINOPOLIS")
+    # Espaço no meio ignorado.
+    assert normalizar_nome("SANTA LUZ") == normalizar_nome("SANTALUZ")
+    assert normalizar_nome("São João  do  Norte") == normalizar_nome("SAOJOAODONORTE")
+    # Caixa.
+    assert normalizar_nome("MUCAJAÍ") == normalizar_nome("mucajai")
+    # Forma canônica: sem acento, sem espaço, minúscula.
+    assert normalizar_nome("  Cantá ") == "canta"
+    # Vazio.
+    assert normalizar_nome(None) == ""
+    # Nomes de fato diferentes NÃO colidem.
+    assert normalizar_nome("BOA VISTA") != normalizar_nome("RORAINOPOLIS")
 
 
 def test_normalizar_coordenada_aceita_virgula_e_ponto():

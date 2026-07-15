@@ -4,7 +4,8 @@ import * as api from "../lib/api";
 // Tela de entrada — login real contra POST /api/login. Se o backend responder
 // { precisaTrocarSenha: true }, delega ao App para exibir a tela de troca (1º acesso).
 export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
-  const [email, setEmail] = useState("");
+  // Fallback temporário: login por "operador" (o e-mail foi adiado para V1/V2).
+  const [operador, setOperador] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");     // mensagem genérica do "esqueci senha"
@@ -17,14 +18,14 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
     setAviso("");
     setCarregando(true);
     try {
-      const { ok, status, dados } = await api.login(email.trim(), senha);
+      const { ok, status, dados } = await api.login(operador.trim(), senha);
       if (status === 401) {
-        setErro("E-mail ou senha inválidos.");
+        setErro("Operador ou senha inválidos.");
         return;
       }
       if (status === 403) {
-        // Domínio de e-mail não mapeado a nenhum grupo — informa e não entra.
-        setErro(dados?.detail || "Domínio de e-mail não registrado no sistema.");
+        // Operador não mapeado a nenhum grupo — informa e não entra.
+        setErro(dados?.detail || "Operador não registrado no sistema.");
         return;
       }
       if (!ok) {
@@ -34,11 +35,11 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
       // 1º acesso: backend pede troca de senha (sem token pleno). Passa a senha
       // recém-validada adiante para a tela de troca não pedi-la de novo.
       if (dados?.precisaTrocarSenha) {
-        onPrecisaTrocar(email.trim(), senha);
+        onPrecisaTrocar(operador.trim(), senha);
         return;
       }
       // Login pleno: guarda o token e entra.
-      onAutenticado(email.trim(), dados.token);
+      onAutenticado(operador.trim(), dados.token);
     } catch {
       setErro("Não foi possível conectar ao servidor.");
     } finally {
@@ -49,13 +50,13 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
   async function handleEsqueci() {
     setErro("");
     setAviso("");
-    const alvo = email.trim();
+    const alvo = operador.trim();
     if (!alvo) {
-      setErro("Informe seu e-mail acima para redefinir a senha.");
+      setErro("Informe seu operador acima para redefinir a senha.");
       return;
     }
     try {
-      // Resposta é sempre genérica (não revela se o e-mail existe). No MVP o backend
+      // Resposta é sempre genérica (não revela se o operador existe). No MVP o backend
       // reseta para a senha padrão de inicialização, sem enviar e-mail.
       await api.esqueciSenha(alvo);
       setResetado(true);
@@ -94,13 +95,13 @@ export default function AuthScreen({ onAutenticado, onPrecisaTrocar }) {
         <p className="auth-subtitle">Sistema Gerenciador do Programa Luz para Todos</p>
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="field">
-            <label className="field-label">E-mail</label>
+            <label className="field-label">Operador</label>
             <input
-              type="email"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="e-mail@agente"
+              value={operador}
+              onChange={(e) => setOperador(e.target.value)}
+              placeholder="operador"
             />
           </div>
           <div className="field">

@@ -6,7 +6,7 @@ import * as api from "../lib/api";
 //
 // A "senha atual" é a temporária que o usuário ACABOU de usar no login (chega por prop),
 // então não a pedimos de novo — evita erro de digitação/autofill e agiliza o 1º acesso.
-export default function TrocarSenha({ email, senhaAtual, onTrocada, onVoltar }) {
+export default function TrocarSenha({ operador, senhaAtual, onTrocada, onVoltar }) {
   const [nova, setNova] = useState("");
   const [confirma, setConfirma] = useState("");
   const [erro, setErro] = useState("");
@@ -26,7 +26,7 @@ export default function TrocarSenha({ email, senhaAtual, onTrocada, onVoltar }) 
     }
     setCarregando(true);
     try {
-      const { ok, status, dados } = await api.trocarSenha(email, senhaAtual, nova);
+      const { ok, status, dados } = await api.trocarSenha(operador, senhaAtual, nova);
       if (status === 401) {
         // Só ocorre se a senha carregada do login não bater (sessão inconsistente).
         setErro("Sua sessão expirou. Volte ao login e entre novamente.");
@@ -37,7 +37,7 @@ export default function TrocarSenha({ email, senhaAtual, onTrocada, onVoltar }) 
         return;
       }
       // Troca concluída: backend devolve o token de sessão → entra.
-      onTrocada(email, dados.token);
+      onTrocada(operador, dados.token);
     } catch {
       setErro("Não foi possível conectar ao servidor.");
     } finally {
@@ -51,7 +51,7 @@ export default function TrocarSenha({ email, senhaAtual, onTrocada, onVoltar }) 
         <p className="eyebrow">Primeiro acesso</p>
         <h1 className="auth-title">Definir nova senha</h1>
         <p className="auth-subtitle">
-          Crie uma nova senha para <strong>{email}</strong> antes de continuar.
+          Crie uma nova senha para <strong>{operador}</strong> antes de continuar.
         </p>
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="field">

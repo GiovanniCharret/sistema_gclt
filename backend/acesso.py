@@ -1,9 +1,10 @@
 """Filtro de acesso por login (grupo econômico) em duas camadas — Bloco A4 (§5.1).
 
 Por que existe: o site é acessado por **grupos econômicos** de distribuidoras, e o
-que cada usuário vê na seleção depende do **domínio do e-mail** informado no login.
-Este módulo resolve as duas camadas do filtro:
-  Camada 1 — domínio do e-mail → grupo econômico (`grupo_do_email`).
+que cada usuário vê na seleção depende do **operador** informado no login (fallback
+temporário 2026-07-15; o login por e-mail foi adiado para V1/V2). Este módulo resolve
+as duas camadas do filtro:
+  Camada 1 — operador → grupo econômico (`grupo_do_operador`).
   Camada 2 — grupo → siglas/contratos visíveis (`siglas_do_grupo`, `contratos_visiveis`).
 `ENBPAR` é **curinga** (vê todos os contratos). **Não é segurança** — é um filtro de
 escopo da seleção (não há, aqui, controle de senha forte vinculado a isso); por isso
@@ -31,26 +32,26 @@ MAPA_GRUPO_SIGLAS = {
     "ENBPAR": None,
 }
 
-# Camada 1 — mapa domínio do e-mail → grupo econômico.
-# **Configurável e provisório**: os domínios reais de cada distribuidora ainda são
-# pendência (risco #3 da spec); estes são placeholders plausíveis, a confirmar antes
-# do deploy. Domínio fora do mapa ⇒ usuário sem grupo (sem contratos).
-MAPA_DOMINIO_GRUPO = {
+# Camada 1 — mapa **operador** (login) → grupo econômico.
+# Fallback temporário (pedido dos engenheiros, 2026-07-15): o login por e-mail foi adiado
+# para V1/V2; por ora o usuário entra com um **operador** simples (o rótulo do domínio, sem
+# `nome@` nem `.com.br`/`.gov.br`). Operador fora do mapa ⇒ usuário sem grupo (sem contratos).
+MAPA_OPERADOR_GRUPO = {
     # Equatorial.
-    "equatorialenergia.com.br": "EQUATORIAL",
+    "equatorialenergia": "EQUATORIAL",
     # Energisa.
-    "energisa.com.br": "ENERGISA",
+    "energisa": "ENERGISA",
     # Neoenergia / Coelba.
-    "neoenergia.com.br": "NEOENERGISA",
-    "coelba.com.br": "NEOENERGISA",
+    "neoenergia": "NEOENERGISA",
+    "coelba": "NEOENERGISA",
     # CERCI.
-    "cerci.com.br": "CERCI",
-    # Grupo ÂMBAR — só o domínio ambarenergia por ora (vê o grupo econômico inteiro:
-    # ÂMBAR + AMAZONAS + RORAIMA). Os domínios `amazonasenergia`/`roraimaenergia` ficam
+    "cerci": "CERCI",
+    # Grupo ÂMBAR — só o operador ambarenergia por ora (vê o grupo econômico inteiro:
+    # ÂMBAR + AMAZONAS + RORAIMA). Os operadores `amazonasenergia`/`roraimaenergia` ficam
     # FORA até os engenheiros decidirem se serão cadastrados (hoje duplicariam esta visão).
-    "ambarenergia.com.br": "ÂMBAR",
+    "ambarenergia": "ÂMBAR",
     # ENBPar (Agente Operacionalizador) — curinga.
-    "enbpar.gov.br": "ENBPAR",
+    "enbpar": "ENBPAR",
 }
 
 # Nomes das UFs (sigla → nome), para o payload do /api/contexto. Espelha o
@@ -66,26 +67,26 @@ UF_NOMES = {
 }
 
 
-def montar_contexto(email, contratos_detalhe, ucs_por_contrato, mapa_dominio=None, mapa_grupo=None):
+def montar_contexto(operador, contratos_detalhe, ucs_por_contrato, mapa_operador=None, mapa_grupo=None):
     """Monta o payload do `/api/contexto`: grupo + UFs/contratos visíveis (C1, §5.1/§6).
 
     Por que existe: o front, após o login, precisa das UFs e contratos que o usuário
-    pode selecionar — já filtrados pelo grupo do e-mail (camada 1→2) e enriquecidos com
+    pode selecionar — já filtrados pelo grupo do operador (camada 1→2) e enriquecidos com
     a contagem de UCs por contrato (que no mock vinha de `mockUcsContrato`, e agora vem
     do backend). Concentrar essa montagem aqui a torna testável sem HTTP.
 
-    Entrada: `email` (do token), `contratos_detalhe` (lista de dicts com numero/uf/sigla/
+    Entrada: `operador` (do token), `contratos_detalhe` (lista de dicts com numero/uf/sigla/
              tipo_contrato/tranche — de `carregar_base_contratos`), `ucs_por_contrato`
              (dict numero→nº de UCs na referência), e os mapas opcionais de acesso.
-    Fase 1: resolve o grupo do e-mail (camada 1).
+    Fase 1: resolve o grupo do operador (camada 1).
     Fase 2: filtra os contratos visíveis do grupo (camada 2) e monta cada item com a
             contagem de UCs (0 se o contrato não tem referência).
     Fase 3: agrega as UFs distintas (sigla, nome, nº de contratos), ordenadas por sigla.
-    Saída: dict `{email, grupo, ufs, contratos}` (grupo None e listas vazias se o domínio
-           não mapeia a nenhum grupo).
+    Saída: dict `{operador, grupo, ufs, contratos}` (grupo None e listas vazias se o
+           operador não mapeia a nenhum grupo).
     """
-    # Fase 1: grupo econômico derivado do domínio do e-mail.
-    grupo = grupo_do_email(email, mapa_dominio)
+    # Fase 1: grupo econômico derivado do operador.
+    grupo = grupo_do_operador(operador, mapa_operador)
     # Fase 2: contratos que o grupo enxerga, com o detalhe + UCs.
     visiveis = contratos_visiveis(grupo, contratos_detalhe, mapa_grupo)
     contratos = [
@@ -111,31 +112,29 @@ def montar_contexto(email, contratos_detalhe, ucs_por_contrato, mapa_dominio=Non
         for sigla, n in sorted(contagem_uf.items())   # ordena por sigla
     ]
     # Saída: contexto pronto para o front.
-    return {"email": email, "grupo": grupo, "ufs": ufs, "contratos": contratos}
+    return {"operador": operador, "grupo": grupo, "ufs": ufs, "contratos": contratos}
 
 
-def grupo_do_email(email, mapa_dominio=None):
-    """Resolve o grupo econômico a partir do domínio do e-mail (camada 1).
+def grupo_do_operador(operador, mapa=None):
+    """Resolve o grupo econômico a partir do operador (login) — camada 1.
 
-    Por que existe: o grupo do usuário (que define o escopo da seleção) é derivado
-    do domínio após o `@`, não armazenado por usuário (§5.2).
+    Por que existe: o grupo do usuário (que define o escopo da seleção) é derivado do
+    operador informado no login (fallback temporário; antes vinha do domínio do e-mail),
+    não armazenado por usuário.
 
-    Entrada: `email` (string) e `mapa_dominio` (mapa opcional; None usa o padrão).
-    Fase 1: valida o formato mínimo (precisa ter `@`).
-    Fase 2: extrai o domínio (depois do último `@`), normaliza (trim + minúsculas).
-    Fase 3: consulta o mapa domínio→grupo.
-    Saída: o grupo (string) ou None se o e-mail é inválido / domínio não mapeado.
+    Entrada: `operador` (string do login) e `mapa` (mapa opcional; None usa o padrão).
+    Fase 1: normaliza (trim + minúsculas); vazio → None.
+    Fase 2: consulta o mapa operador→grupo.
+    Saída: o grupo (string) ou None se o operador é vazio / não mapeado.
     """
     # Mapa efetivo (permite injeção em teste/config).
-    mapa = mapa_dominio if mapa_dominio is not None else MAPA_DOMINIO_GRUPO
-    # Fase 1: e-mail precisa existir e conter "@".
-    if not email or "@" not in email:
-        # E-mail malformado → sem grupo.
+    mapa = mapa if mapa is not None else MAPA_OPERADOR_GRUPO
+    # Fase 1: operador precisa existir; normaliza caixa/bordas.
+    if not operador:
         return None
-    # Fase 2: pega o que vem depois do último "@", tira espaços e baixa a caixa.
-    dominio = email.rsplit("@", 1)[1].strip().lower()
-    # Fase 3/Saída: grupo do domínio, ou None se não mapeado.
-    return mapa.get(dominio)
+    chave = operador.strip().lower()
+    # Fase 2/Saída: grupo do operador, ou None se não mapeado.
+    return mapa.get(chave)
 
 
 def siglas_do_grupo(grupo, mapa_grupo=None):

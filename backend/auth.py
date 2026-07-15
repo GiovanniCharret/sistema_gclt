@@ -173,7 +173,7 @@ def criar_usuario(email, senha=None, caminho=None):
     # Fase 2: hash+salt e montagem do registro.
     hash_hex, salt = gerar_hash(senha_texto)
     registro = {
-        "email": chave,                    # e-mail normalizado (também é a chave)
+        "operador": chave,                 # operador normalizado (também é a chave/login)
         "senha_hash": hash_hex,            # hash pbkdf2 (nunca a senha em texto)
         "salt": salt,                      # salt por usuário
         "precisa_trocar_senha": True,      # troca obrigatória no 1º acesso
@@ -277,7 +277,7 @@ def autenticar(email, senha, caminho=None, config=None):
     if usuario.get("precisa_trocar_senha"):
         return {"autenticado": True, "precisaTrocarSenha": True}
     # Fase 4/Saída: login pleno com token de sessão.
-    return {"autenticado": True, "token": gerar_token(usuario["email"], config)}
+    return {"autenticado": True, "token": gerar_token(usuario["operador"], config)}
 
 
 def trocar_senha(email, senha_atual, nova_senha, caminho=None, config=None):

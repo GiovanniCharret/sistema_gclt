@@ -44,19 +44,19 @@ def store_usuarios(tmp_path):
     app.dependency_overrides.pop(caminho_usuarios, None)
 
 
-def _criar_usuario_sem_flag(caminho, email, senha):
+def _criar_usuario_sem_flag(caminho, operador, senha):
     """Cria um usuário já 'pós-troca' (sem `precisa_trocar_senha`) no store.
 
-    Entrada: `caminho` (store), `email`, `senha`.
+    Entrada: `caminho` (store), `operador`, `senha`.
     Fase 1: cria o usuário (nasce com flag de troca).
     Fase 2: zera a flag e regrava o store.
     Saída: nenhuma (efeito no arquivo).
     """
     # Fase 1: cria com a senha conhecida.
-    registro, _ = criar_usuario(email, senha=senha, caminho=caminho)
+    registro, _ = criar_usuario(operador, senha=senha, caminho=caminho)
     # Fase 2: desliga a flag de troca e persiste.
     registro["precisa_trocar_senha"] = False
-    caminho.write_text(json.dumps({registro["email"]: registro}), encoding="utf-8")
+    caminho.write_text(json.dumps({registro["operador"]: registro}), encoding="utf-8")
 
 
 def test_health_retorna_200_e_status_ok(client):
@@ -135,26 +135,26 @@ def test_login_senha_correta_retorna_token(client, store_usuarios):
     Saída: asserções.
     """
     # Fase 1: usuário sem flag de troca.
-    _criar_usuario_sem_flag(store_usuarios, "op@equatorialenergia.com.br", "Senha123")
+    _criar_usuario_sem_flag(store_usuarios, "equatorialenergia", "Senha123")
     # Fase 2: login com credenciais corretas.
     resposta = client.post("/api/login",
-                           json={"email": "op@equatorialenergia.com.br", "senha": "Senha123"})
+                           json={"operador": "equatorialenergia", "senha": "Senha123"})
     # Fase 3: sucesso com token válido.
     assert resposta.status_code == 200
     token = resposta.json()["token"]
-    assert verificar_token(token) == "op@equatorialenergia.com.br"
+    assert verificar_token(token) == "equatorialenergia"
 
 
-def test_login_dominio_nao_registrado_retorna_403(client, store_usuarios):
-    """`POST /api/login` com domínio fora do mapa de acesso → 403 (não autentica).
+def test_login_operador_nao_registrado_retorna_403(client, store_usuarios):
+    """`POST /api/login` com operador fora do mapa de acesso → 403 (não autentica).
 
-    Não precisa nem existir usuário: o domínio não mapeia a nenhum grupo, então não há
-    o que acessar — informa e para (§5.1). Fase 1: login com domínio desconhecido.
-    Fase 2: 403 com mensagem sobre domínio não registrado.
+    Não precisa nem existir usuário: o operador não mapeia a nenhum grupo, então não há
+    o que acessar — informa e para (§5.1). Fase 1: login com operador desconhecido.
+    Fase 2: 403 com mensagem sobre operador não registrado.
     """
-    # Fase 1/2: domínio desconhecido → 403.
+    # Fase 1/2: operador desconhecido → 403.
     resposta = client.post("/api/login",
-                           json={"email": "alguem@desconhecido.com", "senha": "qualquer"})
+                           json={"operador": "desconhecido", "senha": "qualquer"})
     assert resposta.status_code == 403
     assert "registrad" in resposta.json()["detail"].lower()
 
@@ -166,10 +166,10 @@ def test_login_senha_errada_retorna_401(client, store_usuarios):
     Fase 2: login com senha errada → 401.
     """
     # Fase 1: usuário no store.
-    _criar_usuario_sem_flag(store_usuarios, "op@equatorialenergia.com.br", "Senha123")
+    _criar_usuario_sem_flag(store_usuarios, "equatorialenergia", "Senha123")
     # Fase 2: senha incorreta.
     resposta = client.post("/api/login",
-                           json={"email": "op@equatorialenergia.com.br", "senha": "errada"})
+                           json={"operador": "equatorialenergia", "senha": "errada"})
     # 401 esperado.
     assert resposta.status_code == 401
 
@@ -182,10 +182,10 @@ def test_login_precisa_trocar_senha_sem_token(client, store_usuarios):
     Fase 3: 200, precisaTrocarSenha=true e sem token.
     """
     # Fase 1: usuário recém-criado (precisa_trocar_senha=True).
-    criar_usuario("novo@equatorialenergia.com.br", senha="Temp123", caminho=store_usuarios)
+    criar_usuario("equatorialenergia", senha="Temp123", caminho=store_usuarios)
     # Fase 2: login com a senha temporária.
     resposta = client.post("/api/login",
-                           json={"email": "novo@equatorialenergia.com.br", "senha": "Temp123"})
+                           json={"operador": "equatorialenergia", "senha": "Temp123"})
     # Fase 3: sinaliza troca, sem token.
     assert resposta.status_code == 200
     corpo = resposta.json()
@@ -201,10 +201,10 @@ def test_trocar_senha_no_1o_acesso_e_depois_loga(client, store_usuarios):
     Fase 3: login com a nova senha → 200 + token, SEM precisaTrocarSenha.
     """
     # Fase 1: usuário recém-criado.
-    criar_usuario("op@equatorialenergia.com.br", senha="Temp123", caminho=store_usuarios)
+    criar_usuario("equatorialenergia", senha="Temp123", caminho=store_usuarios)
     # Fase 2: troca de senha no 1º acesso.
     troca = client.post("/api/trocar-senha", json={
-        "email": "op@equatorialenergia.com.br",
+        "operador": "equatorialenergia",
         "senhaAtual": "Temp123",
         "novaSenha": "NovaSenha456",
     })
@@ -212,7 +212,7 @@ def test_trocar_senha_no_1o_acesso_e_depois_loga(client, store_usuarios):
     assert "token" in troca.json()
     # Fase 3: agora loga direto com a nova senha (sem precisar trocar).
     login = client.post("/api/login", json={
-        "email": "op@equatorialenergia.com.br", "senha": "NovaSenha456",
+        "operador": "equatorialenergia", "senha": "NovaSenha456",
     })
     assert login.status_code == 200
     assert "token" in login.json()
@@ -226,10 +226,10 @@ def test_trocar_senha_atual_errada_retorna_401(client, store_usuarios):
     Fase 2: troca com senha atual errada → 401.
     """
     # Fase 1: usuário no store.
-    criar_usuario("op@equatorialenergia.com.br", senha="Temp123", caminho=store_usuarios)
+    criar_usuario("equatorialenergia", senha="Temp123", caminho=store_usuarios)
     # Fase 2: senha atual incorreta.
     resposta = client.post("/api/trocar-senha", json={
-        "email": "op@equatorialenergia.com.br",
+        "operador": "equatorialenergia",
         "senhaAtual": "errada",
         "novaSenha": "NovaSenha456",
     })
@@ -257,8 +257,8 @@ def test_guard_token_invalido_401():
 def test_guard_token_valido_retorna_email():
     """`usuario_do_token` com Bearer válido → devolve o e-mail do token."""
     # Token válido (config do processo) → e-mail.
-    token = gerar_token("op@equatorialenergia.com.br")
-    assert usuario_do_token(authorization=f"Bearer {token}") == "op@equatorialenergia.com.br"
+    token = gerar_token("equatorialenergia")
+    assert usuario_do_token(authorization=f"Bearer {token}") == "equatorialenergia"
 
 
 # --- Esqueci minha senha (B4) ---
@@ -271,18 +271,18 @@ def test_esqueci_senha_reseta_para_senha_padrao_sem_email(client, store_usuarios
     Fase 3: NENHUM e-mail enviado; senha vira "Senha123"; flag de troca religada.
     """
     # Fase 1: usuário no store + spy do envio.
-    criar_usuario("op@equatorialenergia.com.br", senha="Antiga1", caminho=store_usuarios)
+    criar_usuario("equatorialenergia", senha="Antiga1", caminho=store_usuarios)
     with patch("backend.app.enviar_credenciais") as mock_env:
         # Fase 2: dispara o reset.
         resposta = client.post("/api/esqueci-senha",
-                               json={"email": "op@equatorialenergia.com.br"})
+                               json={"operador": "equatorialenergia"})
     # Resposta genérica de sucesso.
     assert resposta.status_code == 200
     assert resposta.json() == {"ok": True}
     # Fase 3: MVP não envia e-mail nenhum.
     assert mock_env.called is False
     # A senha guardada agora é a padrão de inicialização e a troca é obrigatória.
-    usuario = obter_usuario("op@equatorialenergia.com.br", caminho=store_usuarios)
+    usuario = obter_usuario("equatorialenergia", caminho=store_usuarios)
     assert verificar_senha("Senha123", usuario["senha_hash"], usuario["salt"]) is True
     assert usuario["precisa_trocar_senha"] is True
 
@@ -297,7 +297,7 @@ def test_esqueci_senha_email_inexistente_resposta_generica(client, store_usuario
     # Fase 1/2: reset de e-mail inexistente, com spy.
     with patch("backend.app.enviar_credenciais") as mock_env:
         resposta = client.post("/api/esqueci-senha",
-                               json={"email": "nao@existe.com"})
+                               json={"operador": "naoexiste"})
     # Fase 3: resposta genérica idêntica e nada enviado.
     assert resposta.status_code == 200
     assert resposta.json() == {"ok": True}
@@ -320,7 +320,7 @@ def test_contexto_equatorial_ve_18_contratos(client):
     Fase 3: grupo correto, 18 contratos (todos EQUATORIAL) e UFs com nome resolvido.
     """
     # Fase 1: token do usuário equatorial.
-    token = gerar_token("op@equatorialenergia.com.br")
+    token = gerar_token("equatorialenergia")
     # Fase 2: consulta o contexto autenticado.
     resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
     assert resposta.status_code == 200
@@ -335,7 +335,7 @@ def test_contexto_equatorial_ve_18_contratos(client):
 def test_contexto_enbpar_ve_41_contratos(client):
     """`GET /api/contexto` com token enbpar (curinga) → todos os 41 contratos."""
     # Token enbpar → vê tudo.
-    token = gerar_token("chefe@enbpar.gov.br")
+    token = gerar_token("enbpar")
     resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
     assert resposta.status_code == 200
     assert len(resposta.json()["contratos"]) == 41
@@ -396,7 +396,7 @@ def validar_env():
         yield {"planilha": env_planilha, "alerta": env_alerta}
 
 
-def _headers(email="op@equatorialenergia.com.br"):
+def _headers(email="equatorialenergia"):
     """Cabeçalho Authorization com um token válido para o e-mail dado."""
     return {"Authorization": f"Bearer {gerar_token(email)}"}
 
@@ -436,7 +436,7 @@ def test_validar_planilha_suja_nao_envia(client, validar_env):
 def test_validar_contrato_fora_do_grupo_403(client, validar_env):
     """Contrato de outro grupo (token ENERGISA, contrato EQUATORIAL) → 403."""
     conteudo = gerar_xlsx([_LINHA_LIMPA])
-    r = client.post("/api/validar", headers=_headers("op@energisa.com.br"),
+    r = client.post("/api/validar", headers=_headers("energisa"),
                     files={"arquivo": ("Anexo.xlsx", conteudo)},
                     data={"contrato": "CTR TESTE", "uf": "AM"})
     assert r.status_code == 403

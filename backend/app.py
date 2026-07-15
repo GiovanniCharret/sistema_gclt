@@ -37,7 +37,7 @@ from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_toke
 # E-mails: credenciais (B1), planilha validada e alerta crítico (E1) — mockáveis nos testes.
 from backend.email_envio import enviar_credenciais, enviar_planilha_validada, enviar_alerta_critico
 # Montagem do contexto, resolução do grupo e filtro de contratos por grupo (C1/E2, §5.1).
-from backend.acesso import montar_contexto, grupo_do_email, contratos_visiveis
+from backend.acesso import montar_contexto, grupo_do_operador, contratos_visiveis
 # Parsing (D1), domínios (D2) e validação (D3–D5) da planilha.
 from backend.planilha import ler_preenchimento, obter_dominios, PlanilhaInvalida, _MODELO_PADRAO
 from backend.validacao import validar
@@ -126,10 +126,10 @@ def caminho_usuarios():
 
 
 class LoginIn(BaseModel):
-    """Corpo do `POST /api/login`: e-mail + senha."""
+    """Corpo do `POST /api/login`: operador + senha."""
 
-    # E-mail informado no login.
-    email: str
+    # Operador (login) informado — fallback temporário; e-mail adiado para V1/V2.
+    operador: str
     # Senha em texto (validada contra o hash guardado).
     senha: str
 
@@ -145,12 +145,12 @@ def login(dados: LoginIn, caminho=Depends(caminho_usuarios)):
     Fase 4: caso normal → `{token}`.
     Saída: JSON conforme o desfecho; 401 quando inválido.
     """
-    # Fase 0: domínio do e-mail precisa mapear a um grupo (§5.1); senão não há o que
-    # acessar — informa e para (não faz sentido autenticar num domínio não registrado).
-    if grupo_do_email(dados.email) is None:
-        raise HTTPException(status_code=403, detail="Domínio de e-mail não registrado no sistema.")
+    # Fase 0: o operador precisa mapear a um grupo (§5.1); senão não há o que acessar —
+    # informa e para (não faz sentido autenticar um operador não registrado).
+    if grupo_do_operador(dados.operador) is None:
+        raise HTTPException(status_code=403, detail="Operador não registrado no sistema.")
     # Fase 1: decide o desfecho do login.
-    resultado = autenticar(dados.email, dados.senha, caminho=caminho)
+    resultado = autenticar(dados.operador, dados.senha, caminho=caminho)
     # Fase 2: inválido → 401 (mensagem genérica, não revela o que falhou).
     if not resultado["autenticado"]:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
@@ -162,10 +162,10 @@ def login(dados: LoginIn, caminho=Depends(caminho_usuarios)):
 
 
 class TrocarSenhaIn(BaseModel):
-    """Corpo do `POST /api/trocar-senha`: e-mail + senha atual + nova senha."""
+    """Corpo do `POST /api/trocar-senha`: operador + senha atual + nova senha."""
 
-    # E-mail do usuário que está trocando a senha.
-    email: str
+    # Operador (login) que está trocando a senha.
+    operador: str
     # Senha atual (temporária, no 1º acesso).
     senhaAtual: str
     # Nova senha desejada.
@@ -186,7 +186,7 @@ def trocar_senha_rota(dados: TrocarSenhaIn, caminho=Depends(caminho_usuarios)):
     if not dados.novaSenha.strip():
         raise HTTPException(status_code=400, detail="Nova senha obrigatória")
     # Fase 2: tenta trocar; falha de credencial → 401.
-    resultado = trocar_senha(dados.email, dados.senhaAtual, dados.novaSenha, caminho=caminho)
+    resultado = trocar_senha(dados.operador, dados.senhaAtual, dados.novaSenha, caminho=caminho)
     if not resultado["ok"]:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     # Fase 3/Saída: token de sessão após a troca.
@@ -194,7 +194,7 @@ def trocar_senha_rota(dados: TrocarSenhaIn, caminho=Depends(caminho_usuarios)):
 
 
 def usuario_do_token(authorization: str = Header(default=None)):
-    """Guard de rota: extrai e valida o token `Bearer`, devolvendo o e-mail (B4).
+    """Guard de rota: extrai e valida o token `Bearer`, devolvendo o operador (B4).
 
     Por que existe: as rotas protegidas (`/api/contexto`, `/api/validar`, `/api/modelo`
     a partir dos Blocos C/E) identificam o usuário pelo token, não por parâmetro. Este
@@ -203,7 +203,7 @@ def usuario_do_token(authorization: str = Header(default=None)):
     Entrada: header `Authorization: Bearer <token>` (injetado).
     Fase 1: exige o esquema Bearer; ausente/mal-formado → 401.
     Fase 2: valida o token; inválido/expirado → 401.
-    Saída: o e-mail (subject) do token.
+    Saída: o operador (subject) do token.
     """
     # Fase 1: precisa do header no formato "Bearer <token>".
     if not authorization or not authorization.startswith("Bearer "):
@@ -211,11 +211,11 @@ def usuario_do_token(authorization: str = Header(default=None)):
     # Extrai o token após "Bearer ".
     token = authorization[len("Bearer "):].strip()
     # Fase 2: valida a assinatura/expiração.
-    email = verificar_token(token)
-    if email is None:
+    operador = verificar_token(token)
+    if operador is None:
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
-    # Saída: e-mail autenticado.
-    return email
+    # Saída: operador autenticado.
+    return operador
 
 
 # Rate-limiter do esqueci-senha (compartilhado no processo; tempo real via time.time()).
@@ -228,10 +228,10 @@ _SENHA_PADRAO_MVP = "Senha123"
 
 
 class EsqueciSenhaIn(BaseModel):
-    """Corpo do `POST /api/esqueci-senha`: apenas o e-mail."""
+    """Corpo do `POST /api/esqueci-senha`: apenas o operador."""
 
-    # E-mail que solicitou a redefinição.
-    email: str
+    # Operador que solicitou a redefinição.
+    operador: str
 
 
 @app.post("/api/esqueci-senha")
@@ -252,10 +252,10 @@ def esqueci_senha_rota(dados: EsqueciSenhaIn, caminho=Depends(caminho_usuarios))
     Saída: JSON `{ok: true}`.
     """
     # Fase 1: respeita o rate-limit (sem revelar nada ao chamador).
-    if _limitador_reset.permitido(dados.email, time.time()):
+    if _limitador_reset.permitido(dados.operador, time.time()):
         # Fase 2: reseta para a senha padrão do MVP (None se não existe/inativo).
-        resetar_senha(dados.email, caminho=caminho, senha=_SENHA_PADRAO_MVP)
-    # Fase 3/Saída: resposta genérica (não revela existência do e-mail).
+        resetar_senha(dados.operador, caminho=caminho, senha=_SENHA_PADRAO_MVP)
+    # Fase 3/Saída: resposta genérica (não revela existência do operador).
     return {"ok": True}
 
 
@@ -264,14 +264,14 @@ async def validar_rota(
     arquivo: UploadFile = File(...),
     contrato: str = Form(...),
     uf: str = Form(...),
-    email=Depends(usuario_do_token),
+    operador=Depends(usuario_do_token),
 ):
     """Valida a planilha e, se passar, envia por e-mail (E2, §5.1/§6/§8).
 
-    Protegida: o e-mail vem do token. `multipart/form-data` com `arquivo`/`contrato`/`uf`.
+    Protegida: o operador vem do token. `multipart/form-data` com `arquivo`/`contrato`/`uf`.
 
-    Entrada: arquivo (.xlsx), contrato, uf; email (do token).
-    Fase 1: escopo — contrato precisa pertencer ao grupo do e-mail (senão 403).
+    Entrada: arquivo (.xlsx), contrato, uf; operador (do token).
+    Fase 1: escopo — contrato precisa pertencer ao grupo do operador (senão 403).
     Fase 2: anomalia — contrato sem referência em `entrada/` → alerta crítico + 409 (§8).
     Fase 3: parsing — lê a aba Preenchimento (não-.xlsx/sem aba → 400).
     Fase 4: valida (regras D3/D4) e monta o painel (D5).
@@ -283,8 +283,8 @@ async def validar_rota(
     referencia = obter_referencia()
     referencia.recarregar_se_preciso()
     base = obter_base_contratos()
-    # Fase 1: o contrato precisa estar entre os visíveis do grupo do e-mail.
-    visiveis = {c["numero"] for c in contratos_visiveis(grupo_do_email(email), base["contratos"])}
+    # Fase 1: o contrato precisa estar entre os visíveis do grupo do operador.
+    visiveis = {c["numero"] for c in contratos_visiveis(grupo_do_operador(operador), base["contratos"])}
     if contrato_norm not in visiveis:
         raise HTTPException(status_code=403, detail="Contrato fora do escopo do seu acesso.")
     # Fase 2: contrato sem referência (sem chaves_uc) = anomalia → alerta + 409 (§8).
@@ -322,10 +322,10 @@ async def validar_rota(
 
 
 @app.get("/api/modelo")
-def modelo(email=Depends(usuario_do_token)):
+def modelo(operador=Depends(usuario_do_token)):
     """Baixa o modelo oficial do Anexo V (E3, §6). Protegida pelo token.
 
-    Entrada: email (do token, injetado).
+    Entrada: operador (do token, injetado).
     Fase 1: confere que o arquivo do modelo existe (senão 404).
     Fase 2: devolve como download (Content-Disposition attachment, nome canônico).
     Saída: o arquivo .xlsx.
@@ -343,16 +343,16 @@ def modelo(email=Depends(usuario_do_token)):
 
 
 @app.get("/api/contexto")
-def contexto(email=Depends(usuario_do_token)):
+def contexto(operador=Depends(usuario_do_token)):
     """Contexto de login: grupo do usuário + UFs/contratos visíveis (C1, §5.1/§6).
 
-    Protegida: o e-mail vem do token (guard `usuario_do_token`), nunca de parâmetro.
+    Protegida: o operador vem do token (guard `usuario_do_token`), nunca de parâmetro.
 
-    Entrada: `email` (do token, injetado).
+    Entrada: `operador` (do token, injetado).
     Fase 1: obtém referência (recarrega se `entrada/` mudou) e a autoridade de contratos.
     Fase 2: calcula a contagem de UCs por contrato (tamanho de `chaves_uc`).
-    Fase 3: monta o contexto filtrado pelo grupo do e-mail.
-    Saída: JSON `{email, grupo, ufs, contratos}`.
+    Fase 3: monta o contexto filtrado pelo grupo do operador.
+    Saída: JSON `{operador, grupo, ufs, contratos}`.
     """
     # Fase 1: caches de referência e autoridade.
     referencia = obter_referencia()
@@ -360,5 +360,5 @@ def contexto(email=Depends(usuario_do_token)):
     base = obter_base_contratos()
     # Fase 2: nº de UCs por contrato (a partir dos pares (odi, uc) da referência).
     ucs_por_contrato = {numero: len(pares) for numero, pares in referencia.chaves_uc.items()}
-    # Fase 3/Saída: contexto filtrado pelo grupo do e-mail do token.
-    return montar_contexto(email, base["contratos"], ucs_por_contrato)
+    # Fase 3/Saída: contexto filtrado pelo grupo do operador do token.
+    return montar_contexto(operador, base["contratos"], ucs_por_contrato)

@@ -46,9 +46,10 @@ async function getJson(caminho, token) {
   return { ok: resposta.ok, status: resposta.status, dados };
 }
 
-// POST /api/login — { token } | { precisaTrocarSenha: true } | 401.
-export function login(email, senha) {
-  return postJson("/login", { email, senha });
+// POST /api/login — { token } | { precisaTrocarSenha: true } | 401/403.
+// Fallback temporário: login por "operador" (o e-mail foi adiado para V1/V2).
+export function login(operador, senha) {
+  return postJson("/login", { operador, senha });
 }
 
 // GET /api/contexto — { email, grupo, ufs, contratos } (rota protegida).
@@ -102,13 +103,13 @@ export async function baixarModelo(token) {
 }
 
 // POST /api/trocar-senha — { token } | 400/401.
-export function trocarSenha(email, senhaAtual, novaSenha) {
-  return postJson("/trocar-senha", { email, senhaAtual, novaSenha });
+export function trocarSenha(operador, senhaAtual, novaSenha) {
+  return postJson("/trocar-senha", { operador, senhaAtual, novaSenha });
 }
 
 // POST /api/esqueci-senha — sempre { ok: true } (resposta genérica).
-export function esqueciSenha(email) {
-  return postJson("/esqueci-senha", { email });
+export function esqueciSenha(operador) {
+  return postJson("/esqueci-senha", { operador });
 }
 
 // Exposto para depuração/uso futuro (ex.: montar URLs de download).

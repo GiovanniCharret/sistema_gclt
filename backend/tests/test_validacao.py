@@ -253,6 +253,48 @@ def test_comunidade_nao_tradicional_nao_aciona_regras_novas():
     assert "Tipologia de família ≠ Tipo de Comunidade" not in titulos
 
 
+# ── D3 (cont.) · Comparações ignoram caixa alta/baixa (pedido 2026-07-15) ──
+
+def test_tipologia_sim_maiusculo_nao_gera_aviso():
+    """'SIM' (caixa alta) é aceito como 'Sim' → sem aviso de tipologia (bug do arquivo
+    revisado, coluna II-A = 'SIM')."""
+    linha = linha_valida(**{"0 - Não é prioridade": "Não", "I - Baixa renda": "SIM"})
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_zero_sim_maiusculo_aciona_clausula1():
+    """'0'='SIM' com outra tipologia='SIM' aciona a cláusula 1, ignorando a caixa."""
+    linha = linha_valida(**{"0 - Não é prioridade": "SIM", "I - Baixa renda": "Sim"})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "“0 - Não é prioridade” + outra tipologia") in _regras(achados)
+
+
+def test_zero_nao_reconhece_sim_maiusculo():
+    """'0'='Não' com uma tipologia='SIM' satisfaz a cláusula 2 (SIM conta como Sim)."""
+    linha = linha_valida(**{"0 - Não é prioridade": "Não", "I - Baixa renda": "SIM"})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Nenhuma tipologia assinalada") not in _regras(achados)
+
+
+def test_dominio_ignora_caixa():
+    """Valor de domínio em caixa diferente ('am' vs 'AM') é aceito → sem erro de domínio."""
+    linha = linha_valida(**{"UF": "am"})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Valor fora do domínio") not in _regras(achados)
+
+
+def test_comunidade_coerente_em_caixa_alta_nao_gera_aviso():
+    """Comunidade tradicional coerente, toda em CAIXA ALTA, não gera avisos (case-insensitive
+    no Tipo de Comunidade, Enquadramento e nas famílias)."""
+    linha = linha_valida(**{
+        "Tipo de Comunidade": "1 - COMUNIDADE INDÍGENA",
+        "Enquadramento do beneficiário": "4 - POVOS TRADICIONAIS",
+        "IV.1 - Família indígena": "sim", "IV.2 - Família quilombola": "NÃO",
+        "IV.3 - Família ribeirinha": "não",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
+
+
 # ── D4 · Cruzamento com entrada/ (chaves_uc / odi_ref por contrato) ──
 
 def test_odi_uc_nao_consta_na_referencia_e_erro():
@@ -268,6 +310,35 @@ def test_uf_municipio_divergente_e_erro():
                               "UF": "AM", "Município": "MANAUS"})]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
                                 odi_ref={"O1": ("PA", "PORTO GRANDE")})
+    assert ("err", "UF / município divergente") in _regras(achados)
+
+
+def test_municipio_diverge_so_no_acento_nao_gera_erro():
+    """Município que difere só por acento (planilha 'RORAINÓPOLIS' vs base 'RORAINOPOLIS')
+    não deve acusar 'UF / município divergente' (caso Roraima Energia)."""
+    linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",
+                              "UF": "RR", "Município": "RORAINÓPOLIS"})]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
+                                odi_ref={"O1": ("RR", "RORAINOPOLIS")})
+    assert ("err", "UF / município divergente") not in _regras(achados)
+
+
+def test_municipio_diverge_so_no_espaco_nao_gera_erro():
+    """Município que difere só por espaço no meio ('SANTA LUZ' vs 'SANTALUZ') não diverge."""
+    linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",
+                              "UF": "RR", "Município": "SANTA LUZ"})]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
+                                odi_ref={"O1": ("RR", "SANTALUZ")})
+    assert ("err", "UF / município divergente") not in _regras(achados)
+
+
+def test_municipio_realmente_divergente_ainda_gera_erro():
+    """Município de fato diferente continua acusando divergência (a normalização não
+    afrouxa nomes distintos)."""
+    linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",
+                              "UF": "RR", "Município": "BOA VISTA"})]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
+                                odi_ref={"O1": ("RR", "RORAINOPOLIS")})
     assert ("err", "UF / município divergente") in _regras(achados)
 
 

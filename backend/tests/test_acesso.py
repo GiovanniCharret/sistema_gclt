@@ -11,7 +11,7 @@ por escape para evitar pegadinhas de normalização Unicode.
 """
 
 # Funções/constantes sob teste do módulo de acesso.
-from backend.acesso import grupo_do_email, siglas_do_grupo, contratos_visiveis, montar_contexto
+from backend.acesso import grupo_do_operador, siglas_do_grupo, contratos_visiveis, montar_contexto
 # Autoridade real (lista de contratos selecionáveis com sigla) para as contagens.
 from backend.referencia import carregar_base_contratos
 
@@ -30,51 +30,51 @@ def _contratos_reais():
     return carregar_base_contratos()["contratos"]
 
 
-def test_grupo_do_email_resolve_dominio():
-    """Domínio do e-mail resolve o grupo econômico (camada 1).
+def test_grupo_do_operador_resolve():
+    """O operador resolve o grupo econômico (camada 1).
 
-    Entrada: e-mails com domínios conhecidos.
+    Entrada: operadores conhecidos.
     Fase 1: resolve equatorial e enbpar.
-    Saída: grupos corretos; case-insensitive no domínio.
+    Saída: grupos corretos; case-insensitive no operador.
     """
-    # Fase 1/Saída: domínios mapeados (inclusive com caixa mista no e-mail).
-    assert grupo_do_email("fulano@equatorialenergia.com.br") == "EQUATORIAL"
-    assert grupo_do_email("Fulano@ENBPAR.GOV.BR") == "ENBPAR"
+    # Fase 1/Saída: operadores mapeados (inclusive com caixa mista).
+    assert grupo_do_operador("equatorialenergia") == "EQUATORIAL"
+    assert grupo_do_operador("ENBPAR") == "ENBPAR"
 
 
-def test_dominios_das_distribuidoras_resolvem_grupos():
-    """Todos os domínios das distribuidoras (config real, .com.br) resolvem o grupo certo.
+def test_operadores_das_distribuidoras_resolvem_grupos():
+    """Todos os operadores das distribuidoras resolvem o grupo certo.
 
-    Trava o mapa domínio→grupo usado para testar cada empresa do base_contratos.json.
+    Trava o mapa operador→grupo usado para testar cada empresa do base_contratos.json.
     """
     esperado = {
-        "op@equatorialenergia.com.br": "EQUATORIAL",
-        "op@energisa.com.br": "ENERGISA",
-        "op@neoenergia.com.br": "NEOENERGISA",
-        "op@coelba.com.br": "NEOENERGISA",
-        "op@ambarenergia.com.br": AMBAR,
-        "op@cerci.com.br": "CERCI",
-        "op@enbpar.gov.br": "ENBPAR",
+        "equatorialenergia": "EQUATORIAL",
+        "energisa": "ENERGISA",
+        "neoenergia": "NEOENERGISA",
+        "coelba": "NEOENERGISA",
+        "ambarenergia": AMBAR,
+        "cerci": "CERCI",
+        "enbpar": "ENBPAR",
     }
-    # Cada domínio deve mapear ao grupo esperado.
-    for email, grupo in esperado.items():
-        assert grupo_do_email(email) == grupo
+    # Cada operador deve mapear ao grupo esperado.
+    for operador, grupo in esperado.items():
+        assert grupo_do_operador(operador) == grupo
     # amazonasenergia/roraimaenergia ficam FORA do mapa até decisão dos engenheiros
     # (hoje só duplicariam a visão do grupo ÂMBAR de ambarenergia) → não registrados.
-    assert grupo_do_email("op@amazonasenergia.com.br") is None
-    assert grupo_do_email("op@roraimaenergia.com.br") is None
+    assert grupo_do_operador("amazonasenergia") is None
+    assert grupo_do_operador("roraimaenergia") is None
 
 
-def test_dominio_desconhecido_nao_tem_grupo():
-    """Domínio fora do mapa → sem grupo (None).
+def test_operador_desconhecido_nao_tem_grupo():
+    """Operador fora do mapa → sem grupo (None).
 
-    Entrada: e-mail de domínio desconhecido e e-mail malformado.
+    Entrada: operador desconhecido e operador vazio.
     Saída: None nos dois casos.
     """
-    # Domínio não mapeado → None.
-    assert grupo_do_email("alguem@desconhecido.com") is None
-    # E-mail sem "@" → None (defensivo).
-    assert grupo_do_email("semarroba") is None
+    # Operador não mapeado → None.
+    assert grupo_do_operador("desconhecido") is None
+    # Operador vazio → None (defensivo).
+    assert grupo_do_operador("") is None
 
 
 def test_contratos_visiveis_equatorial_sao_18():
@@ -85,8 +85,8 @@ def test_contratos_visiveis_equatorial_sao_18():
     Fase 2: confere a contagem (18) e que todos têm sigla EQUATORIAL.
     Saída: asserções.
     """
-    # Fase 1: e-mail → grupo → contratos visíveis.
-    grupo = grupo_do_email("op@equatorialenergia.com.br")
+    # Fase 1: operador → grupo → contratos visíveis.
+    grupo = grupo_do_operador("equatorialenergia")
     visiveis = contratos_visiveis(grupo, _contratos_reais())
     # Fase 2: 18 contratos, todos da sigla EQUATORIAL.
     assert len(visiveis) == 18
@@ -139,16 +139,16 @@ _CONTRATOS_FIX = [
 
 
 def test_montar_contexto_filtra_grupo_e_agrega_ufs():
-    """`montar_contexto` filtra pelo grupo do e-mail, traz UCs e agrega UFs.
+    """`montar_contexto` filtra pelo grupo do operador, traz UCs e agrega UFs.
 
-    Entrada: e-mail equatorial, o detalhe de contratos e um mapa de UCs por contrato.
+    Entrada: operador equatorial, o detalhe de contratos e um mapa de UCs por contrato.
     Fase 1: monta o contexto.
     Fase 2: grupo EQUATORIAL; só os contratos EQUATORIAL (C1, C2); UCs do mapa; detalhe.
     Fase 3: UFs agregadas (PA com 2 contratos, nome resolvido "Pará").
     Saída: asserções.
     """
-    # Fase 1: contexto para o e-mail equatorial (C1 tem 10 UCs; C2 nenhuma).
-    ctx = montar_contexto("op@equatorialenergia.com.br", _CONTRATOS_FIX, {"C1": 10, "C2": 0})
+    # Fase 1: contexto para o operador equatorial (C1 tem 10 UCs; C2 nenhuma).
+    ctx = montar_contexto("equatorialenergia", _CONTRATOS_FIX, {"C1": 10, "C2": 0})
     # Fase 2: grupo e contratos filtrados (só EQUATORIAL).
     assert ctx["grupo"] == "EQUATORIAL"
     assert {c["numero"] for c in ctx["contratos"]} == {"C1", "C2"}
@@ -161,16 +161,16 @@ def test_montar_contexto_filtra_grupo_e_agrega_ufs():
 
 def test_montar_contexto_enbpar_ve_todos():
     """ENBPAR (curinga) enxerga todos os contratos, de qualquer sigla."""
-    # E-mail enbpar → todos os contratos do detalhe.
-    ctx = montar_contexto("chefe@enbpar.gov.br", _CONTRATOS_FIX, {})
+    # Operador enbpar → todos os contratos do detalhe.
+    ctx = montar_contexto("enbpar", _CONTRATOS_FIX, {})
     assert ctx["grupo"] == "ENBPAR"
     assert len(ctx["contratos"]) == 3
 
 
-def test_montar_contexto_dominio_desconhecido_vazio():
-    """Domínio fora do mapa → grupo None e listas vazias."""
-    # E-mail desconhecido → nada visível.
-    ctx = montar_contexto("alguem@desconhecido.com", _CONTRATOS_FIX, {})
+def test_montar_contexto_operador_desconhecido_vazio():
+    """Operador fora do mapa → grupo None e listas vazias."""
+    # Operador desconhecido → nada visível.
+    ctx = montar_contexto("desconhecido", _CONTRATOS_FIX, {})
     assert ctx["grupo"] is None
     assert ctx["ufs"] == []
     assert ctx["contratos"] == []

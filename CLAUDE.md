@@ -150,14 +150,14 @@ exports as removable, not as source of truth.
 
 ### The official model file is VERSIONED
 
-The Anexo V model lives in **`manuais/`** (gitignored) with a **version-stamped name**:
-`Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
+The Anexo V model lives in **`manuais/`** (committed to the repo) with a **version-stamped
+name**: `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
 `.v260714.xlsx` = 14/07/2026). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
-(`VersaoPlanilha.jsx` + `relatorioCsv.js`), the download test (`backend/tests/test_api.py`
-asserts the version string), and **scp the file to the VPS** (`manuais/` is gitignored, so
-`git pull` does NOT carry it). See the latest dated model-swap decision in PLAN.md.
+(`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`
+asserts the version string). Then **commit the `.xlsx`** — `manuais/` is tracked, so the VPS
+`git pull` carries the new model (**no scp needed**). See the latest model-swap decision in PLAN.md.
 
 ### Real client-side download (`src/lib/relatorioCsv.js`)
 
@@ -181,12 +181,13 @@ reference for what that download should produce.
 ## Repo layout & ignored paths
 
 This **is** a git repository; `origin` is
-`github.com/GiovanniCharret/sistema_gclt_demo.git` (default branch `main`). Gitignored
-(treat as personal/out-of-scope inputs, not app code): **`manuais/`** (domain source
-material + the official model), **`minhas_notas/`**, **`planning/`**, **`bug_fix/`**, plus
-`node_modules/`, `dist/`, this `CLAUDE.md`, `.venv/`, `__pycache__/`, `.pytest_cache/`,
-and `plano_classificacao_beneficiarios.html`. The front app source is under `modelo/src/`;
-the backend under `backend/`.
+`github.com/GiovanniCharret/sistema_gclt.git` (default branch `main`). The `.gitignore`
+follows a **"commit everything" policy** — so **`manuais/`** (domain source material +
+**the official model**), **`planning/`**, and this **`CLAUDE.md`** are **committed**
+(they ride `git pull` to the VPS). **Gitignored** (regenerable or secret only): `node_modules/`,
+`dist/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `bug_fix/`, `minhas_notas/`, logs, and
+secrets (`backend/usuarios.json`, `.env*`, `senha e-mail hostinger`). The front app source
+is under `modelo/src/`; the backend under `backend/`.
 
 **`entrada/`** holds the backend's reference data (`entrada/lpt/`, `entrada/mla/` with
 `consolidado*.csv`; BOM UTF-8, `;`-separated). It **is committed** (versioned). It is
