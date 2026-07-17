@@ -239,6 +239,7 @@ curl -i -X POST http://127.0.0.1/api/login \
   <tr><td>403 HTML "nginx"</td><td><code>location /api/</code> ausente ou permissão</td><td>bloco <code>/api/</code> (Passo 4); <code>chown www-data</code></td></tr>
   <tr><td>404 no <code>/api/…</code></td><td><code>proxy_pass</code> com barra no final</td><td>tirar a barra: <code>proxy_pass http://127.0.0.1:8000;</code></td></tr>
   <tr><td>502 Bad Gateway</td><td>backend não está rodando</td><td><code>systemctl status anexov-api</code>; ver logs</td></tr>
+  <tr><td>login OK, mas <strong>"Não foi possível trocar a senha"</strong> (ou "esqueci senha" falha)</td><td>backend <strong>não consegue ESCREVER</strong> <code>usuarios.json</code> (permissão) → 500</td><td><code>sudo chown -R &lt;user-do-serviço&gt; …/backend</code> — o <strong>diretório</strong> precisa ser gravável (escrita atômica: <code>.tmp</code> + <code>rename</code>). Logs mostram <code>PermissionError</code></td></tr>
   <tr><td>login devolve o HTML do site</td><td>só <code>try_files</code>, sem proxy</td><td>bloco <code>/api/</code> (Passo 4)</td></tr>
 </table>
 

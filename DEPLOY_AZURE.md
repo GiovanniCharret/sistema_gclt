@@ -241,6 +241,7 @@ curl -i -X POST http://127.0.0.1/api/login \
 | 403 HTML "nginx" | `location /api/` ausente ou permissão | adicionar o bloco `/api/` (Passo 4); `chown www-data` |
 | 404 no `/api/...` | `proxy_pass` **com** barra no final | tirar a barra: `proxy_pass http://127.0.0.1:8000;` |
 | 502 Bad Gateway | backend não está rodando | `systemctl status anexov-api`; `journalctl -u anexov-api` |
+| Login funciona, mas **"Não foi possível trocar a senha"** (ou "esqueci senha" falha) | o backend **não consegue ESCREVER** `usuarios.json` (permissão) → 500 na escrita atômica | `sudo chown -R <user-do-serviço>:<grupo> .../backend` — o **diretório** `backend/` precisa ser gravável (cria `.tmp` + `rename`). Confirme: `journalctl -u anexov-api` mostra `PermissionError`/`os.replace` |
 | Login retorna o HTML do site | só há `try_files`, sem proxy `/api` | adicionar o bloco `/api/` (Passo 4) |
 
 ---
