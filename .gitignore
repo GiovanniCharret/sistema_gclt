@@ -18,6 +18,16 @@ __pycache__/
 minhas_notas/
 bug_fix/
 
+# ── Handoff à empresa (2026-07-17): arquivos internos/meta fora do repo ──
+# Config do Claude Code, planejamento interno e artefatos de deploy da Hostinger
+# (substituídos por DEPLOY_AZURE.*) — poderiam confundir os engenheiros da empresa.
+.claude/
+planning/
+claude resume.txt
+DEPLOY.md
+DEPLOY_HOSTINGER.html
+deploy_hostinger.sh
+
 # ── Segredos (NÃO versionar) ─────────────────────────────
 # `backend/usuarios.json` VOLTOU ao gitignore em 2026-07-08 (revertida a decisão de
 # 2026-07-07): com o `git pull` diário de entrada/ no VPS, versioná-lo sobrescreveria
