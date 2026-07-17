@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy Backend — Azure / Ubuntu 24</title>
+<style>
+  :root{
+    --navy:#0f2c52; --blue:#1f5fb0; --blue-2:#2b7de0; --ink:#1b2733; --muted:#5a6b7b;
+    --bg:#f4f7fb; --card:#ffffff; --line:#e2e8f0; --code-bg:#0f1b2d; --code-ink:#e7eefc;
+    --warn-bg:#fff6e6; --warn-line:#f0c674; --warn-ink:#7a5200;
+    --ok-bg:#e9f7ef; --ok-line:#8fd3ab; --bad-bg:#fdeceb; --bad-line:#f0a9a4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 80px;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;
+    border-radius:14px;padding:28px 28px;margin-bottom:24px;}
+  header h1{margin:0 0 6px;font-size:26px;}
+  header p{margin:0;opacity:.9;font-size:15px;}
+  h2{color:var(--navy);font-size:20px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);}
+  h3{color:var(--blue);font-size:16px;margin:20px 0 8px;}
+  p,li{color:var(--ink);}
+  .muted{color:var(--muted);font-size:14px;}
+  code{background:#eef2f8;color:#0d2748;padding:1px 6px;border-radius:5px;font-size:13.5px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;}
+  pre{position:relative;background:var(--code-bg);color:var(--code-ink);border-radius:10px;
+    padding:14px 44px 14px 16px;overflow-x:auto;margin:10px 0;
+    font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;}
+  pre code{background:none;color:inherit;padding:0;font-size:inherit;}
+  .copy{position:absolute;top:8px;right:8px;background:#24405f;color:#cfe0f5;border:0;
+    border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;}
+  .copy:hover{background:#33587e;}
+  .box{border-radius:12px;padding:16px 18px;margin:16px 0;border:1px solid var(--line);background:var(--card);}
+  .alert{background:var(--warn-bg);border:1px solid var(--warn-line);}
+  .alert strong{color:var(--warn-ink);}
+  .callout{background:#eef4fc;border:1px solid #c7ddf7;}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;overflow:hidden;
+    border-radius:10px;border:1px solid var(--line);}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:#eef2f8;color:var(--navy);font-weight:600;}
+  tr:last-child td{border-bottom:0;}
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;}
+  .pill.ok{background:var(--ok-bg);color:#1c6b3f;border:1px solid var(--ok-line);}
+  .pill.bad{background:var(--bad-bg);color:#a3271f;border:1px solid var(--bad-line);}
+  .step{display:flex;align-items:center;gap:10px;margin:26px 0 6px;}
+  .step .n{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;}
+  .step h2{margin:0;border:0;padding:0;}
+  kbd{background:#233;color:#fff;border-radius:4px;padding:1px 5px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Deploy do Backend — Azure / Ubuntu 24</h1>
+  <p>Front carrega na porta 80, mas o <strong>login dá 403</strong>. Este guia resolve e valida o backend.</p>
+</header>
+
+<div class="box callout">
+  <strong>Arquitetura:</strong> SPA estático (<code>modelo/dist/</code>) + API FastAPI
+  (<code>backend/</code>) atrás do <strong>mesmo Nginx</strong>. O front chama a API em
+  <code>/api</code> (mesma origem). O Nginx precisa <strong>servir o estático E fazer proxy
+  de <code>/api</code></strong> para o uvicorn em <code>127.0.0.1:8000</code>.
+</div>
+
+<div class="step"><span class="n">0</span><h2>Diagnóstico do 403 — comece aqui (2 min)</h2></div>
+<p>O 403 tem duas causas possíveis. O <strong>corpo da resposta</strong> diz qual:</p>
+<pre><code># Rode NO SERVIDOR. Veja o corpo do 403:
+curl -i -X POST http://127.0.0.1/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"operador":"enbpar","senha":"x"}'</code></pre>
+<ul>
+  <li><strong>Corpo = <code>{"detail":"Operador não registrado no sistema."}</code></strong> →
+    o <strong>backend</strong> recusando. O login <strong>não é por e-mail</strong>, é por
+    <strong>operador</strong> (Passo 3). <em>Causa nº 1, a mais comum.</em></li>
+  <li><strong>Página HTML "403 Forbidden / nginx"</strong> → o <strong>Nginx</strong> não roteia
+    <code>/api</code>, ou é permissão de arquivo (Passo 4).</li>
+  <li><strong>Conexão recusada em <code>127.0.0.1:8000</code></strong> → o backend não está
+    rodando (Passo 2).</li>
+</ul>
+<p>Escada de verificação (isola a camada):</p>
+<pre><code># (a) backend direto (pula o Nginx):
+curl -s http://127.0.0.1:8000/api/health     # espera 200 + JSON
+# (b) através do Nginx:
+curl -s http://127.0.0.1/api/health          # espera o MESMO 200 + JSON</code></pre>
+<p class="muted">Se <strong>(a) funciona e (b) dá 403/404</strong> → o problema é o
+<strong>proxy <code>/api</code> do Nginx</strong> (Passo 4).</p>
+
+<div class="step"><span class="n">1</span><h2>Pré-requisitos (Ubuntu 24)</h2></div>
+<pre><code>sudo apt update
+sudo apt install -y python3 python3-venv python3-pip nginx git
+python3 --version        # 3.12.x (padrão no Ubuntu 24)</code></pre>
+<p class="muted">O front (build do Vite) pode ser gerado na máquina de dev e enviado, ou na
+VM (Node 20.19+/22.x). Este guia foca no <strong>backend + Nginx</strong>, onde está o 403.</p>
+
+<div class="step"><span class="n">2</span><h2>Backend: instalar e subir</h2></div>
+<p>Projeto em <code>/opt/anexov</code> (ajuste se usarem outro caminho). O uvicorn roda
+<strong>a partir da raiz</strong> do projeto.</p>
+<pre><code>cd /opt/anexov
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt
+
+# teste de subida (Ctrl+C p/ sair):
+.venv/bin/uvicorn backend.app:app --host 127.0.0.1 --port 8000
+# noutro terminal:  curl -s http://127.0.0.1:8000/api/health   → 200 + JSON</code></pre>
+<p>Arquivos que <strong>precisam existir</strong> (vêm no git, exceto o <code>usuarios.json</code>):</p>
+<table>
+  <tr><th>Arquivo/pasta</th><th>Origem</th><th>Observação</th></tr>
+  <tr><td><code>entrada/**/*.csv</code></td><td>git</td><td>base de referência (validação)</td></tr>
+  <tr><td><code>base_contratos.json</code></td><td>git (raiz)</td><td>autoridade de contratos</td></tr>
+  <tr><td><code>manuais/…v260714.xlsx</code></td><td>git</td><td>modelo oficial (aba Dominios)</td></tr>
+  <tr><td><code>backend/usuarios.json</code></td><td><strong>provisionar</strong> (Passo 3)</td><td><strong>não</strong> vem no git (segredo)</td></tr>
+</table>
+<h3>Serviço systemd — <code>/etc/systemd/system/anexov-api.service</code></h3>
+<pre><code>[Unit]
+Description=Anexo V - API FastAPI
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/anexov
+ExecStart=/opt/anexov/.venv/bin/uvicorn backend.app:app --host 127.0.0.1 --port 8000
+Restart=always
+User=www-data
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<pre><code>sudo chown -R www-data:www-data /opt/anexov      # www-data precisa LER os arquivos
+sudo systemctl daemon-reload
+sudo systemctl enable --now anexov-api
+sudo systemctl status anexov-api                 # "active (running)"
+journalctl -u anexov-api -n 50 --no-pager        # logs se não subir</code></pre>
+
+<div class="step"><span class="n">3</span><h2>Provisionar operadores — CAUSA nº 1 do 403</h2></div>
+<div class="box alert">
+  <strong>O login é por OPERADOR, não por e-mail.</strong> Operadores válidos (fixos):
+  <code>equatorialenergia</code> · <code>energisa</code> · <code>neoenergia</code> ·
+  <code>ambarenergia</code> · <code>cerci</code> · <code>enbpar</code>.
+  Qualquer outro valor (inclusive e-mail) → <strong>403 "Operador não registrado"</strong>.
+</div>
+<p>Crie cada operador (gera senha temporária <strong>impressa no terminal</strong>, trocada no 1º acesso):</p>
+<pre><code>cd /opt/anexov
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add enbpar
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add equatorialenergia
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add energisa
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add neoenergia
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add ambarenergia
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add cerci
+# imprime:  "Operador criado: <op> — senha temporária: <SENHA>"</code></pre>
+<div class="box alert">
+  ⚠️ <strong>NÃO</strong> rode <code>add fulano@equatorialenergia.com.br</code> — o
+  <code>DEPLOY.md</code> antigo está desatualizado. Isso cria um login por e-mail que
+  <strong>não existe no mapa</strong> → 403. <code>enbpar</code> é curinga (vê todos os
+  contratos) — bom para testar o login primeiro.
+</div>
+<p class="muted">Reset de senha (self-service, sem e-mail): "Esqueci minha senha" → volta para
+<code>Senha123</code> (troca obrigatória no próximo login).</p>
+
+<div class="step"><span class="n">4</span><h2>Nginx: estático + proxy de <code>/api</code></h2></div>
+<p><code>/etc/nginx/sites-available/anexov</code>:</p>
+<pre><code>server {
+    listen 80;
+    server_name SEU_DOMINIO_OU_IP;
+
+    root /opt/anexov/modelo/dist;
+    index index.html;
+
+    # SPA: rotas do front caem no index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API do backend — resolve o 403 de infra.
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;      # SEM barra no final (preserva o /api/)
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 50m;              # planilhas grandes
+    }
+}</code></pre>
+<div class="box alert">
+  ⚠️ <strong>Detalhe crítico:</strong> <code>proxy_pass http://127.0.0.1:8000;</code>
+  <strong>sem</strong> barra no final. Com barra (<code>…/8000/;</code>) o Nginx remove o
+  prefixo <code>/api</code> e o backend recebe <code>/login</code> → 404. As rotas são
+  literalmente <code>/api/login</code>, <code>/api/health</code>, etc.
+</div>
+<pre><code>sudo ln -s /etc/nginx/sites-available/anexov /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx</code></pre>
+<p class="muted">UFW ativo? <code>sudo ufw allow 'Nginx Full'</code>. Na Azure, confira o
+<strong>NSG</strong> (80/443) — o front já carrega, então provavelmente já está ok.
+<strong>Mesma origem = sem CORS</strong> — no layout acima, CORS não é o problema.</p>
+
+<div class="step"><span class="n">5</span><h2>Verificação — rodar TODA a suíte do backend</h2></div>
+<p>A suíte prova que a <strong>lógica está correta</strong>. Se ela passa e o site ainda dá
+403, o problema é <strong>infra</strong> (Nginx/provisionamento), não código.</p>
+<pre><code>cd /opt/anexov
+.venv/bin/pip install -r backend/requirements.txt   # inclui pytest + httpx2
+.venv/bin/python -m pytest backend/tests/ -v
+# esperado:  121 passed</code></pre>
+<p class="muted">O <code>TestClient</code> exige <strong>httpx2</strong> (não httpx) no
+starlette 1.3+ — já está no <code>requirements.txt</code>. Rode a partir da raiz.</p>
+<table>
+  <tr><th>Arquivo</th><th>Cobre</th></tr>
+  <tr><td><code>test_api.py</code> (25)</td><td>login/troca/esqueci-senha, <strong>403 de operador não registrado</strong>, contexto, <code>/api/validar</code>, <code>/api/modelo</code>, guard de token</td></tr>
+  <tr><td><code>test_auth.py</code> (21)</td><td>hash pbkdf2+salt, token JWT, criar/desativar/autenticar, reset, rate-limit</td></tr>
+  <tr><td><code>test_acesso.py</code> (10)</td><td><strong>operador → grupo</strong>, curinga ENBPAR, filtro de contratos</td></tr>
+  <tr><td><code>test_validacao.py</code> (29)</td><td>regras de erro/aviso (obrigatórios, domínio, "0 - Não é prioridade", comunidade, caixa)</td></tr>
+  <tr><td><code>test_planilha.py</code> (9)</td><td>parser .xlsx, normalização de ID/coordenada/<strong>nome (acento/espaço)</strong></td></tr>
+  <tr><td><code>test_referencia.py</code> (8)</td><td>carga de <code>entrada/</code>, integridade vs <code>base_contratos.json</code></td></tr>
+  <tr><td><code>test_dominios.py</code> (2)</td><td>aba Dominios do modelo</td></tr>
+  <tr><td><code>test_email.py</code> (6)</td><td>os 4 e-mails (SMTP mockado)</td></tr>
+</table>
+<h3>Smoke test na máquina (simula o front)</h3>
+<pre><code># health através do Nginx:
+curl -s http://127.0.0.1/api/health
+
+# login com operador provisionado (senha temporária do Passo 3):
+curl -i -X POST http://127.0.0.1/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"operador":"enbpar","senha":"SENHA_TEMPORARIA"}'</code></pre>
+<ul>
+  <li><span class="pill ok">200</span> com <code>token</code> ou <code>precisaTrocarSenha</code> → backend + Nginx OK ✔</li>
+  <li><span class="pill bad">401</span> → senha errada (operador válido)</li>
+  <li><span class="pill bad">403</span> "Operador não registrado" → operador inválido/não provisionado (Passo 3)</li>
+</ul>
+
+<div class="step"><span class="n">6</span><h2>Checklist do 403</h2></div>
+<table>
+  <tr><th>Sintoma</th><th>Causa</th><th>Correção</th></tr>
+  <tr><td>403 JSON <code>"Operador não registrado…"</code></td><td>operador inválido (usaram e-mail)</td><td>logar/provisionar com um dos 6 operadores (Passo 3)</td></tr>
+  <tr><td>403 HTML "nginx"</td><td><code>location /api/</code> ausente ou permissão</td><td>bloco <code>/api/</code> (Passo 4); <code>chown www-data</code></td></tr>
+  <tr><td>404 no <code>/api/…</code></td><td><code>proxy_pass</code> com barra no final</td><td>tirar a barra: <code>proxy_pass http://127.0.0.1:8000;</code></td></tr>
+  <tr><td>502 Bad Gateway</td><td>backend não está rodando</td><td><code>systemctl status anexov-api</code>; ver logs</td></tr>
+  <tr><td>login devolve o HTML do site</td><td>só <code>try_files</code>, sem proxy</td><td>bloco <code>/api/</code> (Passo 4)</td></tr>
+</table>
+
+<div class="step"><span class="n">7</span><h2>Produção — segredos (recomendado)</h2></div>
+<p>O backend sobe <strong>sem <code>.env</code></strong> (defaults de dev; login funciona). Para
+produção, defina uma <strong>SECRET_KEY</strong> forte (assina os tokens):</p>
+<pre><code>python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))" \
+  | sudo tee -a /opt/anexov/backend/.env
+sudo systemctl restart anexov-api</code></pre>
+<p class="muted">E-mail da planilha validada (opcional): <code>SMTP_HOST/PORT/USER/PASS/FROM</code>,
+<code>DESTINATARIOS</code>, <code>ALERTA_EMAIL</code> no <code>.env</code>. Sem SMTP, a
+validação funciona; só o envio fica em dry-run. <code>backend/.env</code> e
+<code>backend/usuarios.json</code> <strong>nunca</strong> vão para o git.</p>
+
+<p class="muted" style="margin-top:40px;border-top:1px solid var(--line);padding-top:14px;">
+Anexo V — Painel de Monitoramento · Programa Luz para Todos · MME · ENBPar</p>
+
+</div>
+<script>
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button');
+    b.className='copy';b.textContent='copiar';
+    b.onclick=function(){
+      navigator.clipboard.writeText(pre.querySelector('code').innerText).then(function(){
+        b.textContent='copiado ✓';setTimeout(function(){b.textContent='copiar';},1500);
+      });
+    };
+    pre.appendChild(b);
+  });
+</script>
+</body>
+</html>
