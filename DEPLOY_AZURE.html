@@ -112,7 +112,7 @@ python3 -m venv .venv
   <tr><td><code>entrada/**/*.csv</code></td><td>git</td><td>base de referência (validação)</td></tr>
   <tr><td><code>base_contratos.json</code></td><td>git (raiz)</td><td>autoridade de contratos</td></tr>
   <tr><td><code>manuais/…v260714.xlsx</code></td><td>git</td><td>modelo oficial (aba Dominios)</td></tr>
-  <tr><td><code>backend/usuarios.json</code></td><td><strong>provisionar</strong> (Passo 3)</td><td><strong>não</strong> vem no git (segredo)</td></tr>
+  <tr><td><code>backend/usuarios.json</code></td><td><strong>git</strong> (semeado)</td><td>6 operadores; senha inicial <code>Senha123</code>, troca no 1º acesso</td></tr>
 </table>
 <h3>Serviço systemd — <code>/etc/systemd/system/anexov-api.service</code></h3>
 <pre><code>[Unit]
@@ -133,30 +133,33 @@ sudo systemctl enable --now anexov-api
 sudo systemctl status anexov-api                 # "active (running)"
 journalctl -u anexov-api -n 50 --no-pager        # logs se não subir</code></pre>
 
-<div class="step"><span class="n">3</span><h2>Provisionar operadores — CAUSA nº 1 do 403</h2></div>
+<div class="step"><span class="n">3</span><h2>Operadores (login) — já vêm no repo</h2></div>
 <div class="box alert">
-  <strong>O login é por OPERADOR, não por e-mail.</strong> Operadores válidos (fixos):
+  <strong>O login é por OPERADOR, não por e-mail.</strong> Os 6 operadores já vêm
+  versionados em <code>backend/usuarios.json</code> (não precisa provisionar):
   <code>equatorialenergia</code> · <code>energisa</code> · <code>neoenergia</code> ·
   <code>ambarenergia</code> · <code>cerci</code> · <code>enbpar</code>.
-  Qualquer outro valor (inclusive e-mail) → <strong>403 "Operador não registrado"</strong>.
 </div>
-<p>Crie cada operador (gera senha temporária <strong>impressa no terminal</strong>, trocada no 1º acesso):</p>
+<ul>
+  <li><strong>Senha inicial de todos: <code>Senha123</code></strong> — troca <strong>obrigatória</strong> no 1º acesso.</li>
+  <li><code>enbpar</code> é curinga (vê todos os contratos) — bom para testar o login primeiro.</li>
+  <li>Operador fora dessa lista (ou <strong>e-mail</strong>) → <strong>403 "Operador não registrado"</strong>.</li>
+</ul>
+<p>Comandos úteis (opcionais):</p>
 <pre><code>cd /opt/anexov
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add enbpar
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add equatorialenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add energisa
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add neoenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add ambarenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add cerci
-# imprime:  "Operador criado: <op> — senha temporária: <SENHA>"</code></pre>
-<div class="box alert">
-  ⚠️ <strong>NÃO</strong> rode <code>add fulano@equatorialenergia.com.br</code> — o
-  <code>DEPLOY.md</code> antigo está desatualizado. Isso cria um login por e-mail que
-  <strong>não existe no mapa</strong> → 403. <code>enbpar</code> é curinga (vê todos os
-  contratos) — bom para testar o login primeiro.
-</div>
-<p class="muted">Reset de senha (self-service, sem e-mail): "Esqueci minha senha" → volta para
+# adicionar um operador novo (imprime a senha temporária):
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add &lt;operador&gt;
+# desativar:
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios disable &lt;operador&gt;</code></pre>
+<p class="muted">Esqueci a senha (self-service, sem e-mail): "Esqueci minha senha" → volta para
 <code>Senha123</code> (troca obrigatória no próximo login).</p>
+<div class="box alert">
+  ⚠️ <strong><code>git pull</code> sobrescreve as senhas.</strong> Como o
+  <code>usuarios.json</code> é versionado, um <code>git pull</code> no servidor
+  <strong>reseta todos os logins para o seed (<code>Senha123</code>)</strong>. Depois que os
+  operadores trocarem a senha, <strong>faça backup de <code>backend/usuarios.json</code>
+  antes de puxar código novo</strong> e restaure-o depois (ou re-semeie via "esqueci senha").
+</div>
 
 <div class="step"><span class="n">4</span><h2>Nginx: estático + proxy de <code>/api</code></h2></div>
 <p><code>/etc/nginx/sites-available/anexov</code>:</p>
@@ -219,10 +222,10 @@ starlette 1.3+ — já está no <code>requirements.txt</code>. Rode a partir da 
 <pre><code># health através do Nginx:
 curl -s http://127.0.0.1/api/health
 
-# login com operador provisionado (senha temporária do Passo 3):
+# login com o operador semeado (senha inicial Senha123):
 curl -i -X POST http://127.0.0.1/api/login \
   -H "Content-Type: application/json" \
-  -d '{"operador":"enbpar","senha":"SENHA_TEMPORARIA"}'</code></pre>
+  -d '{"operador":"enbpar","senha":"Senha123"}'</code></pre>
 <ul>
   <li><span class="pill ok">200</span> com <code>token</code> ou <code>precisaTrocarSenha</code> → backend + Nginx OK ✔</li>
   <li><span class="pill bad">401</span> → senha errada (operador válido)</li>
@@ -232,7 +235,7 @@ curl -i -X POST http://127.0.0.1/api/login \
 <div class="step"><span class="n">6</span><h2>Checklist do 403</h2></div>
 <table>
   <tr><th>Sintoma</th><th>Causa</th><th>Correção</th></tr>
-  <tr><td>403 JSON <code>"Operador não registrado…"</code></td><td>operador inválido (usaram e-mail)</td><td>logar/provisionar com um dos 6 operadores (Passo 3)</td></tr>
+  <tr><td>403 JSON <code>"Operador não registrado…"</code></td><td>operador inválido (usaram e-mail)</td><td>logar com um dos 6 operadores (senha <code>Senha123</code>, Passo 3)</td></tr>
   <tr><td>403 HTML "nginx"</td><td><code>location /api/</code> ausente ou permissão</td><td>bloco <code>/api/</code> (Passo 4); <code>chown www-data</code></td></tr>
   <tr><td>404 no <code>/api/…</code></td><td><code>proxy_pass</code> com barra no final</td><td>tirar a barra: <code>proxy_pass http://127.0.0.1:8000;</code></td></tr>
   <tr><td>502 Bad Gateway</td><td>backend não está rodando</td><td><code>systemctl status anexov-api</code>; ver logs</td></tr>

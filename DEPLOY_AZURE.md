@@ -77,7 +77,7 @@ Arquivos que **precisam estar presentes** (vêm no `git`, exceto o `usuarios.jso
 | `entrada/**/*.csv` | git | base de referência (validação) |
 | `base_contratos.json` | git (raiz) | autoridade de contratos |
 | `manuais/…v260714.xlsx` | git | modelo oficial (aba Dominios) |
-| `backend/usuarios.json` | **provisionar** (Passo 3) | **NÃO** vem no git (segredo) |
+| `backend/usuarios.json` | **git** (semeado) | 6 operadores; senha inicial `Senha123`, troca no 1º acesso (Passo 3) |
 
 ### Serviço systemd (`/etc/systemd/system/anexov-api.service`)
 
@@ -106,35 +106,35 @@ journalctl -u anexov-api -n 50 --no-pager        # logs se não subir
 
 ---
 
-## 3. Provisionar operadores (login) — CAUSA nº 1 DO 403
+## 3. Operadores (login) — já vêm no repo
 
-**O login é por OPERADOR, não por e-mail.** Operadores válidos (fixos no sistema):
+**O login é por OPERADOR, não por e-mail.** Os 6 operadores **já vêm versionados** em
+`backend/usuarios.json` (não precisa provisionar):
 
 ```
 equatorialenergia   energisa   neoenergia   ambarenergia   cerci   enbpar
 ```
 
-Qualquer outro valor (incluindo **e-mail**) → **403 "Operador não registrado"**.
+- **Senha inicial de todos: `Senha123`** — o sistema **exige troca no 1º acesso**.
+- `enbpar` é curinga (vê todos os contratos) — bom para testar o login primeiro.
+- Digitar um operador fora dessa lista (ou um **e-mail**) → **403 "Operador não registrado"**.
 
-Crie cada operador (gera senha temporária, **impressa no terminal**, trocada no 1º acesso):
+Comandos úteis (opcionais):
 
 ```bash
 cd /opt/anexov
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add enbpar
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add equatorialenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add energisa
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add neoenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add ambarenergia
-sudo -u www-data .venv/bin/python -m backend.admin_usuarios add cerci
-# cada comando imprime:  "Operador criado: <op> — senha temporária: <SENHA>"
+# adicionar um operador novo (imprime a senha temporária):
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios add <operador>
+# desativar:
+sudo -u www-data .venv/bin/python -m backend.admin_usuarios disable <operador>
 ```
+Esqueci a senha (self-service, sem e-mail): botão "Esqueci minha senha" → volta para
+`Senha123` (troca obrigatória no próximo login).
 
-> ⚠️ **NÃO** rode `add fulano@equatorialenergia.com.br` (o `DEPLOY.md` antigo está
-> desatualizado). Isso cria um login por e-mail que **não existe no mapa** → 403.
-> `enbpar` é curinga (vê todos os contratos) — bom para testar o login primeiro.
-
-Reset de senha (self-service, sem e-mail): botão "Esqueci minha senha" → volta para a
-senha padrão **`Senha123`** (troca obrigatória no próximo login).
+> ⚠️ **`git pull` sobrescreve as senhas.** Como o `usuarios.json` é versionado, um
+> `git pull` no servidor **reseta todos os logins para o seed (`Senha123`)**. Depois que
+> os operadores trocarem a senha: **faça backup do `backend/usuarios.json` antes de puxar
+> código novo** e restaure-o depois (ou re-semeie via "esqueci senha").
 
 ---
 
@@ -221,11 +221,11 @@ Smoke test **na máquina** (após subir tudo), simulando o front:
 # 1) health através do Nginx:
 curl -s http://127.0.0.1/api/health
 
-# 2) login com um operador provisionado (use a senha temporária impressa no Passo 3;
-#    no 1º acesso o backend responde {"precisaTrocarSenha": true} — isso é SUCESSO):
+# 2) login com o operador semeado (senha inicial Senha123; no 1º acesso o backend
+#    responde {"precisaTrocarSenha": true} — isso é SUCESSO):
 curl -i -X POST http://127.0.0.1/api/login \
   -H "Content-Type: application/json" \
-  -d '{"operador":"enbpar","senha":"SENHA_TEMPORARIA_IMPRESSA"}'
+  -d '{"operador":"enbpar","senha":"Senha123"}'
 ```
 - **200** com `token` ou `precisaTrocarSenha` → backend + Nginx OK. ✔
 - **401** → senha errada (operador válido).
@@ -237,7 +237,7 @@ curl -i -X POST http://127.0.0.1/api/login \
 
 | Sintoma | Causa | Correção |
 |---|---|---|
-| 403 JSON `{"detail":"Operador não registrado no sistema."}` | operador inválido (ex.: usaram **e-mail**) | logar/provisionar com um dos 6 operadores (Passo 3) |
+| 403 JSON `{"detail":"Operador não registrado no sistema."}` | operador inválido (ex.: usaram **e-mail**) | logar com um dos 6 operadores (senha `Senha123`, Passo 3) |
 | 403 HTML "nginx" | `location /api/` ausente ou permissão | adicionar o bloco `/api/` (Passo 4); `chown www-data` |
 | 404 no `/api/...` | `proxy_pass` **com** barra no final | tirar a barra: `proxy_pass http://127.0.0.1:8000;` |
 | 502 Bad Gateway | backend não está rodando | `systemctl status anexov-api`; `journalctl -u anexov-api` |
