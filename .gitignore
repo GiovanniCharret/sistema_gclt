@@ -29,11 +29,11 @@ DEPLOY_HOSTINGER.html
 deploy_hostinger.sh
 
 # ── Segredos (NÃO versionar) ─────────────────────────────
-# `backend/usuarios.json` VOLTOU ao gitignore em 2026-07-08 (revertida a decisão de
-# 2026-07-07): com o `git pull` diário de entrada/ no VPS, versioná-lo sobrescreveria
-# os usuários reais de produção (senhas trocadas lá seriam desfeitas a cada pull).
-usuarios.json
-backend/usuarios.json
+# NOTA (2026-07-17): `backend/usuarios.json` VOLTOU ao versionamento (para o handoff) —
+# vem semeado com os 6 operadores, senha inicial "Senha123" e troca OBRIGATÓRIA no 1º
+# acesso (o hash é de uma senha pública/documentada; a senha real é definida pelo operador
+# e nunca vai ao git). ⚠️ Um `git pull` no servidor SOBRESCREVE o store e reseta as senhas
+# para o seed — faça backup do arquivo antes de puxar (ou re-semeie via "esqueci senha").
 .env
 .env.*
 !.env.example

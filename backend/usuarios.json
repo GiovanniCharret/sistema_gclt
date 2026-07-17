@@ -1,0 +1,44 @@
+{
+  "equatorialenergia": {
+    "operador": "equatorialenergia",
+    "senha_hash": "b3a2f9a835bc5da47b2c9a27dc4b5b57b0c12f57b19d69b0d152163e7de13d7b",
+    "salt": "d778e81b3ffb0b147cfee67d6b139833",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "energisa": {
+    "operador": "energisa",
+    "senha_hash": "a06ec7023369c45be08821eb5624eff8f358237b78d3d725759e8f9bb1eec88d",
+    "salt": "8b72bcaf6c7cb88512e7bf2759a269c8",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "neoenergia": {
+    "operador": "neoenergia",
+    "senha_hash": "a2622f3ed820149f829af2c25da1f38e3bff83824eb03a84684e0dafd28858a7",
+    "salt": "f47a47f33d0d45258224e807a74699cb",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "ambarenergia": {
+    "operador": "ambarenergia",
+    "senha_hash": "163250d1997211cadd14874e4a3b2b700a5fbfff2dddab0442b3b4202a869a9f",
+    "salt": "42aad05ec22c67712df7cc724782109b",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "cerci": {
+    "operador": "cerci",
+    "senha_hash": "c230efcd2837f613601606a14e146b4bfeae3dad21c025a640425ce4816bc614",
+    "salt": "ac249f2e3d01bee031a8cd74048d7b16",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  },
+  "enbpar": {
+    "operador": "enbpar",
+    "senha_hash": "f73a505dae22db99935defcb63099d0527937e7970fca59935b41891e611465a",
+    "salt": "7e821999e599e1bcefa2e00ffb0d8e8e",
+    "precisa_trocar_senha": true,
+    "ativo": true
+  }
+}
