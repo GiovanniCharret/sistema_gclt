@@ -1,0 +1,17 @@
+# Imagem da API FastAPI (backend/) — roda a partir da raiz do repo, pois
+# config.py e planilha.py leem caminhos relativos (backend/usuarios.json,
+# backend/.env, base_contratos.json, entrada/, manuais/).
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Instala as dependências primeiro para aproveitar o cache de camadas do Docker.
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Copia o restante do repositório (backend/, entrada/, manuais/, base_contratos.json).
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
