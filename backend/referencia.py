@@ -6,16 +6,22 @@ planilha enviada com a base de referência, e conferir UF/município por ODI. Le
 módulo carrega tudo **uma vez** em dicionários/sets e **recarrega só quando um CSV
 muda** (atualização diária), sem reiniciar o uvicorn. É a fonte única dos índices.
 
-Índices montados, por contrato (chave normalizada):
-  - `chaves_uc[contrato]` = set de `(odi, uc)`           ← arquivos `*_ucs.csv`
-  - `odi_ref[contrato]`   = dict `odi -> (uf, municipio)` ← arquivos `consolidado.csv`
+Índices montados, por contrato (chave normalizada), decididos POR COLUNA (não por
+nome de arquivo):
+  - `chaves_uc[contrato]` = set de `(odi, uc)`            ← colunas com `uc`
+  - `odi_ref[contrato]`   = dict `odi -> (uf, municipio)` ← colunas com `uf`+`municipio`
+
+Como a decisão é por coluna, um arquivo pode alimentar UM ou OS DOIS índices: o layout
+antigo do LPT tinha dois arquivos (`consolidado_ucs.csv` + `consolidado.csv`) e o MLA
+ainda tem; desde 2026-07-21 o LPT exporta um único `consolidado_ucs_modelo.csv` que
+reúne `odi;uc;uf;municipio` e sozinho alimenta os dois índices.
 
 Lógica (Entrada → Saída):
   Entrada: um diretório-base (por padrão `entrada/` na raiz do repo).
   Fase 1: varre os `**/*.csv` do diretório.
-  Fase 2: para cada arquivo, decide o índice pelo conjunto de colunas do cabeçalho
-          (tem `uc` → chaves_uc; tem `uf`+`municipio` → odi_ref).
-  Fase 3: normaliza a chave de contrato e popula os índices.
+  Fase 2: para cada arquivo, olha o conjunto de colunas do cabeçalho
+          (tem `uc` → chaves_uc; tem `uf`+`municipio` → odi_ref; pode ter ambos).
+  Fase 3: normaliza a chave de contrato e popula os índices aplicáveis.
   Saída: atributos `chaves_uc`/`odi_ref` prontos para consulta; `recarregar_se_preciso`
          mantém-nos atualizados conforme os arquivos mudam.
 """
@@ -127,14 +133,19 @@ class Referencia:
                     # Linha sem contrato não tem como ser indexada — pula.
                     if not contrato:
                         continue
-                    # ODI é comum aos dois tipos de arquivo (normalizado p/ casar c/ a planilha).
+                    # ODI é comum a ambos os índices (normalizado p/ casar c/ a planilha).
                     odi = normalizar_id(linha.get("odi"))
+                    # Os dois ramos são INDEPENDENTES (não `elif`): um arquivo único que
+                    # traz `uc` E `uf`+`municipio` (novo `consolidado_ucs_modelo.csv` do
+                    # LPT, 2026-07-21) deve alimentar os DOIS índices na mesma passada. O
+                    # layout antigo de dois arquivos continua valendo — cada um só dispara
+                    # o ramo cujas colunas possui.
                     if eh_ucs:
-                        # Arquivo de UCs → adiciona o par (odi, uc) ao set do contrato.
+                        # Tem coluna `uc` → adiciona o par (odi, uc) ao set do contrato.
                         uc = normalizar_id(linha.get("uc"))
                         chaves_uc.setdefault(contrato, set()).add((odi, uc))
-                    elif eh_localizacao:
-                        # Arquivo de localização → mapeia odi → (uf, municipio).
+                    if eh_localizacao:
+                        # Tem `uf`+`municipio` → mapeia odi → (uf, municipio).
                         uf = (linha.get("uf") or "").strip()
                         municipio = (linha.get("municipio") or "").strip()
                         odi_ref.setdefault(contrato, {})[odi] = (uf, municipio)

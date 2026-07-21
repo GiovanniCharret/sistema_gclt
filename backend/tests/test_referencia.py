@@ -92,6 +92,39 @@ def test_indice_odi_ref_mapeia_odi_para_uf_municipio(tmp_path):
     assert ref.odi_ref["ECO 011/2018"]["136PROJ"] == ("AP", "PORTO GRANDE")
 
 
+def test_arquivo_unico_com_uc_e_localizacao_alimenta_os_dois_indices(tmp_path):
+    """Um CSV único com `uc` E `uf`+`municipio` popula `chaves_uc` E `odi_ref`.
+
+    Por que existe: a partir de 2026-07-21 o LPT deixou de ter dois arquivos
+    (`consolidado_ucs.csv` + `consolidado.csv`) e passou a exportar **um só**
+    (`consolidado_ucs_modelo.csv`) reunindo `odi;uc;uf;municipio`. Como o loader
+    decide o índice **por coluna** (não por nome de arquivo), um arquivo que tem as
+    duas famílias de coluna deve alimentar os **dois** índices — caso contrário o
+    cruzamento de UF/município por ODI (erro bloqueante) deixaria de validar no LPT.
+    Este teste trava esse comportamento (guarda contra o `elif` mutuamente exclusivo).
+
+    Entrada: dir temporário com um único `lpt/consolidado_ucs_modelo.csv`.
+    Fase 1: grava o CSV único com todas as colunas (2 UCs no mesmo ODI).
+    Fase 2: instancia `Referencia`.
+    Fase 3: confere que `chaves_uc` tem os pares (odi, uc) E `odi_ref` tem odi→(uf, mun).
+    Saída: asserções.
+    """
+    # Fase 1: arquivo único no novo layout (contrato;odi;uc;uf;municipio).
+    _escrever_csv(
+        tmp_path / "lpt" / "consolidado_ucs_modelo.csv",
+        ["contrato", "odi", "uc", "uf", "municipio"],
+        [["ECO 011/2018", "ODR142PROJ001", "2959348", "Amapá", "Pracuúba"],
+         ["ECO 011/2018", "ODR142PROJ001", "2959550", "Amapá", "Pracuúba"]],
+    )
+    # Fase 2: carrega a referência a partir do dir temporário.
+    ref = Referencia(tmp_path)
+    # Fase 3a: os pares (odi, uc) devem estar no índice de UCs.
+    assert ("ODR142PROJ001", "2959348") in ref.chaves_uc["ECO 011/2018"]
+    assert ("ODR142PROJ001", "2959550") in ref.chaves_uc["ECO 011/2018"]
+    # Fase 3b: o MESMO arquivo deve ter alimentado o índice de localização.
+    assert ref.odi_ref["ECO 011/2018"]["ODR142PROJ001"] == ("Amapá", "Pracuúba")
+
+
 def test_normaliza_chave_de_contrato(tmp_path):
     """A chave de contrato é normalizada (trim + colapso de espaços + upper).
 
