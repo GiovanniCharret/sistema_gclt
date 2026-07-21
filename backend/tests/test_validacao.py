@@ -342,12 +342,46 @@ def test_municipio_realmente_divergente_ainda_gera_erro():
     assert ("err", "UF / município divergente") in _regras(achados)
 
 
-def test_ucs_faltando_e_aviso():
-    """UCs da referência ausentes da planilha → aviso agregado 'UCs faltando'."""
+def test_ucs_faltando_lista_cada_uc_ausente():
+    """UCs da referência ausentes → aviso 'UCs faltando', UMA ocorrência por UC.
+
+    Antes era um agregado só com a contagem; agora lista ODI+UC de cada faltante
+    (pedido: o operador precisa saber QUAIS UCs reenviar).
+    """
     linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1"})]
     chaves = {("O1", "U1"), ("O1", "U2"), ("O2", "U3")}  # faltam 2 na planilha
     achados = regras_cruzamento(linhas, chaves_uc=chaves, odi_ref={})
+    # A regra está presente como aviso.
     assert ("warn", "UCs faltando") in _regras(achados)
+    # Uma ocorrência por UC faltante (U2 e U3), não um único agregado.
+    faltando = [a for a in achados if a["regra"] == "UCs faltando"]
+    assert len(faltando) == 2
+    # Cada faltante identifica a sua UC (e o ODI) no texto.
+    problemas = " | ".join(a["problema"] for a in faltando)
+    assert "U2" in problemas and "O1" in problemas
+    assert "U3" in problemas and "O2" in problemas
+    # A UC enviada (U1) não aparece como faltante.
+    assert "U1" not in problemas
+
+
+def test_agrupar_limita_rows_mas_mantem_count_real():
+    """`_agrupar` limita as linhas de detalhe a `_ROWS_MAX`, mas `count` = total real.
+
+    Assim o front lista as primeiras e resume o resto como "+N outras…", sem inflar
+    o payload quando uma regra tem milhares de ocorrências.
+    """
+    from backend.validacao import _agrupar, _ROWS_MAX
+    # Fabrica _ROWS_MAX + 5 achados da mesma regra.
+    achados = [
+        {"sev": "warn", "regra": "UCs faltando", "loc": "—", "campo": "UC",
+         "problema": f"UC U{i}", "sug": "x"}
+        for i in range(_ROWS_MAX + 5)
+    ]
+    grupos = _agrupar(achados)
+    grupo = grupos[0]
+    # count reflete TODAS as ocorrências; rows fica no teto.
+    assert grupo["count"] == _ROWS_MAX + 5
+    assert len(grupo["rows"]) == _ROWS_MAX
 
 
 def test_cruzamento_ignora_zero_a_esquerda_do_odi():

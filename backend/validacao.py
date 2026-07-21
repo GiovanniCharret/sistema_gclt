@@ -312,12 +312,15 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
                                         f"linha: {uf}/{mun} · referência: {uf_ref}/{mun_ref}",
                                         "corrigir para bater com a referência do ODI"))
 
-    # Fase 2: UCs da referência que não vieram na planilha (aviso agregado).
+    # Fase 2: UCs da referência que não vieram na planilha (aviso — UMA ocorrência
+    # por UC, listando ODI+UC, para o operador saber exatamente quais reenviar; antes
+    # era um único agregado só com a contagem). Ordena por (odi, uc) p/ saída estável;
+    # o teto de linhas por grupo (o "+N outras" do front) é aplicado em `_agrupar`.
     faltando = chaves_uc - enviados
-    if faltando:
+    for odi, uc in sorted(faltando):
         achados.append(_achado("warn", "UCs faltando", "—", "UC",
-                                f"{len(faltando)} UC(s) da referência não estão na planilha",
-                                "conferir se todas as UCs do contrato foram enviadas"))
+                                f'UC {uc} (ODI {odi}) não está na planilha',
+                                "incluir na planilha ou confirmar a exclusão da UC"))
 
     # Saída: achados de cruzamento.
     return achados
@@ -351,12 +354,20 @@ _CAMPO_PREVIEW = {
 # Quantas linhas mostrar no preview.
 _PREVIEW_MAX = 7
 
+# Teto de linhas de DETALHE por grupo no payload. `count` continua sendo o total real;
+# o front mostra as primeiras `_ROWS_MAX` e resume o resto como "+N outra(s)…". Evita
+# payloads gigantes quando uma regra tem milhares de ocorrências (ex.: UCs faltando de
+# um contrato grande enviado parcialmente).
+_ROWS_MAX = 200
+
 
 def _agrupar(achados):
     """Agrupa os achados por regra, preservando a ordem de 1º aparecimento.
 
     Entrada: lista de achados.
     Saída: lista de grupos `{sev, title, desc, count, rows:[{loc,field,problem,sug}]}`.
+           `count` = total de ocorrências; `rows` é limitado a `_ROWS_MAX` (o excedente
+           vira "+N outras…" no front).
     """
     # Dict título→grupo + lista de ordem (para saída estável).
     grupos = {}
@@ -368,9 +379,11 @@ def _agrupar(achados):
                               "desc": _DESCRICOES.get(titulo, ""), "count": 0, "rows": []}
             ordem.append(titulo)
         grupo = grupos[titulo]
+        # `count` conta TODAS as ocorrências; só as `_ROWS_MAX` primeiras viram detalhe.
         grupo["count"] += 1
-        grupo["rows"].append({"loc": a["loc"], "field": a["campo"],
-                              "problem": a["problema"], "sug": a["sug"]})
+        if len(grupo["rows"]) < _ROWS_MAX:
+            grupo["rows"].append({"loc": a["loc"], "field": a["campo"],
+                                  "problem": a["problema"], "sug": a["sug"]})
     return [grupos[t] for t in ordem]
 
 
