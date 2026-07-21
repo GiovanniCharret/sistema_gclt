@@ -18,6 +18,7 @@ from backend.planilha import (
     normalizar_coordenada,
     normalizar_id,
     normalizar_nome,
+    normalizar_uf,
     PlanilhaInvalida,
 )
 # Gerador de .xlsx-fixture.
@@ -131,6 +132,30 @@ def test_normalizar_nome_ignora_acento_caixa_e_espacos():
     assert normalizar_nome(None) == ""
     # Nomes de fato diferentes NÃO colidem.
     assert normalizar_nome("BOA VISTA") != normalizar_nome("RORAINOPOLIS")
+
+
+def test_normalizar_uf_equivale_sigla_e_nome_completo():
+    """`normalizar_uf` trata sigla e nome completo como a MESMA UF.
+
+    Caso real (2026-07-21): a planilha preenche a sigla ('AP') e o novo
+    `consolidado_ucs_modelo.csv` do LPT passou a trazer o nome por extenso
+    ('Amapá'). `normalizar_nome` sozinho não resolve ('ap' != 'amapa'); a UF é
+    um conjunto fechado (27), então canonizamos para a sigla dos dois lados.
+    """
+    # Sigla × nome por extenso (com e sem acento, caixa e espaços) devem coincidir.
+    assert normalizar_uf("AP") == normalizar_uf("Amapá")
+    assert normalizar_uf("ap") == normalizar_uf("AMAPA")
+    assert normalizar_uf("RJ") == normalizar_uf("Rio de Janeiro")
+    assert normalizar_uf("SP") == normalizar_uf("São Paulo")
+    assert normalizar_uf("RO") == normalizar_uf("Rondônia")
+    assert normalizar_uf("PA") == normalizar_uf("Pará")
+    # UFs diferentes NÃO colidem (não afrouxa a checagem).
+    assert normalizar_uf("AP") != normalizar_uf("AM")
+    assert normalizar_uf("Amapá") != normalizar_uf("Amazonas")
+    # Vazio é tolerado (não quebra).
+    assert normalizar_uf(None) == ""
+    # Valor desconhecido cai na forma canônica de nome (comparável, não quebra).
+    assert normalizar_uf("Xingu") == normalizar_nome("Xingu")
 
 
 def test_normalizar_coordenada_aceita_virgula_e_ponto():

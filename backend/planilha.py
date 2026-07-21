@@ -266,6 +266,54 @@ def normalizar_nome(valor):
     return s.casefold()
 
 
+# UFs do Brasil: nome oficial → sigla. Chave já na forma canônica de `normalizar_nome`
+# (sem acento, sem espaço, casefold), para casar tanto "Amapá" quanto "amapa".
+_UF_NOME_PARA_SIGLA = {
+    normalizar_nome(nome): sigla for nome, sigla in {
+        "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
+        "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF",
+        "Espírito Santo": "ES", "Goiás": "GO", "Maranhão": "MA",
+        "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
+        "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE",
+        "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
+        "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR",
+        "Santa Catarina": "SC", "São Paulo": "SP", "Sergipe": "SE",
+        "Tocantins": "TO",
+    }.items()
+}
+# Conjunto das 27 siglas (em minúsculas) — reconhece a UF já vinda como sigla.
+_UF_SIGLAS = {sigla.casefold() for sigla in _UF_NOME_PARA_SIGLA.values()}
+
+
+def normalizar_uf(valor):
+    """Canoniza a UF para a sigla, aceitando sigla OU nome por extenso.
+
+    Por que existe: a planilha preenche a UF como **sigla** ("AP"), mas a base de
+    referência de `entrada/` pode trazer o **nome por extenso** ("Amapá") — como o
+    novo `consolidado_ucs_modelo.csv` do LPT (2026-07-21). `normalizar_nome` reduz
+    acento/caixa/espaço, mas "ap" ≠ "amapa"; a UF é um conjunto fechado (27), então
+    aqui reduzimos os dois formatos à mesma sigla para o cruzamento (§7, D4) não
+    acusar divergência falsa. Nomes de UFs diferentes seguem diferentes.
+
+    Entrada: `valor` (str/int/None) — sigla ("AP"/"ap") ou nome ("Amapá").
+    Fase 1: reduz à forma canônica de nome (sem acento/espaço, casefold).
+    Fase 2: se já é uma sigla conhecida, devolve-a.
+    Fase 3: se é um nome de UF conhecido, devolve a sigla correspondente (casefold).
+    Saída: a sigla canônica (minúscula); vazio vira ""; desconhecido volta como veio
+           (forma canônica de nome) — ainda comparável, sem afrouxar a checagem.
+    """
+    # Fase 1: forma canônica comum a sigla e nome ("AP"→"ap", "Amapá"→"amapa").
+    base = normalizar_nome(valor)
+    # Fase 2: já é sigla (ex.: "ap") → devolve como está.
+    if base in _UF_SIGLAS:
+        return base
+    # Fase 3: é nome por extenso conhecido → devolve a sigla equivalente.
+    if base in _UF_NOME_PARA_SIGLA:
+        return _UF_NOME_PARA_SIGLA[base].casefold()
+    # Saída: desconhecido (ou vazio) → forma canônica de nome, ainda comparável.
+    return base
+
+
 def normalizar_coordenada(valor):
     """Interpreta latitude/longitude de forma defensiva (decimal com `,` ou `.`).
 

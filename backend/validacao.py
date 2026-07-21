@@ -12,7 +12,7 @@ formato/domínio; o cruzamento com `entrada/` (D4) e a montagem (D5) vêm em seg
 """
 
 # Normalização defensiva de coordenada, de ID (ODI/UC) e de nome (município/UF) — do parser.
-from backend.planilha import normalizar_coordenada, normalizar_id, normalizar_nome
+from backend.planilha import normalizar_coordenada, normalizar_id, normalizar_nome, normalizar_uf
 
 # ── Nomes de coluna (cabeçalhos reais do modelo) ──
 COL_ODI = "Número ODI"
@@ -302,9 +302,11 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
             uf_ref, mun_ref = odi_ref[odi]
             uf = _txt(linha, COL_UF)
             mun = _txt(linha, COL_MUNICIPIO)
-            # Compara UF e município por forma canônica (ignora acento, caixa e espaços —
-            # inclusive no meio): a base e a planilha divergem nesses ruídos sem ser erro.
-            if (normalizar_nome(uf) != normalizar_nome(uf_ref)
+            # Compara por forma canônica (ignora acento, caixa e espaços — inclusive no
+            # meio): base e planilha divergem nesses ruídos sem ser erro. A UF usa
+            # `normalizar_uf` (equivale sigla "AP" ao nome "Amapá", pois a base pode
+            # trazer qualquer um dos dois); o município usa `normalizar_nome`.
+            if (normalizar_uf(uf) != normalizar_uf(uf_ref)
                     or normalizar_nome(mun) != normalizar_nome(mun_ref)):
                 achados.append(_achado("err", "UF / município divergente", loc, "UF/Município",
                                         f"linha: {uf}/{mun} · referência: {uf_ref}/{mun_ref}",
