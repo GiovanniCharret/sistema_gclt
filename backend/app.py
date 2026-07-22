@@ -37,7 +37,7 @@ from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_toke
 # E-mails: credenciais (B1), planilha validada e alerta crítico (E1) — mockáveis nos testes.
 from backend.email_envio import enviar_credenciais, enviar_planilha_validada, enviar_alerta_critico
 # Montagem do contexto, resolução do grupo e filtro de contratos por grupo (C1/E2, §5.1).
-from backend.acesso import montar_contexto, grupo_do_operador, contratos_visiveis
+from backend.acesso import montar_contexto, grupo_do_operador, contratos_visiveis, motivo_acesso_negado
 # Parsing (D1), domínios (D2) e validação (D3–D5) da planilha.
 from backend.planilha import ler_preenchimento, obter_dominios, PlanilhaInvalida, _MODELO_PADRAO
 from backend.validacao import validar
@@ -286,13 +286,19 @@ async def validar_rota(
     # Fase 1: o contrato precisa estar entre os visíveis do grupo do operador.
     visiveis = {c["numero"] for c in contratos_visiveis(grupo_do_operador(operador), base["contratos"])}
     if contrato_norm not in visiveis:
-        raise HTTPException(status_code=403, detail="Contrato fora do escopo do seu acesso.")
+        # 403 com o MOTIVO concreto (grupo do operador × dono do contrato), não só "sem acesso".
+        raise HTTPException(status_code=403,
+                            detail="Acesso negado ao contrato: "
+                                   + motivo_acesso_negado(operador, contrato_norm, base["contratos"]) + ".")
     # Fase 2: contrato sem referência (sem chaves_uc) = anomalia → alerta + 409 (§8).
     if contrato_norm not in referencia.chaves_uc:
         enviar_alerta_critico(contrato, uf, arquivo.filename or "(sem nome)")
+        # 409 dizendo POR QUE não valida: está no acesso, mas sem dados de referência carregados.
         raise HTTPException(status_code=409,
-                            detail="Sem ODIs/UCs cadastradas. "
-                                   "Por favor, atualize os dados no gerenciador antes.")
+                            detail=(f"O contrato {contrato} está no seu acesso, mas não há "
+                                    f"ODIs/UCs de referência carregados para ele (a base desse "
+                                    f"contrato ainda não foi importada em entrada/). Atualize os "
+                                    f"dados no gerenciador antes de validar."))
     # Fase 3: lê os bytes e parseia a aba Preenchimento.
     conteudo = await arquivo.read()
     try:

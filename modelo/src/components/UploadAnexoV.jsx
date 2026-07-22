@@ -67,19 +67,32 @@ export default function UploadAnexoV({ uf, contrato, token, onComplete }) {
         setTimeout(() => { setRunning(false); onComplete(dados); }, 350);
         return;
       }
-      // Erros de requisição — mostra a mensagem e volta ao estado ocioso.
-      const msg = {
-        401: "Sua sessão expirou. Entre novamente.",
-        403: dados?.detail || "Este contrato está fora do seu acesso.",
-        409: dados?.detail || "Sem ODIs/UCs cadastradas. Por favor, atualize os dados no gerenciador antes.",
-        400: dados?.detail || "Arquivo inválido. Envie o .xlsx do Anexo V.",
-      }[status] || "Não foi possível validar. Tente novamente.";
-      setErro(msg);
+      // Erros de requisição — expõe o que REALMENTE quebrou (status HTTP + detail cru
+      // do backend), em vez de mensagens suaves. Prioriza o debug em produção.
+      const bruto = dados?.detail;
+      const detalhe =
+        (typeof bruto === "string" ? bruto : bruto ? JSON.stringify(bruto) : null)
+        ?? (dados ? JSON.stringify(dados) : null)
+        ?? "sem corpo JSON na resposta (provável erro de Nginx/proxy, não do app)";
+      // Rótulo da camada: diz POR QUE aquele status ocorre (o porquê específico vem no detalhe).
+      const camada = {
+        400: "400 — a planilha não passou na leitura estrutural (parser recusou o arquivo)",
+        401: "401 — o backend não aceitou seu token (ausente ou expirado); refaça o login",
+        403: "403 — o backend recusou o acesso a este contrato",
+        409: "409 — o contrato não tem dados de referência (ODIs/UCs) carregados",
+        500: "500 — o backend quebrou ao processar (erro interno)",
+      }[status] || `${status} — resposta inesperada do backend`;
+      // Loga o objeto cru no DevTools para inspeção completa (status, corpo).
+      console.error("[validar] erro de requisição", { status, dados });
+      setErro(`[validar] ${camada} · ${detalhe}`);
       setRunning(false);
       setPhase(-1);
-    } catch {
+    } catch (err) {
       clearTimeout(t);
-      setErro("Não foi possível conectar ao servidor.");
+      // Falha ANTES de qualquer resposta HTTP: rede, CORS, DNS, backend fora do ar.
+      // Mostra o erro real + o destino, para distinguir "backend caiu" de "URL errada".
+      console.error("[validar] falha de conexão", err);
+      setErro(`[validar] falha de conexão — ${err?.name || "Error"}: ${err?.message || String(err)} · destino ${api.API_BASE}/validar`);
       setRunning(false);
       setPhase(-1);
     }

@@ -440,6 +440,9 @@ def test_validar_contrato_fora_do_grupo_403(client, validar_env):
                     files={"arquivo": ("Anexo.xlsx", conteudo)},
                     data={"contrato": "CTR TESTE", "uf": "AM"})
     assert r.status_code == 403
+    # O detail explica o PORQUÊ: grupo do operador × dono do contrato.
+    detail = r.json()["detail"]
+    assert "ENERGISA" in detail and "EQUATORIAL" in detail and "CTR TESTE" in detail
 
 
 def test_validar_contrato_sem_referencia_409_e_alerta(client, validar_env):
@@ -449,9 +452,10 @@ def test_validar_contrato_sem_referencia_409_e_alerta(client, validar_env):
                     files={"arquivo": ("Anexo.xlsx", conteudo)},
                     data={"contrato": "CTR SEMREF", "uf": "AM"})
     assert r.status_code == 409
-    # A mensagem diz ao operador o que aconteceu e o que fazer (backlog item 2).
-    assert r.json()["detail"] == ("Sem ODIs/UCs cadastradas. "
-                                  "Por favor, atualize os dados no gerenciador antes.")
+    # A mensagem diz POR QUE não valida (contrato sem referência) e o que fazer.
+    detail = r.json()["detail"]
+    assert "ODIs/UCs" in detail and "CTR SEMREF" in detail
+    assert "atualize os dados" in detail.lower()
     assert validar_env["alerta"].called is True
 
 

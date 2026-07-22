@@ -174,3 +174,40 @@ def contratos_visiveis(grupo, contratos, mapa_grupo=None):
         return list(contratos)
     # Fase 3/Saída: filtra pelos contratos cuja sigla é visível ao grupo.
     return [c for c in contratos if c.get("sigla") in siglas]
+
+
+def motivo_acesso_negado(operador, contrato_num, contratos, mapa_operador=None, mapa_grupo=None):
+    """Explica POR QUE um contrato está fora do acesso do operador (para o `detail` do 403).
+
+    Por que existe: um 403 "sem acesso" não diz onde a regra barrou; quem depura precisa
+    saber o motivo concreto. Este helper usa os dados que o backend já tem no ponto da
+    recusa — o grupo do operador (camada 1), as siglas que o grupo enxerga (camada 2) e,
+    buscando na base, de qual distribuidora/UF é o contrato negado — para montar a razão.
+
+    Entrada: `operador` (do token), `contrato_num` (número normalizado), `contratos`
+             (lista de detalhe da base, com `numero`/`sigla`/`uf`), e os mapas opcionais.
+    Fase 1: resolve o grupo do operador e as siglas visíveis do grupo.
+    Fase 2: localiza o contrato na base (mesmo fora do acesso) para descrever de quem é.
+    Fase 3: escolhe a explicação conforme o caso (sem grupo / inexistente / outro grupo).
+    Saída: uma frase (str) com o motivo, sem ponto final (o chamador compõe a mensagem).
+    """
+    # Fase 1: grupo do operador (camada 1) e siglas que o grupo vê (camada 2).
+    grupo = grupo_do_operador(operador, mapa_operador)
+    siglas = siglas_do_grupo(grupo, mapa_grupo)
+    # Fase 2: acha o contrato na base ainda que ele esteja fora do acesso do operador.
+    alvo = next((c for c in contratos if c.get("numero") == contrato_num), None)
+    # Descreve o escopo visível: curinga, o conjunto de siglas, ou nenhuma.
+    escopo = "todos os contratos (curinga)" if siglas is None else (", ".join(sorted(siglas)) or "nenhuma sigla")
+    # Fase 3 — caso 1: operador não mapeado a grupo nenhum (login fora da lista).
+    if grupo is None:
+        return (f'o operador "{operador}" não está mapeado a nenhum grupo econômico '
+                f'(login fora da lista de operadores), então não enxerga contrato algum')
+    # Caso 2: o contrato nem existe na base (número inválido ou não cadastrado).
+    if alvo is None:
+        return (f'o contrato "{contrato_num}" não existe na base de contratos '
+                f'(número inválido ou não cadastrado); o operador "{operador}" pertence ao '
+                f'grupo {grupo} (siglas visíveis: {escopo})')
+    # Caso 3/Saída: existe, mas é de outra distribuidora/grupo.
+    return (f'o operador "{operador}" pertence ao grupo {grupo} (vê as siglas: {escopo}); '
+            f'o contrato {contrato_num} é da distribuidora {alvo.get("sigla")} '
+            f'(UF {alvo.get("uf")}), fora desse grupo')

@@ -11,7 +11,10 @@ por escape para evitar pegadinhas de normalização Unicode.
 """
 
 # Funções/constantes sob teste do módulo de acesso.
-from backend.acesso import grupo_do_operador, siglas_do_grupo, contratos_visiveis, montar_contexto
+from backend.acesso import (
+    grupo_do_operador, siglas_do_grupo, contratos_visiveis, montar_contexto,
+    motivo_acesso_negado,
+)
 # Autoridade real (lista de contratos selecionáveis com sigla) para as contagens.
 from backend.referencia import carregar_base_contratos
 
@@ -28,6 +31,27 @@ def _contratos_reais():
     """
     # Fase 1/Saída: usa o caminho padrão (raiz) e devolve a lista de detalhe.
     return carregar_base_contratos()["contratos"]
+
+
+def test_motivo_acesso_negado_explica_os_tres_casos():
+    """`motivo_acesso_negado` explica o PORQUÊ do 403 nos três cenários.
+
+    (1) contrato de outro grupo → cita grupo do operador + distribuidora/UF do contrato;
+    (2) contrato inexistente na base → diz que o número não existe;
+    (3) operador não mapeado → diz que ele não enxerga contrato algum.
+    """
+    contratos = [
+        {"numero": "CTR TESTE", "sigla": "EQUATORIAL", "uf": "AM"},
+    ]
+    # (1) energisa (grupo ENERGISA) tenta um contrato EQUATORIAL.
+    m1 = motivo_acesso_negado("energisa", "CTR TESTE", contratos)
+    assert "ENERGISA" in m1 and "EQUATORIAL" in m1 and "CTR TESTE" in m1 and "AM" in m1
+    # (2) contrato que não está na base.
+    m2 = motivo_acesso_negado("energisa", "XPTO 999", contratos)
+    assert "não existe na base" in m2 and "XPTO 999" in m2
+    # (3) operador fora do mapa de operadores (sem grupo).
+    m3 = motivo_acesso_negado("fulano", "CTR TESTE", contratos)
+    assert "não está mapeado" in m3 and "fulano" in m3
 
 
 def test_grupo_do_operador_resolve():
