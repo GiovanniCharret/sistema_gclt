@@ -110,6 +110,15 @@ and **"0 - Não é prioridade" consistency (err, 3 clauses)**: (0) column "0" is
 — **blank "0" = err** (since 2026-07-14; also closes the "row with nothing marked" hole);
 (1) if "0" = "Sim", all other tipologia columns must be "Não"; (2) if "0" = "Não",
 at least one other tipologia must be "Sim" (clauses 1–2 err since 2026-07-09).
+**Enquadramento (col N) × "0 - Não é prioridade" (col O) — 2 rules, err, since 2026-07-29:**
+(1) N = `2 - Famílias inscritas no CadÚnico` forces **O = "Não"**, and N =
+`0 - Não é prioridade` forces **O = "Sim"** (`_ENQUAD_EXIGE_ZERO`); every other
+enquadramento leaves O free. (2) N = CadÚnico also requires **at least one "Sim" among
+P:AZ** — deliberately overlapping the "0"-clause-2 error, with its own message.
+⚠️ Consequence: M ∈ {1,2,3,4} **combined with** N = `0 - Não é prioridade` is
+**unsatisfiable** (N=0 → O="Sim" → clause 1 forces every tipologia to "Não", but M forces
+the family column to "Sim") — the operator must change M or N.
+
 **Tipo de Comunidade × família (err, since 2026-07-29)** — direction M→U:X only, no reverse
 check: when column M is `1 - indígena` / `2 - quilombola` / `3 - ribeirinha` /
 `4 - extrativista`, the **matching** family column must be "Sim" — 1→IV.1 (U), 2→IV.2 (V),
@@ -198,8 +207,9 @@ exports as removable, not as source of truth.
 ### The official model file is VERSIONED
 
 The Anexo V model lives in **`manuais/`** (committed to the repo) with a **version-stamped
-name**: `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
-`.v260729.xlsx` = 29/07/2026). `GET /api/modelo` serves it from disk each request (no
+name**: `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx`, plus an
+optional `-N` suffix for a same-day revision (current: **`.v260729-2.xlsx`** = 2nd revision
+of 29/07/2026 — `VERSAO_DATA` stays `29/07/2026`, since the date didn't change). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
 (`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`

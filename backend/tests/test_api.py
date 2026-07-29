@@ -349,19 +349,19 @@ _DOM_VAL = {
     "UF": ["AM"],
     "SIM_NAO": ["Sim", "Não"],
     "TIPO_COMUNIDADE": ["1 - Comunidade indígena"],
-    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade"],
+    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade", "1 - Famílias de baixa renda"],
 }
 
-# Uma linha 100% válida (para o caminho limpo). Como o Tipo de Comunidade é
-# "1 - Comunidade indígena", a linha precisa de "IV.1 - Família indígena" = "Sim" — a
-# correspondência M→família virou ERRO em 2026-07-29 (antes era só aviso e o caminho
-# "limpo" passava mesmo sem a coluna).
+# Uma linha 100% válida (para o caminho limpo). Duas amarras vindas das regras de
+# 2026-07-29: (a) Tipo de Comunidade "1 - Comunidade indígena" exige
+# "IV.1 - Família indígena" = "Sim"; (b) o Enquadramento tem de ser um que NÃO amarre a
+# coluna "0 - Não é prioridade" — "0" exigiria "Sim" ali e "2 - CadÚnico" exigiria "Não".
 _LINHA_LIMPA = {
     "Número ODI": "O1", "Número da Unidade Consumidora": "U1",
     "Código IBGE do Município": "1302603", "Município": "MANACAPURU", "UF": "AM",
     "Latitude": "-3.30", "Longitude": "-60.0", "Data de Energização da UC": "14/02/2026",
     "Tipo de Atendimento": "Extensão de Rede", "Tipo de Comunidade": "1 - Comunidade indígena",
-    "Enquadramento do beneficiário": "0 - Não é prioridade",
+    "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
     "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
     "IV.1 - Família indígena": "Sim",
 }
@@ -481,7 +481,8 @@ def test_modelo_baixa_o_arquivo(client):
     r = client.get("/api/modelo", headers=_headers())
     assert r.status_code == 200
     assert "attachment" in r.headers.get("content-disposition", "").lower()
-    # O nome do download carrega a versão do modelo (v260729 desde 2026-07-29) para o
-    # operador distinguir de versões antigas já baixadas.
-    assert "v260729" in r.headers.get("content-disposition", "")
+    # O nome do download carrega a versão do modelo (v260729-2 = 2ª revisão de 29/07/2026)
+    # para o operador distinguir de versões antigas já baixadas. A asserção inclui o
+    # sufixo "-2" de propósito: só "v260729" passaria também com o arquivo anterior.
+    assert "v260729-2" in r.headers.get("content-disposition", "")
     assert len(r.content) > 0

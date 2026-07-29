@@ -18,7 +18,10 @@ DOM = {
         "4 - Comunidade extrativista",
         "11 - Rural geral / demais comunidades rurais",
     ],
-    "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade", "4 - Povos tradicionais"],
+    "ENQUADRAMENTO_BENEFICIARIO": [
+        "0 - Não é prioridade", "1 - Famílias de baixa renda",
+        "2 - Famílias inscritas no CadÚnico", "4 - Povos tradicionais",
+    ],
 }
 
 
@@ -28,6 +31,10 @@ def linha_valida(**over):
     O `Tipo de Comunidade` base é NÃO-tradicional (11) de propósito: a regra de
     correspondência comunidade×família (erro) só vale para 1/2/3/4, então a linha base
     não a aciona — cada teste dessa regra seta o tipo tradicional.
+
+    O `Enquadramento do beneficiário` base é "1 - Famílias de baixa renda" pelo mesmo
+    motivo: desde 2026-07-29 os enquadramentos "0" e "2 - CadÚnico" amarram a coluna
+    "0 - Não é prioridade", e a base precisa ficar fora dessas duas regras.
     """
     base = {
         "_linha": 3,
@@ -41,7 +48,7 @@ def linha_valida(**over):
         "Data de Energização da UC": "14/02/2026",
         "Tipo de Atendimento": "Extensão de Rede",
         "Tipo de Comunidade": "11 - Rural geral / demais comunidades rurais",
-        "Enquadramento do beneficiário": "0 - Não é prioridade",
+        "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
         "0 - Não é prioridade": "Não",
         "I - Baixa renda": "Sim",
     }
@@ -276,10 +283,91 @@ def test_enquadramento_fora_de_povos_tradicionais_nao_gera_mais_achado():
     2026-07-29: comunidade tradicional com outro enquadramento não gera mais achado."""
     linha = linha_valida(**{
         "Tipo de Comunidade": "1 - Comunidade indígena",
-        "Enquadramento do beneficiário": "0 - Não é prioridade",      # ≠ "4 - Povos tradicionais"
+        "Enquadramento do beneficiário": "1 - Famílias de baixa renda",  # ≠ "4 - Povos tradicionais"
         "IV.1 - Família indígena": "Sim",
     })
     assert regras_formato_dominio([linha], DOM) == []
+
+
+# ── D3 (cont.) · Enquadramento (N) × “0 - Não é prioridade” (O) e tipologias (P:AZ) ──
+# Duas regras de ERRO pedidas em 2026-07-29:
+#   (1) N = "2 - Famílias inscritas no CadÚnico" → O obrigatoriamente "Não";
+#       N = "0 - Não é prioridade"               → O obrigatoriamente "Sim".
+#   (2) N = "2 - Famílias inscritas no CadÚnico" → ao menos um "Sim" em P:AZ.
+
+def test_cadunico_com_zero_sim_e_erro():
+    """(1) CadÚnico exige “0 - Não é prioridade” = “Não”; com “Sim” → erro."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "2 - Famílias inscritas no CadÚnico",
+        "0 - Não é prioridade": "Sim", "I - Baixa renda": "Não",
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Enquadramento × “0 - Não é prioridade”") in _regras(achados)
+
+
+def test_cadunico_com_zero_nao_nao_gera_achado():
+    """(1) CadÚnico com “0” = “Não” e uma tipologia “Sim” → linha limpa."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "2 - Famílias inscritas no CadÚnico",
+        "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_enquadramento_zero_exige_coluna_zero_sim():
+    """(1) Enquadramento “0 - Não é prioridade” exige a coluna “0” = “Sim”; “Não” → erro."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "0 - Não é prioridade",
+        "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Enquadramento × “0 - Não é prioridade”") in _regras(achados)
+
+
+def test_enquadramento_zero_com_coluna_zero_sim_nao_gera_achado():
+    """(1) Enquadramento “0” com a coluna “0” = “Sim” (e nada mais marcado) → limpa."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "0 - Não é prioridade",
+        "0 - Não é prioridade": "Sim", "I - Baixa renda": "Não",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_cadunico_sem_nenhum_sim_nas_tipologias_e_erro():
+    """(2) CadÚnico exige ao menos um “Sim” entre P:AZ; nenhuma marcada → erro próprio.
+
+    A cláusula 2 do “0 - Não é prioridade” acusa a mesma linha por outro ângulo — são
+    achados distintos de propósito (mensagens diferentes para o operador).
+    """
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "2 - Famílias inscritas no CadÚnico",
+        "0 - Não é prioridade": "Não", "I - Baixa renda": "Não",
+    })
+    regras = _regras(regras_formato_dominio([linha], DOM))
+    assert ("err", "CadÚnico sem tipologia assinalada") in regras
+    assert ("err", "Nenhuma tipologia assinalada") in regras
+
+
+def test_cadunico_em_caixa_alta_e_reconhecido():
+    """As duas regras ignoram a caixa (casefold, como o resto do vocabulário)."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "2 - FAMÍLIAS INSCRITAS NO CADÚNICO",
+        "0 - Não é prioridade": "SIM", "I - Baixa renda": "Não",
+    })
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Enquadramento × “0 - Não é prioridade”") in _regras(achados)
+
+
+def test_outros_enquadramentos_nao_amarram_a_coluna_zero():
+    """Escopo: só os enquadramentos “0” e “2 - CadÚnico” amarram a coluna “0”; os demais
+    (ex.: “4 - Povos tradicionais”) ficam livres."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "4 - Povos tradicionais",
+        "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
+    })
+    titulos = {a["regra"] for a in regras_formato_dominio([linha], DOM)}
+    assert "Enquadramento × “0 - Não é prioridade”" not in titulos
+    assert "CadÚnico sem tipologia assinalada" not in titulos
 
 
 # ── D3 (cont.) · Comparações ignoram caixa alta/baixa (pedido 2026-07-15) ──

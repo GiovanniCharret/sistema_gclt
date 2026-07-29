@@ -47,6 +47,18 @@ _COMUNIDADE_FAMILIA = {
 # Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
 _COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
 
+# Enquadramentos (coluna N) que amarram a coluna "0 - Não é prioridade" (O) — pedido dos
+# clientes da planilha em 2026-07-29. Os demais enquadramentos não restringem a coluna O.
+_ENQUAD_CADUNICO = "2 - Famílias inscritas no CadÚnico"
+_ENQUAD_NAO_PRIORIDADE = "0 - Não é prioridade"
+# Enquadramento → valor exigido na coluna "0 - Não é prioridade".
+_ENQUAD_EXIGE_ZERO = {
+    # Inscrito no CadÚnico é, por definição, prioridade → a coluna "0" tem que ser "Não".
+    _ENQUAD_CADUNICO: "Não",
+    # Enquadrado como "não é prioridade" → a coluna "0" tem que ser "Sim" (coerência).
+    _ENQUAD_NAO_PRIORIDADE: "Sim",
+}
+
 # Campos obrigatórios em toda linha preenchida (§7).
 OBRIGATORIOS = [COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF, COL_LAT, COL_LON, COL_DATA]
 
@@ -229,6 +241,28 @@ def regras_formato_dominio(linhas, dominios):
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
 
+        # (erro) Enquadramento (coluna N) × coluna "0 - Não é prioridade" (O) e tipologias
+        # (P:AZ) — pedido dos clientes da planilha em 2026-07-29. Só os enquadramentos
+        # "2 - Famílias inscritas no CadÚnico" e "0 - Não é prioridade" restringem a
+        # coluna O; os demais ficam livres. Comparações ignoram a caixa (via `_eh`).
+        for enquadramento, zero_exigido in _ENQUAD_EXIGE_ZERO.items():
+            # Só age quando a linha está NESTE enquadramento (um casa por vez).
+            if not _eh(linha, COL_ENQUAD, enquadramento):
+                continue
+            # Regra 1: a coluna "0" tem que ter exatamente o valor exigido pelo enquadramento.
+            if not _eh(linha, COL_TIPOLOGIA_ZERO, zero_exigido):
+                achados.append(_achado("err", "Enquadramento × “0 - Não é prioridade”", loc,
+                                        COL_TIPOLOGIA_ZERO,
+                                        f'Enquadramento “{enquadramento}” exige “{zero_exigido}” '
+                                        f'em “{COL_TIPOLOGIA_ZERO}” (valor atual: "{zero}")',
+                                        f'preencher “{COL_TIPOLOGIA_ZERO}” com “{zero_exigido}”'))
+            # Regra 2: só o CadÚnico exige ao menos um "Sim" entre as demais tipologias.
+            if enquadramento == _ENQUAD_CADUNICO and not any(_eh(linha, c, "Sim") for c in demais):
+                achados.append(_achado("err", "CadÚnico sem tipologia assinalada", loc,
+                                        "Tipologia",
+                                        f'Enquadramento “{enquadramento}” sem nenhuma tipologia “Sim”',
+                                        "assinalar “Sim” em pelo menos uma tipologia (colunas I a VII.8)"))
+
         # (erro) Correspondência do Tipo de Comunidade tradicional (coluna M) com a sua
         # tipologia de família: 1→IV.1 (U), 2→IV.2 (V), 3→IV.3 (W), 4→IV.4 (X).
         # Simplificação pedida pelos clientes da planilha (2026-07-29): checa-se APENAS se
@@ -336,6 +370,8 @@ _DESCRICOES = {
     "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
+    "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” exige “Não” e “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
+    "CadÚnico sem tipologia assinalada": "Enquadramento “2 - Famílias inscritas no CadÚnico” exige ao menos uma tipologia “Sim”",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 
