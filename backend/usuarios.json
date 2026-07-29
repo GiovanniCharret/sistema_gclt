@@ -36,9 +36,9 @@
   },
   "enbpar": {
     "operador": "enbpar",
-    "senha_hash": "f73a505dae22db99935defcb63099d0527937e7970fca59935b41891e611465a",
-    "salt": "7e821999e599e1bcefa2e00ffb0d8e8e",
-    "precisa_trocar_senha": true,
+    "senha_hash": "e2ccbda932f8d73b9d4ef60ec3926cdaf2ded60407484ee56109457c553e82e8",
+    "salt": "4315364343cc9582e1d5d6e29e0fa1aa",
+    "precisa_trocar_senha": false,
     "ativo": true
   }
 }

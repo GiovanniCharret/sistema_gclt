@@ -27,23 +27,25 @@ COL_TIPO_ATEND = "Tipo de Atendimento"
 COL_TIPO_COM = "Tipo de Comunidade"
 COL_ENQUAD = "Enquadramento do beneficiário"
 COL_TIPOLOGIA_ZERO = "0 - Não é prioridade"
-# Tipologias de família dos povos tradicionais (colunas U/V/W do modelo) — usadas na
-# regra de coerência com o Tipo de Comunidade (avisos).
+# Tipologias de família dos povos tradicionais (colunas U/V/W/X do modelo) — usadas na
+# regra de correspondência com o Tipo de Comunidade (erro).
 COL_FAM_INDIGENA = "IV.1 - Família indígena"
 COL_FAM_QUILOMBOLA = "IV.2 - Família quilombola"
 COL_FAM_RIBEIRINHA = "IV.3 - Família ribeirinha"
+COL_FAM_EXTRATIVISTA = "IV.4 - Família extrativista"
 
-# Tipo de Comunidade tradicional → coluna de tipologia de família que deve casar (regra 2).
-# Só estes três tipos disparam as duas regras de coerência (avisos, desde 2026-07-14).
+# Tipo de Comunidade tradicional (coluna M) → coluna de família que deve estar "Sim".
+# Pedido dos clientes da planilha (2026-07-29): a regra é SÓ esta correspondência, e vale
+# apenas para estes quatro tipos; as demais colunas de família ficam livres (podem ser
+# "Sim" sem gerar achado) e os tipos 5–12 não disparam checagem alguma.
 _COMUNIDADE_FAMILIA = {
     "1 - Comunidade indígena": COL_FAM_INDIGENA,
     "2 - Comunidade quilombola": COL_FAM_QUILOMBOLA,
     "3 - Comunidade ribeirinha": COL_FAM_RIBEIRINHA,
+    "4 - Comunidade extrativista": COL_FAM_EXTRATIVISTA,
 }
 # Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
 _COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
-# Enquadramento exigido para comunidades tradicionais (regra 1).
-_ENQUAD_POVOS_TRADICIONAIS = "4 - Povos tradicionais"
 
 # Campos obrigatórios em toda linha preenchida (§7).
 OBRIGATORIOS = [COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF, COL_LAT, COL_LON, COL_DATA]
@@ -227,28 +229,21 @@ def regras_formato_dominio(linhas, dominios):
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
 
-        # (aviso) Coerência do Tipo de Comunidade tradicional (indígena/quilombola/
-        # ribeirinha) com o Enquadramento e a tipologia de família (colunas U/V/W).
-        # Só se aplica quando "Tipo de Comunidade" é uma das três (pedido 2026-07-14);
-        # não bloqueia o envio (severidade "warn").
+        # (erro) Correspondência do Tipo de Comunidade tradicional (coluna M) com a sua
+        # tipologia de família: 1→IV.1 (U), 2→IV.2 (V), 3→IV.3 (W), 4→IV.4 (X).
+        # Simplificação pedida pelos clientes da planilha (2026-07-29): checa-se APENAS se
+        # a família correspondente está "Sim" — as demais colunas de família são livres
+        # (podem ser "Sim" sem gerar achado). Bloqueia o envio (severidade "err").
         tipo_com = _txt(linha, COL_TIPO_COM)
-        # Casa o Tipo de Comunidade ignorando a caixa; None se não for tradicional (1/2/3).
+        # Casa o Tipo de Comunidade ignorando a caixa; None se não for 1/2/3/4.
         esperada = _COMUNIDADE_FAMILIA_CF.get(tipo_com.casefold())
+        # Só os quatro tipos mapeados disparam a regra (sem direção reversa).
         if esperada is not None:
-            # Regra 1: comunidade tradicional exige Enquadramento "4 - Povos tradicionais".
-            if not _eh(linha, COL_ENQUAD, _ENQUAD_POVOS_TRADICIONAIS):
-                achados.append(_achado("warn", "Enquadramento ≠ Povos tradicionais", loc, COL_ENQUAD,
-                                        f'“{tipo_com}” exige Enquadramento “{_ENQUAD_POVOS_TRADICIONAIS}”',
-                                        f'preencher Enquadramento com “{_ENQUAD_POVOS_TRADICIONAIS}”'))
-            # Regra 2: a família correspondente deve estar "Sim" e as outras duas ≠ "Sim"
-            # (célula em branco conta como "não marcada" para as outras duas).
-            familias = (COL_FAM_INDIGENA, COL_FAM_QUILOMBOLA, COL_FAM_RIBEIRINHA)
-            coincide = (_eh(linha, esperada, "Sim")
-                        and all(not _eh(linha, c, "Sim") for c in familias if c != esperada))
-            if not coincide:
-                achados.append(_achado("warn", "Tipologia de família ≠ Tipo de Comunidade", loc, esperada,
-                                        f'“{tipo_com}” deve ter “{esperada}” = “Sim” e as demais famílias = “Não”',
-                                        "alinhar IV.1/IV.2/IV.3 ao Tipo de Comunidade"))
+            # A família correspondente deve estar "Sim" (branco conta como não marcada).
+            if not _eh(linha, esperada, "Sim"):
+                achados.append(_achado("err", "Tipologia de família ≠ Tipo de Comunidade", loc, esperada,
+                                        f'“{tipo_com}” exige “{esperada}” = “Sim”',
+                                        f'preencher “{esperada}” com “Sim”'))
 
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
@@ -340,8 +335,7 @@ _DESCRICOES = {
     "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
     "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
-    "Enquadramento ≠ Povos tradicionais": "Comunidade tradicional (indígena/quilombola/ribeirinha) exige Enquadramento “4 - Povos tradicionais”",
-    "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3 deve refletir em Família indígena/quilombola/ribeirinha (IV.1/IV.2/IV.3)",
+    "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 

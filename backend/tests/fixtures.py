@@ -10,14 +10,18 @@ import io
 # `openpyxl` monta a planilha.
 import openpyxl
 
-# Subconjunto realista de colunas (as de identificação/localização + 2 tipologias),
+# Subconjunto realista de colunas (as de identificação/localização + 3 tipologias),
 # suficiente para exercitar as regras. O parser mapeia por NOME, então a ordem/qtd é livre.
+# `IV.1 - Família indígena` entrou em 2026-07-29: a regra de correspondência Tipo de
+# Comunidade × família virou ERRO, então uma linha "limpa" com comunidade indígena precisa
+# ter a coluna disponível para marcar "Sim". Célula em branco continua inerte nas demais
+# linhas (as regras de tipologia ignoram vazio).
 CABECALHO_PADRAO = [
     "Distribuidora", "Tipo de Atendimento", "Número ODI",
     "Número da Unidade Consumidora", "Código IBGE do Município", "Município",
     "UF", "Latitude", "Longitude", "Data de Energização da UC",
     "Tipo de Comunidade", "Enquadramento do beneficiário",
-    "0 - Não é prioridade", "I - Baixa renda",
+    "0 - Não é prioridade", "I - Baixa renda", "IV.1 - Família indígena",
 ]
 
 

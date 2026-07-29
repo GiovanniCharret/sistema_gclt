@@ -2,7 +2,7 @@ import { useState } from "react";
 import * as api from "../lib/api";
 
 // Passo 3 — conferência da versão da planilha antes do envio.
-const VERSAO_DATA = "14/07/2026";
+const VERSAO_DATA = "29/07/2026";
 
 export default function VersaoPlanilha({ token, onAvancar, onBack }) {
   const [baixado, setBaixado] = useState(false);

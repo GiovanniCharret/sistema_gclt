@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mock — Monitoramento dos Beneficiários do Programa</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
+
+/* ==========================================================================
+   CSS reproduzido VERBATIM de modelo/src/styles.css (mesmos tokens e valores).
+   Este arquivo é um MOCK estático de referência do site atual — não é código de
+   produção. O seletor de telas (.mockbar) é chrome só do mock, marcado abaixo.
+   ========================================================================== */
+
+:root {
+  --blue:          #1b80c4;
+  --blue-dark:     #1565a0;
+  --blue-hover:    #1672b0;
+  --navy:          #0d3558;
+  --text-primary:  #1e293b;
+  --text-secondary:#4a5568;
+  --text-muted:    #94a3b8;
+  --bg:            #f0f4f8;
+  --bg-card:       #ffffff;
+  --border:        rgba(0, 0, 0, 0.1);
+  --border-light:  #e2e8f0;
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.10);
+  --radius:        6px;
+  --radius-sm:     4px;
+  --topbar-h:      52px;
+
+  /* severidade */
+  --err-bg:#fef2f2; --err-bd:#fca5a5; --err-tx:#b91c1c;
+  --warn-bg:#fff7ed; --warn-bd:#fdba74; --warn-tx:#c2410c;
+  --ok-bg:#dcfce7; --ok-bd:#86efac; --ok-tx:#15803d;
+
+  font-family: 'Open Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, input, select, textarea { font: inherit; }
+
+/* ── AUTH ──────────────────────────────────────────────── */
+.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.auth-card {
+  width: min(440px, 100%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-top: 3px solid var(--blue);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 36px 32px 32px;
+}
+.auth-card.wide { width: min(720px, 100%); }
+.eyebrow { margin: 0 0 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--blue); font-weight: 600; }
+.auth-title { margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: var(--navy); }
+.auth-subtitle { margin: 10px 0 0; color: var(--text-secondary); line-height: 1.6; font-size: 0.875rem; }
+.login-form { display: grid; gap: 14px; margin-top: 24px; }
+.auth-actions { margin-top: 24px; }
+.field { display: grid; gap: 5px; }
+.field-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.field input {
+  border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  padding: 9px 12px; background: #fff; color: var(--text-primary);
+  transition: border-color 0.12s; font-size: 0.9rem;
+}
+.field input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(27, 128, 196, 0.12); }
+.btn-primary {
+  background: var(--blue); color: #fff; border: 1px solid var(--blue-dark);
+  border-radius: var(--radius-sm); padding: 10px 18px; cursor: pointer;
+  font-weight: 600; font-size: 0.875rem; transition: background 0.12s, box-shadow 0.12s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--blue-hover); box-shadow: 0 2px 6px rgba(27, 128, 196, 0.3); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.full { width: 100%; }
+.auth-links { display: flex; gap: 16px; margin-top: 14px; justify-content: center; }
+.auth-link { background: transparent; border: none; color: var(--blue); font-size: 0.82rem; text-decoration: underline; cursor: pointer; padding: 4px 6px; }
+.auth-link:hover { color: var(--blue-dark); }
+.auth-error { margin: 12px 0 0; padding: 8px 11px; border-radius: var(--radius-sm); font-size: 0.82rem; line-height: 1.45; background: var(--err-bg); border: 1px solid var(--err-bd); color: var(--err-tx); }
+.auth-ok { margin: 12px 0 0; padding: 8px 11px; border-radius: var(--radius-sm); font-size: 0.82rem; line-height: 1.45; background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
+
+/* ── APP SHELL / TOPBAR ────────────────────────────────── */
+.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  position: sticky; top: 0; z-index: 100; height: var(--topbar-h);
+  display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  background: var(--navy); border-bottom: 3px solid var(--blue);
+}
+.topbar-brand { font-size: 0.95rem; font-weight: 700; color: #fff; letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap; }
+.topbar-nav { display: flex; gap: 4px; margin-left: 12px; flex: 1; }
+.topbar-link { background: transparent; border: none; color: #cbd5e1; font-size: 0.85rem; padding: 6px 12px; border-radius: 3px; cursor: pointer; transition: background 0.12s, color 0.12s; }
+.topbar-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.topbar-link.is-active { background: rgba(255,255,255,0.12); color: #fff; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.topbar-uf {
+  font-size: 0.82rem; color: rgba(255,255,255,0.85); padding: 0 12px;
+  border-left: 1px solid rgba(255,255,255,0.2); max-width: 360px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.topbar-user { font-size: 0.8rem; color: #cbd5e1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 3px; }
+.topbar-logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); border-radius: var(--radius-sm); padding: 4px 12px; font-size: 0.8rem; color: #e2e8f0; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+.topbar-logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.55); }
+
+.main-content {
+  flex: 1; width: min(1200px, calc(100% - 32px)); margin: 0 auto;
+  padding: 20px 0 32px; display: flex; flex-direction: column; gap: 16px;
+}
+.card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 22px; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.section-kicker { margin: 0 0 3px; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--blue); font-weight: 700; }
+.card-title { margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.2; color: var(--text-primary); }
+.section-badge { font-size: 0.75rem; color: var(--text-secondary); background: #f1f5f9; border: 1px solid var(--border-light); border-radius: 3px; padding: 3px 8px; white-space: nowrap; margin-top: 4px; font-weight: 500; }
+
+/* botões auxiliares */
+.btn-ghost { background: #fff; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); padding: 7px 14px; font-size: 0.82rem; color: var(--text-primary); cursor: pointer; font-weight: 500; transition: border-color 0.12s, background 0.12s; white-space: nowrap; }
+.btn-ghost:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); background: #f8fbff; }
+.btn-ghost:disabled { opacity: 0.38; cursor: not-allowed; }
+.btn-link { background: transparent; border: none; color: var(--blue); font-size: 0.82rem; cursor: pointer; text-decoration: underline; padding: 4px 6px; }
+.btn-link:hover { color: var(--blue-dark); }
+
+.empty-state { padding: 28px 20px; text-align: center; border-radius: var(--radius-sm); background: #f8fafc; border: 1px dashed #cbd5e1; }
+.empty-state p { margin: 0; color: var(--text-secondary); font-size: 0.875rem; }
+.inline-error { padding: 9px 12px; background: var(--err-bg); border: 1px solid var(--err-bd); border-radius: var(--radius-sm); color: var(--err-tx); font-size: 0.85rem; margin: 12px 0; }
+
+/* ── UF SELECTOR ───────────────────────────────────────── */
+.uf-help { margin: 8px 0 0; color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6; }
+.uf-count { margin: 18px 0 8px; color: var(--text-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.uf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 24px; }
+.uf-item {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  padding: 12px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  background: #fff; cursor: pointer; transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.uf-item:hover { border-color: var(--blue); background: #f8fbff; box-shadow: var(--shadow); }
+.uf-item .uf-sigla { font-weight: 700; color: var(--navy); font-size: 1.1rem; }
+.uf-item .uf-nome { font-size: 0.8rem; color: var(--text-secondary); }
+.uf-item .uf-meta { font-size: 0.74rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* ── MENU PRINCIPAL (hub de módulos) ───────────────────── */
+.modulo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-top: 24px; }
+.modulo-card {
+  position: relative; overflow: hidden; text-align: left; width: 100%;
+  border: 1px solid var(--border-light); border-radius: var(--radius);
+  background: #fff; padding: 22px 24px; cursor: pointer; min-height: 156px;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.modulo-card:hover { border-color: var(--blue); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.modulo-wm {
+  position: absolute; right: -14px; bottom: -18px; width: 180px; height: auto;
+  color: var(--blue); opacity: 0.07; pointer-events: none; transition: opacity 0.15s;
+}
+.modulo-card:hover .modulo-wm { opacity: 0.13; }
+.modulo-card-body { position: relative; z-index: 1; }
+.modulo-card-title { margin: 0 0 6px; font-size: 1.1rem; font-weight: 700; color: var(--navy); }
+.modulo-card-desc { margin: 0 0 16px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; max-width: 78%; }
+.modulo-card-cta { font-size: 0.85rem; font-weight: 600; color: var(--blue); }
+
+/* ── CONTRATO SELECTOR (passo 2 · sublista) ────────────── */
+.contrato-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 24px; }
+.contrato-tile { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: #fff; cursor: pointer; transition: border-color 0.12s, background 0.12s, box-shadow 0.12s; }
+.contrato-tile:hover { border-color: var(--blue); background: #f8fbff; box-shadow: var(--shadow); }
+.contrato-numero { font-weight: 700; color: var(--navy); font-size: 1.02rem; }
+.contrato-meta { font-size: 0.82rem; color: var(--text-secondary); }
+.contrato-sigla { font-size: 0.76rem; color: var(--text-muted); font-family: ui-monospace, 'SF Mono', Consolas, monospace; }
+.contrato-ucs { font-size: 0.78rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.contrato-vig { align-self: flex-start; margin-top: 6px; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.contrato-vig.andamento { background: #eff8ff; color: var(--blue-dark); border: 1px solid #93c5fd; }
+.contrato-vig.encerramento { background: var(--warn-bg); color: var(--warn-tx); border: 1px solid var(--warn-bd); }
+.btn-row { display: flex; gap: 10px; margin-top: 18px; }
+
+/* ── VERSÃO DA PLANILHA (passo 3) ──────────────────────── */
+.versao-card { margin-top: 24px; border: 1px solid var(--border-light); border-radius: var(--radius); background: #f8fbff; padding: 18px 20px; }
+.versao-card .section-kicker { margin-bottom: 4px; }
+.versao-btn { margin-top: 14px; }
+.versao-baixado { margin: 8px 0 0; font-size: 0.78rem; color: var(--ok-tx); }
+.btn-back { background: transparent; color: var(--blue); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 9px 14px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: background 0.12s, border-color 0.12s; }
+.btn-back:hover { background: #f8fafc; border-color: var(--blue); }
+
+/* ── DROPZONE / PROGRESS ───────────────────────────────── */
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 30px 20px; border: 1.5px dashed #93c5fd; border-radius: var(--radius);
+  background: #f8fbff; cursor: pointer; transition: border-color 0.12s, background 0.12s; text-align: center;
+}
+.dropzone:hover, .dropzone.is-drag { border-color: var(--blue); background: #eff8ff; }
+.dropzone-icon { width: 30px; height: 30px; color: var(--blue); opacity: 0.85; }
+.dropzone-label { font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+.dropzone-hint { font-size: 0.78rem; color: var(--text-muted); }
+
+.file-pill { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border: 1px solid #cfe6f6; background: #f6fbff; border-radius: var(--radius-sm); }
+.file-pill .fp-icon { font-size: 18px; }
+.file-pill .fp-name { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 0.82rem; color: var(--text-primary); word-break: break-all; }
+.file-pill .fp-size { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+.file-pill .fp-clear { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 1rem; cursor: pointer; padding: 2px 6px; }
+.file-pill .fp-clear:hover { color: var(--err-tx); }
+
+.progress-block { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+.progress-phases { display: flex; gap: 18px; margin-bottom: 4px; }
+.progress-phases span { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; transition: color 0.2s; }
+.phase-idle { color: var(--text-muted); opacity: 0.55; }
+.phase-active { color: var(--blue); }
+.phase-done { color: #16a34a; }
+.progress-track { height: 5px; border-radius: 2px; background: #e2e8f0; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 2px; background: var(--blue); transition: width 200ms ease; }
+.progress-fill.is-processing { background: linear-gradient(90deg, var(--blue), var(--blue-dark), var(--blue)); background-size: 200% 100%; animation: progress-wave 1.2s linear infinite; }
+@keyframes progress-wave { 0% { background-position: 200% 0; } 100% { background-position: 0 0; } }
+.progress-label { font-size: 0.78rem; color: var(--text-muted); }
+
+.upload-actions { display: flex; gap: 10px; margin-top: 18px; }
+.banner-fix {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  padding: 10px 14px; background: var(--warn-bg); border: 1px solid var(--warn-bd);
+  color: var(--warn-tx); border-radius: var(--radius-sm); font-size: 0.85rem;
+}
+
+/* ── PAINEL DE INCONSISTÊNCIAS ─────────────────────────── */
+.assist { display: flex; gap: 12px; align-items: flex-start; background: #f1f8fd; border: 1px solid #cfe6f6; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.assist-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 1rem; }
+.assist-body { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; }
+.assist-body strong { color: var(--text-primary); }
+
+.val-summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.val-pill { display: flex; align-items: center; gap: 8px; border-radius: var(--radius-sm); padding: 8px 14px; font-size: 0.85rem; font-weight: 600; border: 1px solid var(--border-light); background: #fff; color: var(--text-secondary); }
+.val-pill .big { font-size: 1.05rem; }
+.val-pill.err { background: var(--err-bg); border-color: var(--err-bd); color: var(--err-tx); }
+.val-pill.warn { background: var(--warn-bg); border-color: var(--warn-bd); color: var(--warn-tx); }
+
+.av-split { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.av-col-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 700; margin: 0 0 10px; }
+
+.rule-group { border: 1px solid var(--border-light); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+.rule-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; background: #fff; width: 100%; border: none; text-align: left; color: inherit; }
+.rule-head:hover { background: #f8fafc; }
+.sev-badge { flex: none; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 3px 8px; border-radius: 999px; }
+.sev-badge.err { background: var(--err-bg); color: var(--err-tx); }
+.sev-badge.warn { background: var(--warn-bg); color: var(--warn-tx); }
+.rule-titles { min-width: 0; }
+.rule-title { font-weight: 600; font-size: 0.9rem; color: var(--text-primary); }
+.rule-desc { font-size: 0.76rem; color: var(--text-muted); }
+.rule-count { margin-left: auto; font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 0.8rem; color: var(--text-secondary); }
+.rule-chevron { transition: transform 150ms; color: var(--text-muted); font-size: 0.85rem; }
+.rule-group.is-open .rule-chevron { transform: rotate(90deg); }
+.rule-body { display: none; border-top: 1px solid var(--border-light); background: #fcfdfe; }
+.rule-group.is-open .rule-body { display: block; }
+.issue-row { display: grid; grid-template-columns: 90px 110px 1fr; gap: 12px; padding: 9px 14px; border-top: 1px solid #eef2f6; font-size: 0.8rem; align-items: baseline; }
+.issue-row:first-child { border-top: none; }
+.issue-loc { font-family: ui-monospace, 'SF Mono', Consolas, monospace; color: var(--blue-dark); }
+.issue-field { font-weight: 600; color: var(--text-secondary); }
+.issue-msg { color: var(--text-secondary); line-height: 1.45; }
+.issue-msg .sug { color: var(--text-muted); }
+.issue-msg code { font-family: ui-monospace, 'SF Mono', Consolas, monospace; background: #eef2f6; padding: 1px 5px; border-radius: 3px; color: var(--err-tx); }
+
+/* preview da planilha */
+.av-preview-wrap { border: 1px solid var(--border-light); border-radius: var(--radius); overflow: hidden; }
+.av-preview-scroll { overflow-x: auto; }
+.av-preview { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+.av-preview th, .av-preview td { padding: 7px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid #eef2f6; }
+.av-preview th { background: #f1f5f9; color: var(--navy); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; position: sticky; top: 0; }
+.av-preview td.num { font-family: ui-monospace, 'SF Mono', Consolas, monospace; color: var(--text-secondary); }
+.av-preview .cell-err { background: var(--err-bg); color: var(--err-tx); font-weight: 600; border-radius: 3px; }
+.av-preview .cell-warn { background: var(--warn-bg); color: var(--warn-tx); font-weight: 600; }
+.av-preview-foot { padding: 8px 12px; font-size: 0.74rem; color: var(--text-muted); background: #f8fafc; border-top: 1px solid var(--border-light); }
+.assist-body .assist-erro { color: #dc2626; font-weight: 700; }
+.av-col-preview { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-light); }
+
+.panel-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+/* ── SUCESSO ───────────────────────────────────────────── */
+.success-card { text-align: center; padding: 44px 32px; }
+.success-icon { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px; background: var(--ok-bg); color: var(--ok-tx); display: grid; place-items: center; font-size: 2rem; }
+.success-title { font-size: 1.4rem; font-weight: 700; color: var(--navy); margin: 0 0 6px; }
+.success-sub { color: var(--text-secondary); margin: 0 auto 22px; max-width: 480px; line-height: 1.6; }
+.success-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin-bottom: 24px; }
+.success-meta .mi { font-size: 0.84rem; color: var(--text-secondary); }
+.success-meta .mi b { color: var(--text-primary); }
+.success-avisos { text-align: left; margin-top: 8px; padding-top: 22px; border-top: 1px solid var(--border-light); }
+.success-avisos-hint { margin: -4px 0 14px; font-size: 0.84rem; color: var(--text-secondary); }
+.success-actions { justify-content: center; margin-top: 22px; }
+
+/* ── FOOTER ────────────────────────────────────────────── */
+.app-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: var(--navy); font-size: 0.74rem; color: #94a3b8; font-weight: 500; letter-spacing: 0.02em; }
+
+/* ── TOAST ─────────────────────────────────────────────── */
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--navy); color: #fff; padding: 11px 18px; border-radius: var(--radius); font-size: 0.85rem; box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity 200ms, transform 200ms; z-index: 200; }
+.toast.is-on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── RESPONSIVE ────────────────────────────────────────── */
+@media (max-width: 800px) {
+  .topbar { padding: 0 16px; }
+  .topbar-user { display: none; }
+  .main-content { width: calc(100% - 24px); padding: 14px 0 24px; }
+  .card { padding: 16px; border-radius: var(--radius-sm); }
+}
+@media (max-width: 480px) {
+  .app-footer { flex-direction: column; gap: 3px; text-align: center; }
+}
+
+/* ==========================================================================
+   MOCKBAR — chrome EXCLUSIVO deste mock (não existe no site real). Painel
+   flutuante para pular entre as telas do fluxo. Fica claramente destacado.
+   ========================================================================== */
+.mockbar {
+  position: fixed; right: 14px; bottom: 14px; z-index: 500;
+  display: flex; flex-direction: column; gap: 6px;
+  background: #0b1f33; color: #e2e8f0; border: 1px solid #1e3a5f;
+  border-radius: 10px; padding: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  max-width: 220px; font-family: 'Open Sans', system-ui, sans-serif;
+}
+.mockbar-title { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: #7dd3fc; font-weight: 700; margin-bottom: 2px; }
+.mockbar-hint { font-size: 0.62rem; color: #94a3b8; line-height: 1.4; margin-bottom: 4px; }
+.mockbar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.mockbar button {
+  background: rgba(255,255,255,0.06); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 5px; padding: 6px 8px; font-size: 0.72rem; cursor: pointer; text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.mockbar button:hover { background: rgba(125,211,252,0.16); border-color: #7dd3fc; }
+.mockbar button.is-active { background: var(--blue); border-color: var(--blue-dark); color: #fff; font-weight: 600; }
+.mockbar-collapse { position: absolute; top: 8px; right: 10px; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem; padding: 0; }
+.mockbar.is-min .mockbar-grid, .mockbar.is-min .mockbar-hint { display: none; }
+
+/* cada tela ocupa a viewport; só a ativa aparece */
+.screen { display: none; }
+.screen.is-active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ 1 · LOGIN (AuthScreen) ══════════════════ -->
+<div class="screen is-active" data-screen="login">
+  <div class="auth-shell">
+    <div class="auth-card">
+      <p class="eyebrow">ENBPar - Diretoria de Gestão de Programas - GCLT</p>
+      <h1 class="auth-title">Entrar</h1>
+      <p class="auth-subtitle">Sistema Gerenciador do Programa Luz para Todos</p>
+      <form class="login-form" onsubmit="show('menu');return false;">
+        <div class="field">
+          <label class="field-label">Operador</label>
+          <input type="text" value="enbpar" placeholder="operador" />
+        </div>
+        <div class="field">
+          <label class="field-label">Senha</label>
+          <input type="password" value="Senha123" placeholder="••••••••" />
+        </div>
+        <button class="btn-primary full" type="submit">Entrar</button>
+      </form>
+      <div class="auth-links">
+        <button type="button" class="auth-link" onclick="show('senha')">Esqueci minha senha</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 2 · TROCAR SENHA (1º acesso) ══════════════════ -->
+<div class="screen" data-screen="senha">
+  <div class="auth-shell">
+    <div class="auth-card">
+      <p class="eyebrow">Primeiro acesso</p>
+      <h1 class="auth-title">Definir nova senha</h1>
+      <p class="auth-subtitle">Crie uma nova senha para <strong>enbpar</strong> antes de continuar.</p>
+      <form class="login-form" onsubmit="show('menu');return false;">
+        <div class="field">
+          <label class="field-label">Nova senha</label>
+          <input type="password" placeholder="ao menos 6 caracteres" />
+        </div>
+        <div class="field">
+          <label class="field-label">Confirmar nova senha</label>
+          <input type="password" placeholder="••••••••" />
+        </div>
+        <button class="btn-primary full" type="submit">Salvar e entrar</button>
+      </form>
+      <div class="auth-links">
+        <button type="button" class="auth-link" onclick="show('login')">Voltar ao login</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 3 · MENU PRINCIPAL ══════════════════ -->
+<div class="screen" data-screen="menu">
+  <div class="auth-shell">
+    <div class="auth-card wide">
+      <p class="eyebrow">MME · Luz para Todos</p>
+      <h1 class="auth-title">Menu principal</h1>
+      <p class="auth-subtitle">Selecione um módulo para começar.</p>
+      <div class="modulo-grid">
+        <button type="button" class="modulo-card" onclick="show('uf')">
+          <svg class="modulo-wm" viewBox="0 0 240 200" fill="none" stroke="currentColor"
+            stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="196" cy="44" r="16" />
+            <line x1="196" y1="14" x2="196" y2="4" /><line x1="196" y1="84" x2="196" y2="74" />
+            <line x1="166" y1="44" x2="156" y2="44" /><line x1="236" y1="44" x2="226" y2="44" />
+            <line x1="174" y1="22" x2="167" y2="15" /><line x1="218" y1="66" x2="225" y2="73" />
+            <line x1="218" y1="22" x2="225" y2="15" /><line x1="174" y1="66" x2="167" y2="73" />
+            <path d="M48 100 L96 62 L144 100" /><path d="M58 96 L58 168 L134 168 L134 96" />
+            <rect x="86" y="132" width="22" height="36" /><rect x="68" y="112" width="18" height="18" />
+            <line x1="186" y1="92" x2="186" y2="170" /><line x1="172" y1="104" x2="200" y2="104" />
+            <path d="M186 96 C 168 104, 150 92, 134 84" /><line x1="24" y1="170" x2="216" y2="170" />
+          </svg>
+          <div class="modulo-card-body">
+            <h2 class="modulo-card-title">Monitoramento dos Beneficiários do Programa</h2>
+            <p class="modulo-card-desc">Upload de Informações Sobre Unidades Consumidoras — Decreto Nº 12.964, de 8 de Maio de 2026</p>
+            <span class="modulo-card-cta">Acessar →</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 4 · SELETOR DE UF ══════════════════ -->
+<div class="screen" data-screen="uf">
+  <div class="auth-shell">
+    <div class="auth-card wide">
+      <p class="eyebrow">Passo 2 · Selecione a UF e o contrato</p>
+      <h1 class="auth-title">Unidade da Federação</h1>
+      <div class="uf-grid">
+        <button type="button" class="uf-item" onclick="show('contrato')">
+          <span class="uf-sigla">AM</span><span class="uf-nome">Amazonas</span><span class="uf-meta">4 contratos</span>
+        </button>
+        <button type="button" class="uf-item" onclick="show('contrato')">
+          <span class="uf-sigla">PA</span><span class="uf-nome">Pará</span><span class="uf-meta">3 contratos</span>
+        </button>
+        <button type="button" class="uf-item" onclick="show('contrato')">
+          <span class="uf-sigla">RR</span><span class="uf-nome">Roraima</span><span class="uf-meta">2 contratos</span>
+        </button>
+        <button type="button" class="uf-item" onclick="show('contrato')">
+          <span class="uf-sigla">MA</span><span class="uf-nome">Maranhão</span><span class="uf-meta">2 contratos</span>
+        </button>
+        <button type="button" class="uf-item" onclick="show('contrato')">
+          <span class="uf-sigla">AC</span><span class="uf-nome">Acre</span><span class="uf-meta">1 contrato</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 5 · SELETOR DE CONTRATO ══════════════════ -->
+<div class="screen" data-screen="contrato">
+  <div class="auth-shell">
+    <div class="auth-card wide">
+      <p class="eyebrow">Passo 2 · Selecione o contrato</p>
+      <h1 class="auth-title">Contrato — AM · Amazonas</h1>
+      <div class="contrato-grid">
+        <button type="button" class="contrato-tile" onclick="show('versao')">
+          <span class="contrato-numero">ECM 018/2025</span>
+          <span class="contrato-meta">MLA, 2ª Tranche</span>
+          <span class="contrato-sigla">ÂMBAR · AM</span>
+          <span class="contrato-ucs">3.421 UCs cadastradas</span>
+          <span class="contrato-vig andamento">Andamento</span>
+        </button>
+        <button type="button" class="contrato-tile" onclick="show('versao')">
+          <span class="contrato-numero">ECM 027/2025</span>
+          <span class="contrato-meta">LPT, 1ª Tranche</span>
+          <span class="contrato-sigla">ÂMBAR · AM</span>
+          <span class="contrato-ucs">1.240 UCs cadastradas</span>
+          <span class="contrato-vig andamento">Andamento</span>
+        </button>
+        <button type="button" class="contrato-tile" onclick="show('versao')">
+          <span class="contrato-numero">ECM 029/2026</span>
+          <span class="contrato-meta">LPT, 1ª Tranche</span>
+          <span class="contrato-sigla">ÂMBAR · AM</span>
+          <span class="contrato-ucs">876 UCs cadastradas</span>
+          <span class="contrato-vig andamento">Andamento</span>
+        </button>
+        <button type="button" class="contrato-tile" onclick="show('versao')">
+          <span class="contrato-numero">ECM 041/2024</span>
+          <span class="contrato-meta">MLA, 1ª Tranche</span>
+          <span class="contrato-sigla">ÂMBAR · AM</span>
+          <span class="contrato-ucs">2.058 UCs cadastradas</span>
+          <span class="contrato-vig encerramento">Encerramento</span>
+        </button>
+      </div>
+      <div class="btn-row">
+        <button class="btn-back" onclick="show('uf')">← Trocar UF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 6 · VERSÃO DA PLANILHA ══════════════════ -->
+<div class="screen" data-screen="versao">
+  <div class="auth-shell">
+    <div class="auth-card wide">
+      <p class="eyebrow">Passo 3 · Confira a versão da sua planilha</p>
+      <h1 class="auth-title">Versão da planilha</h1>
+      <p class="auth-subtitle">Confira se sua versão de planilha está atualizada. Não é possível enviar dados com uma versão de planilha desatualizada.</p>
+      <div class="versao-card">
+        <p class="section-kicker">Modelo oficial</p>
+        <h2 class="card-title">Versão de 14/07/2026</h2>
+        <button class="btn-ghost versao-btn" onclick="this.nextElementSibling.style.display='block'">Baixar modelo</button>
+        <p class="versao-baixado" style="display:none">✓ Modelo baixado</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn-back" onclick="show('contrato')">← Trocar contrato</button>
+        <button class="btn-primary" onclick="show('upload')">Avançar para o envio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 7·8·9 · SHELL LOGADO (upload / painel / sucesso) ══════════════════ -->
+<div class="screen" data-screen="upload">   <div class="app-shell" data-shell></div></div>
+<div class="screen" data-screen="painel">   <div class="app-shell" data-shell></div></div>
+<div class="screen" data-screen="sucesso">  <div class="app-shell" data-shell></div></div>
+
+<!-- painel flutuante do mock (não é do site) -->
+<div class="mockbar" id="mockbar">
+  <button class="mockbar-collapse" onclick="document.getElementById('mockbar').classList.toggle('is-min')" title="Minimizar">▾</button>
+  <div class="mockbar-title">Mock · telas</div>
+  <div class="mockbar-hint">Site atual — Monitoramento dos Beneficiários. Clique para pular entre telas.</div>
+  <div class="mockbar-grid" id="mockbar-grid"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── dados de topbar/footer + telas do shell logado ─────────────────────────
+const UF = { sigla: "AM", nome: "Amazonas" };
+const CONTRATO = { numero: "ECM 027/2025", sigla: "ÂMBAR", tipo_contrato: "LPT", tranche: "1ª Tranche" };
+const USER = "enbpar";
+
+// grupos de inconsistências (reproduz seedData.RULE_GROUPS)
+const RULE_GROUPS = [
+  { sev:"err", title:"Campos obrigatórios vazios", desc:"Colunas obrigatórias na aba Preenchimento", count:8, rows:[
+    { loc:"L47", field:"Latitude", problem:"célula vazia", sug:"preencher em graus decimais (ex.: -3.301800)" },
+    { loc:"L102", field:"Código IBGE", problem:"célula vazia", sug:"informar o código IBGE de 7 dígitos do município" },
+    { loc:"L155", field:"Número da UC", problem:"célula vazia", sug:"campo-chave; obrigatório para todas as UCs" },
+    { loc:"L210", field:"Data Energização", problem:"célula vazia", sug:"data de energização da UC (DD/MM/AAAA)" } ] },
+  { sev:"err", title:"Valor fora do domínio", desc:"Valor não consta na lista de domínios válidos", count:3, rows:[
+    { loc:"L47", field:"UF", problem:"valor “XX” não é uma UF válida", sug:"usar sigla de 2 letras (AM, PA, RR…)" },
+    { loc:"L63", field:"Tipo de Atendimento", problem:"valor “Rede” inválido", sug:"usar “Extensão de Rede” ou “Sistemas de Geração…”" },
+    { loc:"L91", field:"Tipo de Comunidade", problem:"valor “13” inexistente", sug:"o domínio aceita 1 a 12" } ] },
+  { sev:"err", title:"Coordenadas inválidas", desc:"Latitude/Longitude fora da faixa geográfica", count:2, rows:[
+    { loc:"L77", field:"Latitude", problem:"valor “91.5” fora da faixa", sug:"latitude deve estar entre -90 e 90" },
+    { loc:"L120", field:"Longitude", problem:"valor “0” suspeito", sug:"confirmar a coordenada da UC" } ] },
+  { sev:"err", title:"Chave ODI + UC duplicada", desc:"Mesma combinação Número ODI + Número da UC em mais de uma linha", count:1, rows:[
+    { loc:"L12 / L4087", field:"ODI + UC", problem:"ODI “210001” + UC “70012345” repetida", sug:"cada UC deve aparecer uma única vez" } ] },
+  { sev:"warn", title:"“0 - Não é prioridade” + outra tipologia", desc:"Regra: marcar “0” só quando nenhuma outra tipologia se aplica", count:5, rows:[
+    { loc:"L30", field:"Tipologia", problem:"“0 - Não é prioridade” = Sim junto com “I - Baixa renda” = Sim", sug:"desmarcar “0” quando houver outra tipologia" },
+    { loc:"L44", field:"Tipologia", problem:"“0 - Não é prioridade” = Sim junto com “IV.1 - Família indígena” = Sim", sug:"revisar a marcação" } ] },
+  { sev:"warn", title:"UCs faltando", desc:"UCs da referência que não vieram na planilha", count:3, rows:[
+    { loc:"—", field:"UC", problem:"UC 70099001 (ODI 210050) não está na planilha", sug:"incluir na planilha ou confirmar a exclusão da UC" } ] },
+  { sev:"warn", title:"Valor de tipologia ≠ Sim/Não", desc:"Colunas de tipologia aceitam apenas “Sim” ou “Não”", count:2, rows:[
+    { loc:"L88", field:"V.1 - Escolas", problem:"valor “X” inválido", sug:"usar “Sim” ou “Não”" } ] },
+];
+const TOTAL_ERROS = RULE_GROUPS.filter(g=>g.sev==="err").reduce((a,g)=>a+g.count,0);
+const TOTAL_AVISOS = RULE_GROUPS.filter(g=>g.sev==="warn").reduce((a,g)=>a+g.count,0);
+const LINHAS_LIDAS = 1240;
+
+const PREVIEW_COLS = [
+  {key:"linha",label:"Linha"},{key:"odi",label:"Nº ODI"},{key:"uc",label:"Nº UC"},
+  {key:"municipio",label:"Município"},{key:"uf",label:"UF"},{key:"ibge",label:"Cód. IBGE"},
+  {key:"latitude",label:"Latitude"},{key:"energizacao",label:"Energização"},{key:"tipoAtend",label:"Tipo de Atendimento"} ];
+const PREVIEW_ROWS = [
+  {linha:"L12",odi:"210001",uc:"70012345",municipio:"MANACAPURU",uf:"AM",ibge:"1302603",latitude:"-3.3018",energizacao:"14/02/2026",tipoAtend:"Extensão de Rede",flags:{uc:"err"}},
+  {linha:"L30",odi:"210002",uc:"70012890",municipio:"COARI",uf:"AM",ibge:"1301209",latitude:"-4.0851",energizacao:"20/02/2026",tipoAtend:"Extensão de Rede",flags:{}},
+  {linha:"L47",odi:"210010",uc:"70013001",municipio:"TEFÉ",uf:"XX",ibge:"1304203",latitude:"(vazio)",energizacao:"25/02/2026",tipoAtend:"Extensão de Rede",flags:{uf:"err",latitude:"err"}},
+  {linha:"L63",odi:"210015",uc:"70013120",municipio:"CARAUARI",uf:"AM",ibge:"1300805",latitude:"-4.8828",energizacao:"02/03/2026",tipoAtend:"Rede",flags:{tipoAtend:"err"}},
+  {linha:"L77",odi:"210021",uc:"70013240",municipio:"EIRUNEPÉ",uf:"AM",ibge:"1301407",latitude:"91.5",energizacao:"08/03/2026",tipoAtend:"Extensão de Rede",flags:{latitude:"err"}},
+  {linha:"L102",odi:"210033",uc:"70013355",municipio:"BORBA",uf:"AM",ibge:"(vazio)",latitude:"-4.3877",energizacao:"15/03/2026",tipoAtend:"Sist. Geração Descentralizado",flags:{ibge:"err"}},
+  {linha:"L201",odi:"210050",uc:"70013470",municipio:"MAUÉS",uf:"AM",ibge:"1302504",latitude:"-3.3839",energizacao:"12/11/2025",tipoAtend:"Extensão de Rede",flags:{energizacao:"warn"}},
+];
+
+const nf = (n) => n.toLocaleString("pt-BR");
+const formatarLoc = (loc) => { const m = /^L(\d+)$/.exec(String(loc ?? "")); return m ? "Linha "+m[1] : loc; };
+
+// topbar + footer comuns ao shell logado
+function shellChrome(activeNav, inner) {
+  return `
+  <header class="topbar">
+    <span class="topbar-brand">Monitoramento dos Beneficiários</span>
+    <nav class="topbar-nav">
+      <button class="topbar-link${activeNav==="upload"?" is-active":""}" onclick="show('upload')">Envio da Planilha</button>
+      <button class="topbar-link" onclick="show('uf')">Trocar Contrato</button>
+    </nav>
+    <div class="topbar-right">
+      <span class="topbar-uf" title="${UF.sigla} · ${CONTRATO.numero}">${UF.sigla} · ${CONTRATO.numero}</span>
+      <span class="topbar-user">${USER}</span>
+      <button class="topbar-logout" onclick="show('login')">Sair</button>
+    </div>
+  </header>
+  <main class="main-content">${inner}</main>
+  <footer class="app-footer">
+    <span>Mock · Monitoramento dos Beneficiários do Programa</span>
+    <span>Programa Luz para Todos · MME · ENBPar</span>
+  </footer>`;
+}
+
+// grupos de regra (expansíveis) — replica RuleGroups.jsx
+function ruleGroupsHtml(grupos) {
+  return grupos.map((g,i) => `
+    <div class="rule-group${i===0?" is-open":""}">
+      <button class="rule-head" onclick="this.parentElement.classList.toggle('is-open')">
+        <span class="sev-badge ${g.sev}">${g.sev==="err"?"Erro":"Aviso"}</span>
+        <span class="rule-titles">
+          <span class="rule-title">${g.title}</span><br />
+          <span class="rule-desc">${g.desc}</span>
+        </span>
+        <span class="rule-count">${g.count}</span>
+        <span class="rule-chevron">▸</span>
+      </button>
+      <div class="rule-body">
+        ${g.rows.map(r => `
+          <div class="issue-row">
+            <span class="issue-loc">${formatarLoc(r.loc)}</span>
+            <span class="issue-field">${r.field}</span>
+            <span class="issue-msg">${r.problem} <span class="sug">→ ${r.sug}</span></span>
+          </div>`).join("")}
+        ${g.count > g.rows.length ? `
+          <div class="issue-row">
+            <span class="issue-loc"></span><span class="issue-field"></span>
+            <span class="issue-msg sug">+ ${g.count - g.rows.length} outra(s) ocorrência(s)…</span>
+          </div>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+// 7 · UPLOAD (estado ocioso da dropzone)
+function uploadInner() {
+  return `
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <p class="section-kicker">Envio · ${CONTRATO.numero}</p>
+        <h2 class="card-title">Planilha Anexo V — Painel de Monitoramento dos Beneficiários do Programa</h2>
+      </div>
+      <span class="section-badge">.xlsx somente</span>
+    </div>
+    <div class="dropzone" onclick="show('painel')">
+      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M7 16a4 4 0 0 1-.88-7.903A5 5 0 1 1 15.9 6L16 6a5 5 0 0 1 1 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <strong class="dropzone-label">Arraste a planilha (.xlsx) ou clique para selecionar</strong>
+      <span class="dropzone-hint">Apenas a aba “Preenchimento” é validada</span>
+    </div>
+    <div class="upload-actions">
+      <button class="btn-primary" onclick="show('painel')">Validar e enviar</button>
+    </div>
+    <p class="dropzone-hint" style="margin-top:10px">Mock: clique na dropzone ou no botão para ver o painel de inconsistências.</p>
+  </section>`;
+}
+
+// 8 · PAINEL DE INCONSISTÊNCIAS
+function painelInner() {
+  const gruposOrdenados = [...RULE_GROUPS].sort((a,b) => (a.sev==="err"?0:1)-(b.sev==="err"?0:1));
+  const thead = PREVIEW_COLS.map(c => `<th>${c.label}</th>`).join("");
+  const tbody = PREVIEW_ROWS.map(row => `<tr>${PREVIEW_COLS.map(c => {
+      const flag = row.flags[c.key];
+      const cls = (c.key==="linha"||c.key==="odi"||c.key==="uc"||c.key==="ibge") ? "num" : "";
+      const val = c.key==="linha" ? formatarLoc(row[c.key]) : row[c.key];
+      const span = flag==="err" ? `<span class="cell-err">${val}</span>` : flag==="warn" ? `<span class="cell-warn">${val}</span>` : val;
+      return `<td class="${cls}">${span}</td>`;
+    }).join("")}</tr>`).join("");
+  return `
+  <section class="card">
+    <div class="card-header">
+      <div><p class="section-kicker">Validação</p><h2 class="card-title">Inconsistências encontradas</h2></div>
+      <span class="section-badge">${CONTRATO.numero} · ${UF.sigla}</span>
+    </div>
+    <div class="assist">
+      <div class="assist-avatar">🤖</div>
+      <div class="assist-body">
+        Recebi a planilha do contrato <strong>${CONTRATO.numero}</strong> (${CONTRATO.sigla} · ${UF.sigla}). Li
+        <strong>${nf(LINHAS_LIDAS)} unidades consumidoras</strong>.
+        <span class="assist-erro">Encontrei ${TOTAL_EROS_TXT()} ${TOTAL_EROS_PL()}. Os erros impedem o salvamento na base</span>
+        — corrija e reenvie. Recomendo ficar atento aos avisos abaixo também.
+      </div>
+    </div>
+    <div class="val-summary">
+      <span class="val-pill err"><span class="big">${TOTAL_ERROS}</span> erros</span>
+      <span class="val-pill warn"><span class="big">${TOTAL_AVISOS}</span> avisos</span>
+      <span class="val-pill">${nf(LINHAS_LIDAS)} UCs lidas</span>
+    </div>
+    <div class="av-split">
+      <div>
+        <p class="av-col-title">Inconsistências por regra</p>
+        ${ruleGroupsHtml(gruposOrdenados)}
+      </div>
+      <div class="av-col-preview">
+        <p class="av-col-title">Planilha enviada</p>
+        <div class="av-preview-wrap">
+          <div class="av-preview-scroll">
+            <table class="av-preview"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>
+          </div>
+          <div class="av-preview-foot">Células destacadas = inconsistências nesta amostra. Vermelho = erro · laranja = aviso.</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-actions">
+      <button class="btn-primary" onclick="show('upload')">Corrigir e reenviar</button>
+      <button class="btn-ghost" onclick="toast('Relatório de inconsistências (.csv) gerado')">Baixar relatório (.csv)</button>
+      <button class="btn-ghost" onclick="show('sucesso')">Mock: ver tela de sucesso →</button>
+    </div>
+  </section>`;
+}
+function TOTAL_EROS_TXT(){ return TOTAL_ERROS; }
+function TOTAL_EROS_PL(){ return TOTAL_ERROS===1 ? "erro" : "erros"; }
+
+// 9 · SUCESSO
+function sucessoInner() {
+  const avisos = RULE_GROUPS.filter(g => g.sev==="warn");
+  return `
+  <section class="card success-card">
+    <div class="success-icon">✓</div>
+    <h2 class="success-title">Planilha enviada.</h2>
+    <p class="success-sub">Nenhuma inconsistência bloqueante. As unidades consumidoras foram registradas sob o contrato e estão disponíveis para o Painel de Monitoramento do MME.</p>
+    <div class="success-meta">
+      <span class="mi"><b>${nf(LINHAS_LIDAS)}</b> UCs classificadas</span>
+      <span class="mi">Contrato <b>${CONTRATO.numero}</b></span>
+      <span class="mi">${CONTRATO.tipo_contrato} · ${CONTRATO.tranche}</span>
+      <span class="mi">UF <b>${UF.sigla}</b></span>
+      <span class="mi">Competência <b>06/2026</b></span>
+    </div>
+    <div class="success-avisos">
+      <p class="av-col-title">Avisos - não bloquearam o envio</p>
+      <p class="success-avisos-hint">Futuramente esses itens vão bloquear o envio. Fique atento.</p>
+      ${ruleGroupsHtml(avisos)}
+    </div>
+    <div class="panel-actions success-actions">
+      <button class="btn-ghost" onclick="toast('Relatório de avisos (.csv) gerado')">Baixar relatório (.csv)</button>
+      <button class="btn-primary" onclick="show('upload')">Iniciar nova validação</button>
+    </div>
+  </section>`;
+}
+
+// ── navegação entre telas ──────────────────────────────────────────────────
+const SHELL = { upload: uploadInner, painel: painelInner, sucesso: sucessoInner };
+const NAV = [
+  ["login","1 · Login"],["senha","2 · Trocar senha"],["menu","3 · Menu"],["uf","4 · UF"],
+  ["contrato","5 · Contrato"],["versao","6 · Versão"],["upload","7 · Upload"],
+  ["painel","8 · Painel"],["sucesso","9 · Sucesso"],
+];
+
+function show(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("is-active"));
+  const el = document.querySelector(`.screen[data-screen="${name}"]`);
+  if (!el) return;
+  // telas do shell logado são montadas sob demanda
+  if (SHELL[name]) el.querySelector("[data-shell]").innerHTML = shellChrome(name==="upload"?"upload":"", SHELL[name]());
+  el.classList.add("is-active");
+  window.scrollTo(0, 0);
+  document.querySelectorAll("#mockbar-grid button").forEach(b => b.classList.toggle("is-active", b.dataset.go === name));
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("is-on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("is-on"), 2200);
+}
+
+// monta os botões do seletor de telas
+document.getElementById("mockbar-grid").innerHTML = NAV.map(([k,label]) =>
+  `<button data-go="${k}" onclick="show('${k}')">${label}</button>`).join("");
+document.querySelector('#mockbar-grid button').classList.add("is-active");
+</script>
+</body>
+</html>

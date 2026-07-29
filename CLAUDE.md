@@ -8,6 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   are recorded in **`planning/PLAN.md`**.
 - All documentation lives in the **`planning/`** directory; the key document is
   **`planning/PLAN.md`** — read it first for current state and dated decisions.
+  ⚠️ Since the **handoff of 2026-07-17**, `planning/` (and `.claude/`) are **gitignored
+  and untracked** — they exist on the local machine only and no longer reach the server,
+  and they are invisible to anyone who clones the repo. They are still the working log:
+  keep writing to them, and **cross-check `git log`** when reading history (decisions from
+  2026-07-16 → 07-22 were backfilled into PLAN.md on 2026-07-29 from the commit messages).
 - **Product versioning (since 2026-07-07): V0 DELIVERED** (production live at
   `gerenciador-gclt.com`); **V1 in planning**. Version scope, known limitations and
   the V1 backlog live in **`planning/VERSOES.md`** — V1 work is tracked there
@@ -48,27 +53,53 @@ under `backend/`:
   `POST /api/esqueci-senha`, `POST /api/validar` (multipart upload → painel),
   `GET /api/modelo` (download the official model), `GET /api/contexto` (grupo → UFs/contratos).
 - **`auth.py`** — real login/senha; signed token on protected routes; first-access
-  password change; self-service reset. `admin_usuarios.py` is the CLI that provisions
-  users (`criar_usuario`) and **emails the temporary password**. Users live in
-  **`backend/usuarios.json`** (pbkdf2 hashes, **gitignored**, VPS-only — see secrets below).
-- **`acesso.py`** — two-layer access filter: email domain → grupo econômico
+  password change; self-service reset. **Login is by `operador`, not by e-mail** (see
+  below). `admin_usuarios.py` is the CLI that provisions users
+  (`python -m backend.admin_usuarios add <operador>` / `disable <operador>`) and **prints**
+  the temporary password (the credentials e-mail is not wired in the operador fallback).
+  Users live in **`backend/usuarios.json`** (pbkdf2 hashes) — **tracked again since the
+  handoff (2026-07-17)**, seeded with the 6 operadores at `Senha123` + forced change on
+  first access. ⚠️ A `git pull` on the server **overwrites the store and resets passwords
+  to the seed** — back it up before pulling.
+- **`acesso.py`** — two-layer access filter: **operador** → grupo econômico
   (EQUATORIAL, ENERGISA, NEOENERGISA, ÂMBAR, CERCI, ENBPAR) → visible UFs/contratos.
-  ENBPAR sees all. `montar_contexto` builds `/api/contexto`. (ÂMBAR sigla uses U+00C2;
-  the domain→grupo map may still be provisional — check the spec.)
+  ENBPAR sees all. `MAPA_OPERADOR_GRUPO` / `grupo_do_operador` / `siglas_do_grupo` /
+  `contratos_visiveis`; `motivo_acesso_negado` builds the **diagnostic reason** behind a
+  403 (operador's grupo × the contract's distribuidora/UF, "contrato inexistente",
+  "operador sem grupo"). `montar_contexto` builds `/api/contexto` (payload key `operador`).
+  (ÂMBAR sigla uses U+00C2.)
+
+  > **Login by `operador` (2026-07-15, temporary fallback; e-mail login deferred to V1/V2).**
+  > The operador is the domain label without `nome@` and without `.com.br`/`.gov.br`:
+  > `equatorialenergia`, `energisa`, `neoenergia`, `ambarenergia`, `cerci`, `enbpar`
+  > (wildcard). Anything in the older docs/spec that says "e-mail domain → grupo",
+  > `MAPA_DOMINIO_GRUPO` or `grupo_do_email` describes the **pre-2026-07-15** shape.
 - **`referencia.py`** — loads `entrada/**/*.csv` into memory (`chaves_uc`, `odi_ref`),
-  **reloads on mtime change** (no restart). `carregar_base_contratos` reads the authority
+  **reloads on mtime change** (no restart). Which index a file feeds is decided **by its
+  header columns, not by filename** (`uc` → `chaves_uc`; `uf`+`municipio` → `odi_ref`;
+  the branches are independent, so one file carrying all four columns feeds **both**).
+  `carregar_base_contratos` reads the authority
   `base_contratos.json` (repo root) — **cached once per process, so a restart is needed
   if it changes.** `integridade()` classifies contracts com/sem referência + órfãos.
   Singletons `obter_referencia` / `obter_base_contratos`.
 - **`planilha.py`** — `.xlsx` parser (`ler_preenchimento` reads the **`Preenchimento`**
   sheet, header on row 2, maps columns **by header name**, keeps only rows with ODI/UC).
   `ler_dominios`/`obter_dominios` read the model's **`Dominios`** sheet. Structural errors
-  → `PlanilhaInvalida` (→ HTTP 400). Defensive `normalizar_id` / `normalizar_coordenada`
-  / `normalizar_data`. `_MODELO_PADRAO` is the path to the versioned model file (see below).
+  → `PlanilhaInvalida` (→ HTTP 400). Defensive normalizers, all used by the cross-check:
+  `normalizar_id` (ODI/UC), `normalizar_coordenada`, `normalizar_data`,
+  **`normalizar_nome`** (canonical form: strips accents, strips **all** spaces, casefold —
+  "RORAINÓPOLIS" == "RORAINOPOLIS") and **`normalizar_uf`** (equates the sigla "AP" to the
+  spelled-out "Amapá", since the LPT reference file spells UFs out).
+  `_MODELO_PADRAO` is the path to the versioned model file (see below).
 - **`validacao.py`** — the validation core (see "Validation rules" below) + panel assembly.
+  All **vocabulary** comparisons are **case-insensitive** (`casefold`, since 2026-07-15:
+  "SIM" == "Sim") — but **accents still matter** ("NAO" is invalid). Detail rows per group
+  are capped at `_ROWS_MAX` (200) in the payload while `count` stays the real total.
 - **`email_envio.py`** — the 4 email types (validated spreadsheet → recipients;
   critical alert → admin; credentials/temp password → user on creation and reset).
   Automated tests **mock SMTP**; real sending is a **manual smoke test** (`planning/TESTES.md`).
+  Note: `enviar_credenciais` is **not called** in the current operador fallback (the CLI
+  prints the password; `esqueci-senha` resets to `Senha123`) — it is kept for V1/V2.
 - **`config.py`** — process config (user store path, SMTP/secrets via `.env`).
 
 ### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
@@ -79,10 +110,23 @@ and **"0 - Não é prioridade" consistency (err, 3 clauses)**: (0) column "0" is
 — **blank "0" = err** (since 2026-07-14; also closes the "row with nothing marked" hole);
 (1) if "0" = "Sim", all other tipologia columns must be "Não"; (2) if "0" = "Não",
 at least one other tipologia must be "Sim" (clauses 1–2 err since 2026-07-09).
+**Tipo de Comunidade × família (err, since 2026-07-29)** — direction M→U:X only, no reverse
+check: when column M is `1 - indígena` / `2 - quilombola` / `3 - ribeirinha` /
+`4 - extrativista`, the **matching** family column must be "Sim" — 1→IV.1 (U), 2→IV.2 (V),
+3→IV.3 (W), 4→IV.4 (X). **The other family columns are free** (may be "Sim"); types 5–12
+trigger nothing. This replaced the 2026-07-14 pair of warnings: the mutual-exclusivity half
+("the other families must be Não") and the whole **Enquadramento = `4 - Povos tradicionais`
+rule (column N) were dropped**, and the severity went warn → **err**.
+
 Cross-line: duplicate ODI+UC key (**err**),
 duplicate UC regardless of ODI (**err**). Cross-check vs `entrada/`: ODI+UC not in the
-contract's reference (**err**), UF/município divergent from the ODI's reference (**err**),
-reference UCs missing from the sheet (**warn**). Zero data rows → "Planilha sem dados" (**err**).
+contract's reference (**err**), UF/município divergent from the ODI's reference (**err**,
+compared via `normalizar_uf`/`normalizar_nome`, so accent/space/sigla noise in the base
+does not trigger it), reference UCs missing from the sheet (**warn** — lists each missing
+ODI+UC, not just the count). Zero data rows → "Planilha sem dados" (**err**).
+
+`_DESCRICOES` (`validacao.py`) is the authoritative list of rule titles + panel blurbs —
+read it rather than trusting a prose summary.
 
 > **The old "Data de energização fora de 2026" rule was removed (2026-07-09)** — any date
 > is accepted; a **blank** date is still an error (it's a required field).
@@ -99,19 +143,21 @@ npm run preview
 ```
 
 The **front** has **no tests, linter, or type-checker** — don't claim front test/lint
-results. `DEPLOY.md` (repo root) covers hosting `modelo/dist/` on the Nginx VPS.
+results. (`modelo/package.json`'s description still calls the app a "mock estatico
+nao-funcional" — a leftover, like the footer; ignore it.) See "Deploy" below.
 
 **Backend** commands run from the **repo root** (`.venv` lives at root, created with `uv`):
 
 ```bash
 uv venv                                    # create .venv (CPython 3.12) — first time only
 uv pip install -r backend/requirements.txt
-.venv\Scripts\python.exe -m pytest backend/tests/ -v            # run the suite (105 green)
+.venv\Scripts\python.exe -m pytest backend/tests/ -v            # run the suite (125 green)
 .venv\Scripts\python.exe -m pytest backend/tests/test_validacao.py -v -k tipologia   # single file / -k filter
 .venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000 # run the API
 ```
 
-The **backend HAS pytest tests** (`backend/tests/`, ~105 green; see `planning/TESTES.md`)
+The **backend HAS pytest tests** (`backend/tests/`, **125 green** as of 2026-07-29; see
+`planning/TESTES.md`)
 — run them and report real results. `TestClient` needs **`httpx2`**, not `httpx`, on
 starlette 1.3+. On Windows, kill stray `python` before a uvicorn smoke test (an orphan
 holding the port silently serves stale code); prefer a fresh port.
@@ -128,7 +174,8 @@ call is real.
 **`src/App.jsx`** is the single stateful container and orchestrator. Gating sequence,
 each guard a full-screen step until satisfied:
 
-`AuthScreen` (real login) → *(first access →)* `TrocarSenha` → `MenuPrincipal` →
+`AuthScreen` (real login — field is **"Operador"**, plain text, not e-mail) →
+*(first access →)* `TrocarSenha` → `MenuPrincipal` →
 **fetch `/api/contexto`** (grupo → UFs/contratos) → `UfSelector` → `ContratoSelector`
 → `VersaoPlanilha` (Passo 3) → **logged-in shell** (`upload` → `painel` → `sucesso`).
 
@@ -152,12 +199,33 @@ exports as removable, not as source of truth.
 
 The Anexo V model lives in **`manuais/`** (committed to the repo) with a **version-stamped
 name**: `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx` (current:
-`.v260714.xlsx` = 14/07/2026). `GET /api/modelo` serves it from disk each request (no
+`.v260729.xlsx` = 29/07/2026). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
 (`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`
 asserts the version string). Then **commit the `.xlsx`** — `manuais/` is tracked, so the VPS
 `git pull` carries the new model (**no scp needed**). See the latest model-swap decision in PLAN.md.
+
+### Deploy — two live targets
+
+1. **Hostinger VPS (V0 production, `gerenciador-gclt.com`)** — Nginx serving
+   `modelo/dist/` + uvicorn systemd `anexov-api` in `/opt/anexov`; update via
+   `git pull` + `npm run build` + `systemctl restart anexov-api`. Its docs
+   (`DEPLOY.md`, `DEPLOY_HOSTINGER.html`, `deploy_hostinger.sh`) still exist locally but
+   were **gitignored at the 2026-07-17 handoff**.
+2. **Azure / Ubuntu 24 + Docker (handed to the company's engineers)** — **`DEPLOY_AZURE.md`**
+   (+ `.html`) is the current guide, aimed at `monitoramentolpt.enbpar.gov.br`.
+   `docker/docker-compose.yml` builds two images from the repo root: `Dockerfile-backend`
+   (python:3.12-slim, `uvicorn backend.app:app` on :8000, **runs from the repo root** because
+   `config.py`/`planilha.py`/`referencia.py` read relative paths) and `Dockerfile-frontend`
+   (nginx:alpine serving a **pre-built `modelo/dist/`** + `modelo/nginx.conf`, published on
+   :80). In compose the front proxies `/api/` to `http://backend:8000` (service name, not
+   `127.0.0.1`), `client_max_body_size 50m`.
+
+Note that `POST /api/validar` returns **diagnostic** `detail` strings (403 says which grupo
+vs which owner; 409 says the contract is visible but has no ODIs/UCs loaded), and
+`UploadAnexoV.jsx` shows the raw status + detail on screen. That is deliberate (2026-07-22)
+— don't "soften" those messages back.
 
 ### Real client-side download (`src/lib/relatorioCsv.js`)
 
@@ -182,32 +250,47 @@ reference for what that download should produce.
 
 This **is** a git repository; `origin` is
 `github.com/GiovanniCharret/sistema_gclt.git` (default branch `main`). The `.gitignore`
-follows a **"commit everything" policy** — so **`manuais/`** (domain source material +
-**the official model**), **`planning/`**, and this **`CLAUDE.md`** are **committed**
-(they ride `git pull` to the VPS). **Gitignored** (regenerable or secret only): `node_modules/`,
-`dist/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `bug_fix/`, `minhas_notas/`, logs, and
-secrets (`backend/usuarios.json`, `.env*`, `senha e-mail hostinger`). The front app source
-is under `modelo/src/`; the backend under `backend/`.
+started as a **"commit everything" policy** — **`manuais/`** (domain source material +
+**the official model**), **`entrada/`**, **`backend/usuarios.json`** and this **`CLAUDE.md`**
+are **committed** and ride `git pull` to the server. The **2026-07-17 handoff** carved out a
+second, non-secret exclusion: **`planning/`, `.claude/`, `claude resume.txt`, `DEPLOY.md`,
+`DEPLOY_HOSTINGER.html`, `deploy_hostinger.sh`** are gitignored so the company's engineers
+don't see internal planning/Hostinger artifacts — they still exist locally. Also gitignored:
+`node_modules/`, `dist/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `bug_fix/`,
+`minhas_notas/`, `.playwright-mcp/`, logs, and the real secrets (`.env*`,
+`senha e-mail hostinger`). The front app source is under `modelo/src/`; the backend under
+`backend/`. (`modelo/mock/mock_site_atual.html` is an untracked reference snapshot, not code.)
 
-**`entrada/`** holds the backend's reference data (`entrada/lpt/`, `entrada/mla/` with
-`consolidado*.csv`; BOM UTF-8, `;`-separated). It **is committed** (versioned). It is
-**not** front code — don't import it into `modelo/src/`. `backend/referencia.py` reads it.
+**`entrada/`** holds the backend's reference data, BOM UTF-8, `;`-separated, **committed**:
+- `entrada/lpt/consolidado_ucs_modelo.csv` — **single file since 2026-07-21**
+  (`contrato;odi;uc;uf;municipio`), replacing the old two-file LPT layout; it feeds
+  **both** `chaves_uc` and `odi_ref`. It spells UFs out ("Amapá") — hence `normalizar_uf`.
+- `entrada/mla/consolidado_ucs.csv` (`contrato;odi;uc`) + `entrada/mla/consolidado.csv`
+  (`contrato;odi;uf;municipio`) — still the old two-file layout.
 
-**Daily update of `entrada/` (provisional):** the reference CSVs are refreshed daily in
-production. As of **2026-07-09** the transport moved from git-pull to **SSH/scp** (script
+It is **not** front code — don't import it into `modelo/src/`. `backend/referencia.py` reads it.
+
+**Daily update of `entrada/` (provisional; Hostinger VPS):** the reference CSVs are
+refreshed daily in production. As of **2026-07-09** the transport moved from git-pull to
+**SSH/scp** (script
 lives in the neighboring `atualizacao_clientes` project; see PLAN.md + `VERSOES.md`).
 Consequence: scp'ed CSVs diverge from the VPS working tree — **before any `git pull` on
 the VPS, run `git checkout -- entrada/` first**; there is no VPS pull cron.
 
 ### Secrets — never commit
 
-`.env` / `backend/.env`, **`backend/usuarios.json`** (production users live **only** on the
-VPS; provisioned via the `criar_usuario` CLI / reset via "esqueci minha senha"), the SSH
-private key (only the `.pub` goes to the VPS), and `senha e-mail hostinger` (repo root).
-`usuarios.json` was briefly versioned (MVP 2026-07-07) then reverted 2026-07-08 — a
-versioned copy would overwrite real production users. Old hashes remain in git history, so
-**the repo must stay PRIVATE**. On the VPS, always run git/npm as `sudo -u deploy`; the
-git remote uses a read-only PAT; no force-push, no touching tags.
+`.env` / `backend/.env`, the SSH private key (only the `.pub` goes to the server), and
+`senha e-mail hostinger` (repo root).
+
+**`backend/usuarios.json` is the exception, and its status has flipped three times** — check
+`.gitignore` before assuming: versioned (MVP 2026-07-07) → gitignored (2026-07-08, because a
+versioned copy overwrites real production users) → **versioned again (2026-07-17 handoff)**,
+now shipped as a *seed* (6 operadores, public documented password `Senha123`, forced change
+on first access). Consequence to keep in mind: **`git pull` on the server resets every
+password to the seed** — back the file up first, or re-provision via
+`admin_usuarios add <operador>` / "esqueci minha senha". Old real hashes remain in git
+history, so **the repo must stay PRIVATE**. On the VPS, always run git/npm as
+`sudo -u deploy`; the git remote uses a read-only PAT; no force-push, no touching tags.
 
 ## Coding Style
 
