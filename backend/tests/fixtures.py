@@ -19,7 +19,8 @@ import openpyxl
 CABECALHO_PADRAO = [
     "Distribuidora", "Tipo de Atendimento", "Número ODI",
     "Número da Unidade Consumidora", "Código IBGE do Município", "Município",
-    "UF", "Latitude", "Longitude", "Data de Energização da UC",
+    "UF", "Nome da Comunidade", "Nome da Unidade Consumidora",
+    "Latitude", "Longitude", "Data de Energização da UC",
     "Tipo de Comunidade", "Enquadramento do beneficiário",
     "0 - Não é prioridade", "I - Baixa renda", "IV.1 - Família indígena",
 ]

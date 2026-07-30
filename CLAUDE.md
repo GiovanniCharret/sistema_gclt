@@ -104,8 +104,17 @@ under `backend/`:
 
 ### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
 
-Per-line: empty required cells (**err**), value out of domain vs `Dominios` sheet
-(**err**), invalid/out-of-range coordinates (**warn**), tipologia ≠ Sim/Não (**warn**),
+Per-line — **no blank cell is allowed in a row that has ODI/UC** (since 2026-07-30): all
+14 identification columns are in `OBRIGATORIOS` → "Campos obrigatórios vazios" (**err**),
+and all 51 tipologia columns must hold Sim/Não → **"Tipologia em branco" (err)**, emitted
+**once per row** naming the blank columns (a per-cell finding would mean 9 310 occurrences
+on a real 490-row file). Column O keeps its own older rule, so it is excluded from this one.
+Asymmetry worth knowing: identification columns are checked even when the column is
+**absent** from the sheet (fixed list), while tipologia is only checked for columns the
+sheet actually has. Also per-line: value out of domain vs `Dominios` sheet
+(**err**), coordinates non-numeric or outside **Brazil's range** (**warn** — `_FAIXA_LAT`
+= −34.5…+6.0, `_FAIXA_LON` = −74.5…−34.0, tightened from the world range on 2026-07-30),
+tipologia filled with something other than Sim/Não (**warn**),
 and **"0 - Não é prioridade" consistency (err, 3 clauses)**: (0) column "0" is mandatory
 — **blank "0" = err** (since 2026-07-14; also closes the "row with nothing marked" hole);
 (1) if "0" = "Sim", all other tipologia columns must be "Não"; (2) if "0" = "Não",
@@ -128,7 +137,9 @@ trigger nothing. This replaced the 2026-07-14 pair of warnings: the mutual-exclu
 rule (column N) were dropped**, and the severity went warn → **err**.
 
 Cross-line: duplicate ODI+UC key (**err**),
-duplicate UC regardless of ODI (**err**). Cross-check vs `entrada/`: ODI+UC not in the
+duplicate UC regardless of ODI (**err**), **duplicate (lat, lon) pair within the uploaded
+sheet** (**err**, since 2026-07-30 — `_coordenadas_duplicadas`; rows with an unreadable
+coordinate are skipped so they don't all "match" each other). Cross-check vs `entrada/`: ODI+UC not in the
 contract's reference (**err**), UF/município divergent from the ODI's reference (**err**,
 compared via `normalizar_uf`/`normalizar_nome`, so accent/space/sigla noise in the base
 does not trigger it), reference UCs missing from the sheet (**warn** — lists each missing

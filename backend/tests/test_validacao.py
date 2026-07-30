@@ -38,6 +38,11 @@ def linha_valida(**over):
     """
     base = {
         "_linha": 3,
+        # As 6 colunas abaixo entraram em OBRIGATORIOS em 2026-07-30 ("nenhuma célula em
+        # branco"), então a linha-base precisa preenchê-las para continuar válida.
+        "Distribuidora": "Equatorial",
+        "Nome da Comunidade": "POVOADO SÃO JOSÉ",
+        "Nome da Unidade Consumidora": "MARIA DA SILVA",
         "Número ODI": "210001",
         "Número da Unidade Consumidora": "70012345",
         "Código IBGE do Município": "1302603",
@@ -130,6 +135,136 @@ def test_coordenada_invalida_e_aviso():
     """Latitude fora da faixa (91.5) → aviso 'Coordenadas inválidas' (não bloqueia)."""
     achados = regras_formato_dominio([linha_valida(**{"Latitude": "91.5"})], DOM)
     assert ("warn", "Coordenadas inválidas") in _regras(achados)
+
+
+# ── D3 (cont.) · Nenhuma célula em branco (2026-07-30) ──
+# Toda coluna da aba Preenchimento é de preenchimento obrigatório numa linha com ODI/UC:
+# as de identificação entram em OBRIGATORIOS; as 51 de tipologia exigem "Sim"/"Não".
+
+def test_coluna_de_tipologia_em_branco_e_erro():
+    """Uma tipologia em branco (ex.: coluna R) bloqueia o envio."""
+    linha = linha_valida(**{"III-A.1 - Família com pessoa com deficiência": ""})
+    achados = regras_formato_dominio([linha], DOM)
+    assert ("err", "Tipologia em branco") in _regras(achados)
+
+
+def test_tipologias_em_branco_geram_um_achado_por_linha():
+    """Várias tipologias vazias na MESMA linha viram UM achado que nomeia as colunas —
+    e não um achado por célula (o arquivo real tem 19 colunas × 490 linhas)."""
+    linha = linha_valida(**{
+        "III-A.1 - Família com pessoa com deficiência": "",
+        "III-A.2 - Família com idoso dependente": "",
+        "IV.4 - Família extrativista": None,
+    })
+    brancas = [a for a in regras_formato_dominio([linha], DOM)
+               if a["regra"] == "Tipologia em branco"]
+    assert len(brancas) == 1
+    assert "3 coluna(s)" in brancas[0]["problema"]
+    assert "III-A.1 - Família com pessoa com deficiência" in brancas[0]["problema"]
+
+
+def test_tipologias_todas_preenchidas_nao_geram_achado():
+    """Linha com todas as tipologias preenchidas (Sim/Não) não aciona a regra."""
+    linha = linha_valida(**{"III-A.1 - Família com pessoa com deficiência": "Não"})
+    titulos = {a["regra"] for a in regras_formato_dominio([linha], DOM)}
+    assert "Tipologia em branco" not in titulos
+
+
+def test_coluna_zero_em_branco_nao_vira_tipologia_em_branco():
+    """A coluna “0 - Não é prioridade” tem regra própria desde 2026-07-14; ela não deve
+    aparecer também como “Tipologia em branco” (mensagem duplicada para o operador)."""
+    achados = regras_formato_dominio([linha_valida(**{"0 - Não é prioridade": ""})], DOM)
+    regras = _regras(achados)
+    assert ("err", "“0 - Não é prioridade” em branco") in regras
+    assert ("err", "Tipologia em branco") not in regras
+
+
+def test_colunas_de_identificacao_viraram_obrigatorias():
+    """As 6 colunas de identificação que faltavam entraram em OBRIGATORIOS."""
+    for coluna in ("Distribuidora", "Tipo de Atendimento", "Nome da Comunidade",
+                   "Nome da Unidade Consumidora", "Tipo de Comunidade",
+                   "Enquadramento do beneficiário"):
+        achados = regras_formato_dominio([linha_valida(**{coluna: ""})], DOM)
+        vazios = [a for a in achados if a["regra"] == "Campos obrigatórios vazios"]
+        assert coluna in {a["campo"] for a in vazios}, coluna
+
+
+# ── D3 (cont.) · Coordenada: faixa do Brasil (2026-07-30) ──
+# A faixa deixou de ser a mundial (±90/±180) e passou a ser a do território brasileiro,
+# para pegar sinal invertido e coordenada de outro país. Continua sendo AVISO.
+
+def test_coordenada_fora_do_brasil_e_aviso():
+    """Latitude +10 (hemisfério norte, acima do extremo do Brasil) → aviso."""
+    achados = regras_formato_dominio([linha_valida(**{"Latitude": "10.0"})], DOM)
+    assert ("warn", "Coordenadas inválidas") in _regras(achados)
+
+
+def test_longitude_com_sinal_invertido_e_aviso():
+    """Longitude positiva (sinal trocado: +60 cai na Ásia) → aviso."""
+    achados = regras_formato_dominio([linha_valida(**{"Longitude": "60.0"})], DOM)
+    assert ("warn", "Coordenadas inválidas") in _regras(achados)
+
+
+def test_extremos_do_brasil_sao_aceitos():
+    """Os extremos reais do território não podem gerar aviso: Oiapoque/AP (norte),
+    Chuí/RS (sul), Acre (oeste) e a costa leste."""
+    for lat, lon in [(4.4, -51.6), (-33.7, -53.4), (-8.2, -73.8), (-7.1, -34.8)]:
+        achados = regras_formato_dominio(
+            [linha_valida(**{"Latitude": str(lat), "Longitude": str(lon)})], DOM)
+        assert ("warn", "Coordenadas inválidas") not in _regras(achados), (lat, lon)
+
+
+# ── D3 (cont.) · Coordenada duplicada na planilha (erro, 2026-07-30) ──
+# Duas UCs não podem compartilhar o mesmo par (latitude, longitude) dentro do arquivo
+# enviado. Espelha a regra de UC duplicada: um achado por linha envolvida.
+
+def test_coordenada_duplicada_aponta_todas_as_linhas():
+    """Mesmo par lat/lon em 2 linhas (UCs diferentes) → erro em cada linha, citando as
+    linhas envolvidas."""
+    linhas = [
+        linha_valida(_linha=3, **{"Número da Unidade Consumidora": "70000001",
+                                  "Latitude": "-3.30", "Longitude": "-60.0"}),
+        linha_valida(_linha=8, **{"Número da Unidade Consumidora": "70000002",
+                                  "Latitude": "-3.30", "Longitude": "-60.0"}),
+    ]
+    dups = [a for a in regras_formato_dominio(linhas, DOM)
+            if a["regra"] == "Coordenada duplicada"]
+    assert [(a["sev"], a["loc"]) for a in dups] == [("err", "L3"), ("err", "L8")]
+    assert all("linhas 3, 8" in a["problema"] for a in dups)
+
+
+def test_coordenadas_distintas_nao_geram_duplicidade():
+    """Coordenadas diferentes na mesma planilha não acionam a regra."""
+    linhas = [
+        linha_valida(_linha=3, **{"Número da Unidade Consumidora": "70000001",
+                                  "Latitude": "-3.30", "Longitude": "-60.0"}),
+        linha_valida(_linha=4, **{"Número da Unidade Consumidora": "70000002",
+                                  "Latitude": "-3.31", "Longitude": "-60.0"}),
+    ]
+    assert ("err", "Coordenada duplicada") not in _regras(regras_formato_dominio(linhas, DOM))
+
+
+def test_coordenada_duplicada_equipara_virgula_e_ponto():
+    """“-3,30” e “-3.30” são a mesma coordenada (normalizar_coordenada) → duplicidade."""
+    linhas = [
+        linha_valida(_linha=3, **{"Número da Unidade Consumidora": "70000001",
+                                  "Latitude": "-3,30", "Longitude": "-60,0"}),
+        linha_valida(_linha=4, **{"Número da Unidade Consumidora": "70000002",
+                                  "Latitude": "-3.30", "Longitude": "-60.0"}),
+    ]
+    assert ("err", "Coordenada duplicada") in _regras(regras_formato_dominio(linhas, DOM))
+
+
+def test_coordenada_ausente_nao_conta_como_duplicidade():
+    """Linhas sem coordenada não podem “casar” entre si: a célula vazia já é erro de campo
+    obrigatório e não deve virar também duplicidade."""
+    linhas = [
+        linha_valida(_linha=3, **{"Número da Unidade Consumidora": "70000001",
+                                  "Latitude": "", "Longitude": ""}),
+        linha_valida(_linha=4, **{"Número da Unidade Consumidora": "70000002",
+                                  "Latitude": "", "Longitude": ""}),
+    ]
+    assert ("err", "Coordenada duplicada") not in _regras(regras_formato_dominio(linhas, DOM))
 
 
 def test_data_de_qualquer_ano_e_aceita():

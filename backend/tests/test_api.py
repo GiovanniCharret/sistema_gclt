@@ -357,6 +357,11 @@ _DOM_VAL = {
 # "IV.1 - Família indígena" = "Sim"; (b) o Enquadramento tem de ser um que NÃO amarre a
 # coluna "0 - Não é prioridade" — "0" exigiria "Sim" ali e "2 - CadÚnico" exigiria "Não".
 _LINHA_LIMPA = {
+    # Distribuidora e os dois campos de Nome entraram em OBRIGATORIOS em 2026-07-30
+    # ("nenhuma célula em branco"), então a linha limpa precisa preenchê-los.
+    "Distribuidora": "Equatorial",
+    "Nome da Comunidade": "POVOADO SÃO JOSÉ",
+    "Nome da Unidade Consumidora": "MARIA DA SILVA",
     "Número ODI": "O1", "Número da Unidade Consumidora": "U1",
     "Código IBGE do Município": "1302603", "Município": "MANACAPURU", "UF": "AM",
     "Latitude": "-3.30", "Longitude": "-60.0", "Data de Energização da UC": "14/02/2026",

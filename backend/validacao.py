@@ -59,8 +59,25 @@ _ENQUAD_EXIGE_ZERO = {
     _ENQUAD_NAO_PRIORIDADE: "Sim",
 }
 
-# Campos obrigatórios em toda linha preenchida (§7).
-OBRIGATORIOS = [COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF, COL_LAT, COL_LON, COL_DATA]
+# Faixa geográfica aceita para as coordenadas (aviso). Desde 2026-07-30 é a do território
+# brasileiro, não mais a mundial (±90/±180): o Anexo V só recebe UC do Brasil, então a
+# faixa fechada pega sinal invertido e coordenada de outro país, que a mundial deixava
+# passar. Limites: +6,0 cobre o extremo norte (Oiapoque/AP e Roraima), −34,5 o Chuí/RS,
+# −74,5 o extremo oeste no Acre e −34,0 a costa leste.
+# (Fernando de Noronha/PE, em −32,4, fica fora da faixa — ilha sem UC de LPT.)
+_FAIXA_LAT = (-34.5, 6.0)
+_FAIXA_LON = (-74.5, -34.0)
+
+# Campos obrigatórios em toda linha preenchida (§7). Desde 2026-07-30 a lista cobre TODAS
+# as colunas de identificação — o pedido é "nenhuma célula em branco numa linha com
+# ODI/UC", e antes disso Distribuidora, Tipo de Atendimento, os dois campos de Nome, Tipo
+# de Comunidade e Enquadramento podiam ficar vazios sem crítica. As 51 colunas de
+# tipologia são cobertas pela regra "Tipologia em branco", logo abaixo.
+OBRIGATORIOS = [
+    "Distribuidora", COL_TIPO_ATEND, COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF,
+    "Nome da Comunidade", "Nome da Unidade Consumidora", COL_LAT, COL_LON, COL_DATA,
+    COL_TIPO_COM, COL_ENQUAD,
+]
 
 # As 14 colunas de identificação/localização/classificação (não são tipologia).
 COLS_IDENTIFICACAO = {
@@ -152,6 +169,47 @@ def _ucs_duplicadas(linhas):
     return achados
 
 
+def _coordenadas_duplicadas(linhas):
+    """Detecta o mesmo par (latitude, longitude) em mais de uma linha da planilha (erro).
+
+    Por que existe: duas unidades consumidoras distintas não podem ocupar exatamente o
+    mesmo ponto de GPS — quando isso acontece é, na prática, coordenada copiada de outra
+    linha (pedido dos clientes da planilha em 2026-07-30). É a contrapartida geográfica da
+    `_ucs_duplicadas`, e vale **dentro do arquivo enviado**, não contra a base histórica.
+
+    Entrada: `linhas` (lista de dicts do parser).
+    Fase 1: agrupa as linhas pelo par de coordenadas normalizado, ignorando as linhas em
+            que latitude ou longitude está ausente/ilegível (a célula vazia já é erro de
+            campo obrigatório; deixá-las entrar faria todas “casarem” entre si).
+    Fase 2: para cada par repetido, gera um achado de erro por linha, citando no texto
+            todas as linhas onde o ponto se repete.
+    Saída: lista de achados.
+    """
+    # Acumulador de achados.
+    achados = []
+    # Fase 1: dict (lat, lon) → linhas onde o par aparece.
+    vistas = {}
+    for linha in linhas:
+        # Normaliza aceitando vírgula ou ponto decimal (mesma regra do aviso de faixa).
+        lat = normalizar_coordenada(linha.get(COL_LAT))
+        lon = normalizar_coordenada(linha.get(COL_LON))
+        # Só compara quando as DUAS coordenadas são legíveis.
+        if lat is None or lon is None:
+            continue
+        vistas.setdefault((lat, lon), []).append(linha)
+    # Fase 2: cada ponto repetido gera um achado por linha envolvida.
+    for (lat, lon), repetidas in vistas.items():
+        if len(repetidas) > 1:
+            # Lista das linhas envolvidas ("3, 8") — vai no texto do problema.
+            numeros = ", ".join(str(l.get("_linha", "?")) for l in repetidas)
+            for linha in repetidas:
+                achados.append(_achado("err", "Coordenada duplicada", _loc(linha), COL_LAT,
+                                        f'ponto ({lat}, {lon}) repetido (linhas {numeros})',
+                                        "cada UC deve ter a sua própria coordenada"))
+    # Saída: achados de coordenada duplicada.
+    return achados
+
+
 def regras_formato_dominio(linhas, dominios):
     """Aplica as regras de formato/domínio (D3) a todas as linhas.
 
@@ -197,8 +255,8 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("err", "Valor fora do domínio", loc, coluna,
                                         f'valor "{v}" fora do domínio', "usar um valor da aba Dominios"))
 
-        # (aviso) Coordenadas inválidas (não numéricas ou fora da faixa).
-        for coluna, (minimo, maximo) in ((COL_LAT, (-90, 90)), (COL_LON, (-180, 180))):
+        # (aviso) Coordenadas inválidas (não numéricas ou fora da faixa do Brasil).
+        for coluna, (minimo, maximo) in ((COL_LAT, _FAIXA_LAT), (COL_LON, _FAIXA_LON)):
             v = _txt(linha, coluna)
             if v == "":
                 continue  # vazio já é erro (obrigatório)
@@ -240,6 +298,21 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("err", "Nenhuma tipologia assinalada", loc,
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
+
+        # (erro) Tipologia em branco — toda coluna de tipologia (P:AZ) exige "Sim" ou "Não"
+        # numa linha com ODI/UC (pedido de 2026-07-30: "nenhuma célula em branco"). A
+        # coluna "0 - Não é prioridade" fica de fora porque já tem regra própria acima —
+        # senão o operador veria a mesma célula criticada duas vezes.
+        # Um único achado por LINHA, nomeando as colunas: no arquivo real são 19 colunas
+        # vazias em 490 linhas, e um achado por célula geraria 9.310 ocorrências.
+        brancas = [c for c in demais if _txt(linha, c) == ""]
+        if brancas:
+            # Mostra as 5 primeiras e resume o resto (mensagem legível no painel).
+            amostra = ", ".join(brancas[:5])
+            resto = f" e mais {len(brancas) - 5}" if len(brancas) > 5 else ""
+            achados.append(_achado("err", "Tipologia em branco", loc, "Tipologia",
+                                    f"{len(brancas)} coluna(s) de tipologia em branco: {amostra}{resto}",
+                                    'preencher “Sim” ou “Não” em todas as colunas de tipologia'))
 
         # (erro) Enquadramento (coluna N) × coluna "0 - Não é prioridade" (O) e tipologias
         # (P:AZ) — pedido dos clientes da planilha em 2026-07-29. Só os enquadramentos
@@ -295,6 +368,9 @@ def regras_formato_dominio(linhas, dominios):
 
     # Fase 2 (cont.): UC duplicada, independentemente do ODI (erro).
     achados.extend(_ucs_duplicadas(linhas))
+
+    # Fase 2 (cont.): mesmo ponto de GPS em duas linhas da planilha (erro, 2026-07-30).
+    achados.extend(_coordenadas_duplicadas(linhas))
 
     # Saída: todos os achados de formato/domínio.
     return achados
@@ -363,12 +439,14 @@ _DESCRICOES = {
     "UC duplicada": "Mesma Unidade Consumidora em mais de uma linha, mesmo com ODIs diferentes",
     "ODI + UC não consta na referência": "A combinação não existe em entrada/ para o contrato",
     "UF / município divergente": "Não bate com a referência de entrada/ para aquele ODI",
-    "Coordenadas inválidas": "Latitude/Longitude fora da faixa geográfica ou não numéricas",
+    "Coordenadas inválidas": "Latitude/Longitude fora da faixa do território brasileiro ou não numéricas",
+    "Coordenada duplicada": "Mesmo par de Latitude/Longitude em mais de uma linha da planilha",
     "UCs faltando": "UCs da referência do contrato ausentes da planilha",
     "“0 - Não é prioridade” em branco": "A coluna “0 - Não é prioridade” é obrigatória: preencher com “Sim” ou “Não”",
     "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
     "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
+    "Tipologia em branco": "Toda coluna de tipologia deve conter “Sim” ou “Não” — nenhuma pode ficar vazia",
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
     "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” exige “Não” e “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
     "CadÚnico sem tipologia assinalada": "Enquadramento “2 - Famílias inscritas no CadÚnico” exige ao menos uma tipologia “Sim”",
