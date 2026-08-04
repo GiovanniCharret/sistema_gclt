@@ -32,12 +32,12 @@ _ABA_DOMINIOS = "Dominios"
 _LINHA_CABECALHO = 2
 # Modelo oficial (aba Dominios). Fica em `manuais/`, que É rastreado no git — o arquivo
 # viaja junto no deploy, sem scp.
-# O nome carrega a versão (v260729-2 = 2ª revisão do modelo de 29/07/2026): a cada modelo
+# O nome carrega a versão (v260804 = modelo de 04/08/2026): a cada modelo
 # novo, atualizar este caminho, o `a.download` do front (api.js), o `VERSAO_DATA`
 # (VersaoPlanilha.jsx e relatorioCsv.js) e a asserção de versão em tests/test_api.py.
 _MODELO_PADRAO = (
     Path(__file__).resolve().parent.parent
-    / "manuais" / "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260729-2.xlsx"
+    / "manuais" / "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260804.xlsx"
 )
 # Colunas-chave que definem uma "linha de dados" (§7: tem ODI e/ou UC).
 _COL_ODI = "Número ODI"

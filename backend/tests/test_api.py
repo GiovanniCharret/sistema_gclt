@@ -486,8 +486,8 @@ def test_modelo_baixa_o_arquivo(client):
     r = client.get("/api/modelo", headers=_headers())
     assert r.status_code == 200
     assert "attachment" in r.headers.get("content-disposition", "").lower()
-    # O nome do download carrega a versão do modelo (v260729-2 = 2ª revisão de 29/07/2026)
+    # O nome do download carrega a versão do modelo (v260804 = modelo de 04/08/2026)
     # para o operador distinguir de versões antigas já baixadas. A asserção inclui o
     # sufixo "-2" de propósito: só "v260729" passaria também com o arquivo anterior.
-    assert "v260729-2" in r.headers.get("content-disposition", "")
+    assert "v260804" in r.headers.get("content-disposition", "")
     assert len(r.content) > 0

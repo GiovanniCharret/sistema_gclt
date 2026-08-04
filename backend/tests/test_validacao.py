@@ -425,10 +425,12 @@ def test_enquadramento_fora_de_povos_tradicionais_nao_gera_mais_achado():
 
 
 # ── D3 (cont.) · Enquadramento (N) × “0 - Não é prioridade” (O) e tipologias (P:AZ) ──
-# Duas regras de ERRO pedidas em 2026-07-29:
+# Regra de ERRO pedida em 2026-07-29, ajustada em 2026-08-04 (modelo v260804):
 #   (1) N = "2 - Famílias inscritas no CadÚnico" → O obrigatoriamente "Não";
 #       N = "0 - Não é prioridade"               → O obrigatoriamente "Sim".
-#   (2) N = "2 - Famílias inscritas no CadÚnico" → ao menos um "Sim" em P:AZ.
+#   A antiga regra (2) — CadÚnico exigia ao menos um "Sim" em P:AZ — CAIU em
+#   2026-08-04: com N = CadÚnico as tipologias são livres (Sim ou Não, nunca vazio),
+#   e a linha fica ISENTA da cláusula 2 do "0" (senão o mesmo erro só mudaria de nome).
 
 def test_cadunico_com_zero_sim_e_erro():
     """(1) CadÚnico exige “0 - Não é prioridade” = “Não”; com “Sim” → erro."""
@@ -468,19 +470,25 @@ def test_enquadramento_zero_com_coluna_zero_sim_nao_gera_achado():
     assert regras_formato_dominio([linha], DOM) == []
 
 
-def test_cadunico_sem_nenhum_sim_nas_tipologias_e_erro():
-    """(2) CadÚnico exige ao menos um “Sim” entre P:AZ; nenhuma marcada → erro próprio.
-
-    A cláusula 2 do “0 - Não é prioridade” acusa a mesma linha por outro ângulo — são
-    achados distintos de propósito (mensagens diferentes para o operador).
-    """
+def test_cadunico_com_todas_tipologias_nao_e_linha_limpa():
+    """Fallback de 2026-08-04: CadÚnico com “0” = “Não” e TODAS as tipologias “Não”
+    é uma linha válida — caiu a exigência de ao menos um “Sim” em P:AZ, e a linha
+    fica isenta da cláusula 2 do “0” (que acusaria o mesmo caso por outro nome)."""
     linha = linha_valida(**{
         "Enquadramento do beneficiário": "2 - Famílias inscritas no CadÚnico",
         "0 - Não é prioridade": "Não", "I - Baixa renda": "Não",
     })
-    regras = _regras(regras_formato_dominio([linha], DOM))
-    assert ("err", "CadÚnico sem tipologia assinalada") in regras
-    assert ("err", "Nenhuma tipologia assinalada") in regras
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_cadunico_em_caixa_alta_tambem_isenta_da_clausula_2():
+    """A isenção da cláusula 2 compara o enquadramento com casefold (como o resto do
+    vocabulário) — CadÚnico em caixa alta também libera a linha toda “Não”."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "2 - FAMÍLIAS INSCRITAS NO CADÚNICO",
+        "0 - Não é prioridade": "Não", "I - Baixa renda": "Não",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
 
 
 def test_cadunico_em_caixa_alta_e_reconhecido():
@@ -502,7 +510,6 @@ def test_outros_enquadramentos_nao_amarram_a_coluna_zero():
     })
     titulos = {a["regra"] for a in regras_formato_dominio([linha], DOM)}
     assert "Enquadramento × “0 - Não é prioridade”" not in titulos
-    assert "CadÚnico sem tipologia assinalada" not in titulos
 
 
 # ── D3 (cont.) · Comparações ignoram caixa alta/baixa (pedido 2026-07-15) ──

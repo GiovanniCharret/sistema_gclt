@@ -294,7 +294,11 @@ def regras_formato_dominio(linhas, dominios):
                                         'se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser “Não”'))
         elif _eh(linha, COL_TIPOLOGIA_ZERO, "Não"):
             # Cláusula 2: com "0" = "Não", pelo menos uma outra tipologia deve estar "Sim".
-            if not any(_eh(linha, c, "Sim") for c in demais):
+            # Exceção (fallback de 2026-08-04, modelo v260804): enquadramento
+            # "2 - Famílias inscritas no CadÚnico" ISENTA a linha desta cláusula — com
+            # CadÚnico as tipologias P:AZ são livres (todas "Não" é válido).
+            if not _eh(linha, COL_ENQUAD, _ENQUAD_CADUNICO) \
+                    and not any(_eh(linha, c, "Sim") for c in demais):
                 achados.append(_achado("err", "Nenhuma tipologia assinalada", loc,
                                         "Tipologia", "nenhuma tipologia marcada com “Sim”",
                                         'assinalar “Sim” em pelo menos uma tipologia ou marcar “0 - Não é prioridade” = “Sim”'))
@@ -314,27 +318,24 @@ def regras_formato_dominio(linhas, dominios):
                                     f"{len(brancas)} coluna(s) de tipologia em branco: {amostra}{resto}",
                                     'preencher “Sim” ou “Não” em todas as colunas de tipologia'))
 
-        # (erro) Enquadramento (coluna N) × coluna "0 - Não é prioridade" (O) e tipologias
-        # (P:AZ) — pedido dos clientes da planilha em 2026-07-29. Só os enquadramentos
-        # "2 - Famílias inscritas no CadÚnico" e "0 - Não é prioridade" restringem a
-        # coluna O; os demais ficam livres. Comparações ignoram a caixa (via `_eh`).
+        # (erro) Enquadramento (coluna N) × coluna "0 - Não é prioridade" (O) — pedido
+        # dos clientes da planilha em 2026-07-29. Só os enquadramentos "2 - Famílias
+        # inscritas no CadÚnico" e "0 - Não é prioridade" restringem a coluna O; os
+        # demais ficam livres. Comparações ignoram a caixa (via `_eh`).
+        # A antiga "Regra 2" (CadÚnico exigia ao menos um "Sim" em P:AZ) CAIU em
+        # 2026-08-04 (fallback, modelo v260804): com CadÚnico as tipologias são livres
+        # — ver também a isenção da cláusula 2 do "0", logo acima.
         for enquadramento, zero_exigido in _ENQUAD_EXIGE_ZERO.items():
             # Só age quando a linha está NESTE enquadramento (um casa por vez).
             if not _eh(linha, COL_ENQUAD, enquadramento):
                 continue
-            # Regra 1: a coluna "0" tem que ter exatamente o valor exigido pelo enquadramento.
+            # A coluna "0" tem que ter exatamente o valor exigido pelo enquadramento.
             if not _eh(linha, COL_TIPOLOGIA_ZERO, zero_exigido):
                 achados.append(_achado("err", "Enquadramento × “0 - Não é prioridade”", loc,
                                         COL_TIPOLOGIA_ZERO,
                                         f'Enquadramento “{enquadramento}” exige “{zero_exigido}” '
                                         f'em “{COL_TIPOLOGIA_ZERO}” (valor atual: "{zero}")',
                                         f'preencher “{COL_TIPOLOGIA_ZERO}” com “{zero_exigido}”'))
-            # Regra 2: só o CadÚnico exige ao menos um "Sim" entre as demais tipologias.
-            if enquadramento == _ENQUAD_CADUNICO and not any(_eh(linha, c, "Sim") for c in demais):
-                achados.append(_achado("err", "CadÚnico sem tipologia assinalada", loc,
-                                        "Tipologia",
-                                        f'Enquadramento “{enquadramento}” sem nenhuma tipologia “Sim”',
-                                        "assinalar “Sim” em pelo menos uma tipologia (colunas I a VII.8)"))
 
         # (erro) Correspondência do Tipo de Comunidade tradicional (coluna M) com a sua
         # tipologia de família: 1→IV.1 (U), 2→IV.2 (V), 3→IV.3 (W), 4→IV.4 (X).
@@ -444,12 +445,11 @@ _DESCRICOES = {
     "UCs faltando": "UCs da referência do contrato ausentes da planilha",
     "“0 - Não é prioridade” em branco": "A coluna “0 - Não é prioridade” é obrigatória: preencher com “Sim” ou “Não”",
     "“0 - Não é prioridade” + outra tipologia": "Se “0 - Não é prioridade” for “Sim”, todas as demais células devem ser assinaladas como “Não”",
-    "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não”",
+    "Nenhuma tipologia assinalada": "Todas as células de classificação não podem ser assinaladas como “Não” (exceção: enquadramento “2 - CadÚnico”, cujas tipologias são livres desde 04/08/2026)",
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
     "Tipologia em branco": "Toda coluna de tipologia deve conter “Sim” ou “Não” — nenhuma pode ficar vazia",
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
     "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” exige “Não” e “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
-    "CadÚnico sem tipologia assinalada": "Enquadramento “2 - Famílias inscritas no CadÚnico” exige ao menos uma tipologia “Sim”",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 
