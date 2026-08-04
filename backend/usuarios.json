@@ -29,15 +29,15 @@
   },
   "cerci": {
     "operador": "cerci",
-    "senha_hash": "c230efcd2837f613601606a14e146b4bfeae3dad21c025a640425ce4816bc614",
-    "salt": "ac249f2e3d01bee031a8cd74048d7b16",
-    "precisa_trocar_senha": true,
+    "senha_hash": "b3085481955f2f6ebf39e436b27fa6fe734a03d3c463ff41585978d892228304",
+    "salt": "50209af2e4e221697fa8c4a5244ea05a",
+    "precisa_trocar_senha": false,
     "ativo": true
   },
   "enbpar": {
     "operador": "enbpar",
-    "senha_hash": "e2ccbda932f8d73b9d4ef60ec3926cdaf2ded60407484ee56109457c553e82e8",
-    "salt": "4315364343cc9582e1d5d6e29e0fa1aa",
+    "senha_hash": "1a1412ab9eaa01bc481caf76240c1ee5ae71d9c4672d45604dc27e8e711c7d09",
+    "salt": "fa5a808ef1f2c629dd58ea230dd8282c",
     "precisa_trocar_senha": false,
     "ativo": true
   }
