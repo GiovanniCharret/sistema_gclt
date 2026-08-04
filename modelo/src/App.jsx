@@ -12,6 +12,23 @@ import SucessoEnvio from "./components/SucessoEnvio";
 import { descreverContrato } from "./seedData";
 import * as api from "./lib/api";
 
+// Versão do produto exibida no rodapé (canto esquerdo) — marcador visível do deploy:
+// serve para conferir no navegador qual versão está no ar. Atualizar a cada release.
+const VERSAO_APP = "V0.0.0804";
+
+// Rodapé único do app, com a versão no canto esquerdo. Nas telas de entrada (login,
+// menu, seleção de UF/contrato) vai FIXO ao pé da janela — elas centralizam o conteúdo
+// em tela cheia (.auth-shell) e não têm footer no fluxo; no shell logado entra no fluxo
+// normal da página, como sempre.
+function Rodape({ fixo = false }) {
+  return (
+    <footer className={fixo ? "app-footer is-fixo" : "app-footer"}>
+      <span>{VERSAO_APP} · Monitoramento dos Beneficiários do Programa</span>
+      <span>Programa Luz para Todos · MME · ENBPar</span>
+    </footer>
+  );
+}
+
 // Orquestrador. Telas: login → menu → UF → contrato → versão → shell
 // (upload → painel → sucesso). Auth + contexto + validação são reais (backend).
 export default function App() {
@@ -98,13 +115,22 @@ export default function App() {
     }
     // Login real: onAutenticado (com token) entra; onPrecisaTrocar abre a tela de troca.
     return (
-      <AuthScreen
-        onAutenticado={(operador, tok) => { setToken(tok); setUser(operador); }}
-        onPrecisaTrocar={(operador, senha) => setTrocaPendente({ operador, senha })}
-      />
+      <>
+        <AuthScreen
+          onAutenticado={(operador, tok) => { setToken(tok); setUser(operador); }}
+          onPrecisaTrocar={(operador, senha) => setTrocaPendente({ operador, senha })}
+        />
+        <Rodape fixo />
+      </>
     );
   }
-  if (!moduloOk) return <MenuPrincipal onClassificacao={() => setModuloOk(true)} />;
+  if (!moduloOk)
+    return (
+      <>
+        <MenuPrincipal onClassificacao={() => setModuloOk(true)} />
+        <Rodape fixo />
+      </>
+    );
   // Aguarda o contexto (grupo → UFs/contratos) chegar do backend antes dos seletores.
   if (!contexto) {
     return (
@@ -115,15 +141,24 @@ export default function App() {
       </div>
     );
   }
-  if (!uf) return <UfSelector ufs={contexto.ufs} onSelect={selectUf} />;
+  if (!uf)
+    return (
+      <>
+        <UfSelector ufs={contexto.ufs} onSelect={selectUf} />
+        <Rodape fixo />
+      </>
+    );
   if (!contrato)
     return (
-      <ContratoSelector
-        uf={uf}
-        contratos={contexto.contratos.filter((c) => c.uf === uf.sigla)}
-        onSelect={selectContrato}
-        onBack={() => setUf(null)}
-      />
+      <>
+        <ContratoSelector
+          uf={uf}
+          contratos={contexto.contratos.filter((c) => c.uf === uf.sigla)}
+          onSelect={selectContrato}
+          onBack={() => setUf(null)}
+        />
+        <Rodape fixo />
+      </>
     );
   if (!versaoOk) return <VersaoPlanilha token={token} onAvancar={() => setVersaoOk(true)} onBack={() => setContrato(null)} />;
 
@@ -185,10 +220,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="app-footer">
-        <span>Mock · Monitoramento dos Beneficiários do Programa</span>
-        <span>Programa Luz para Todos · MME · ENBPar</span>
-      </footer>
+      <Rodape />
 
       {toast && <div className="toast is-on">{toast}</div>}
     </div>
