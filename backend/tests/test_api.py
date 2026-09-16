@@ -332,13 +332,39 @@ def test_contexto_equatorial_ve_18_contratos(client):
     assert all("nome" in u and "contratos" in u for u in corpo["ufs"])
 
 
-def test_contexto_enbpar_ve_41_contratos(client):
-    """`GET /api/contexto` com token enbpar (curinga) → todos os 41 contratos."""
+def test_contexto_enbpar_ve_43_contratos(client):
+    """`GET /api/contexto` com token enbpar (curinga) → todos os 43 contratos."""
     # Token enbpar → vê tudo.
     token = gerar_token("enbpar")
     resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
     assert resposta.status_code == 200
-    assert len(resposta.json()["contratos"]) == 41
+    assert len(resposta.json()["contratos"]) == 43
+
+
+def test_contexto_cemig_ve_apenas_mg_e_o_eco_044(client):
+    """`GET /api/contexto` com token cemig → grupo CEMIG, só MG e só o ECO 044/2026.
+
+    Por que existe: fecha o caminho ponta a ponta do cadastro de 2026-08-27 (base →
+    filtro de acesso → payload do seletor). O `UfSelector` é derivado dos contratos
+    visíveis, então travar a lista de UFs em ["MG"] garante que o operador novo não
+    enxerga estado de outro grupo.
+
+    Fase 1: gera o token do operador `cemig`.
+    Fase 2: chama a rota autenticada.
+    Fase 3: confere grupo, o contrato único e a UF única (com nome resolvido).
+    """
+    # Fase 1: token do operador recém-provisionado.
+    token = gerar_token("cemig")
+    # Fase 2: consulta o contexto autenticado.
+    resposta = client.get("/api/contexto", headers={"Authorization": f"Bearer {token}"})
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    # Fase 3: grupo da camada 1.
+    assert corpo["grupo"] == "CEMIG"
+    # Um único contrato visível, o da CEMIG.
+    assert [c["numero"] for c in corpo["contratos"]] == ["ECO 044/2026"]
+    # E uma única UF no seletor, derivada dele.
+    assert [(u["sigla"], u["nome"]) for u in corpo["ufs"]] == [("MG", "Minas Gerais")]
 
 
 # --- Validar (E2) e Modelo (E3) — rotas protegidas ---
@@ -367,6 +393,8 @@ _LINHA_LIMPA = {
     "Latitude": "-3.30", "Longitude": "-60.0", "Data de Energização da UC": "14/02/2026",
     "Tipo de Atendimento": "Extensão de Rede", "Tipo de Comunidade": "1 - Comunidade indígena",
     "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
+    # Última coluna do modelo, obrigatória desde 2026-08-28 (só não pode vir vazia).
+    "CPF/CNPJ": "12345678901",
     "0 - Não é prioridade": "Não", "I - Baixa renda": "Sim",
     "IV.1 - Família indígena": "Sim",
 }
@@ -430,6 +458,47 @@ def test_validar_planilha_limpa_envia_email(client, validar_env):
     assert validar_env["planilha"].called is True
 
 
+def _planilha_com_dado_novo():
+    """Planilha com a UC já cadastrada de 'CTR TESTE' (O1/U1) + uma UC nova (O2/U2).
+
+    A 2ª linha muda latitude e longitude para não cair na regra de coordenada duplicada.
+    """
+    # Linha nova: outro par e outra coordenada, o resto idêntico à linha limpa.
+    nova = {**_LINHA_LIMPA, "Número ODI": "O2", "Número da Unidade Consumidora": "U2",
+            "Latitude": "-3.40", "Longitude": "-60.1"}
+    return gerar_xlsx([_LINHA_LIMPA, nova])
+
+
+def test_validar_workaround_ligado_aceita_dado_novo_e_envia(client, validar_env, monkeypatch):
+    """Flag ligada (config): base completa + UC nova → 200, ok=true, e-mail enviado."""
+    from backend.config import obter_config
+    # Liga a flag no singleton que a rota lê.
+    monkeypatch.setattr(obter_config(), "odi_uc_novo_como_aviso", True)
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", _planilha_com_dado_novo())},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["ok"] is True and corpo["totalErros"] == 0
+    # O dado novo chega ao painel como aviso.
+    assert any(g["sev"] == "warn" and g["title"] == "ODI + UC não consta na referência"
+               for g in corpo["grupos"])
+    assert validar_env["planilha"].called is True
+
+
+def test_validar_workaround_desligado_bloqueia_dado_novo(client, validar_env, monkeypatch):
+    """Flag desligada (config): a mesma planilha → ok=false, e-mail NÃO enviado."""
+    from backend.config import obter_config
+    # Desliga a flag no singleton que a rota lê.
+    monkeypatch.setattr(obter_config(), "odi_uc_novo_como_aviso", False)
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", _planilha_com_dado_novo())},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+    assert validar_env["planilha"].called is False
+
+
 def test_validar_planilha_suja_nao_envia(client, validar_env):
     """Planilha com erro → 200, ok=false, e-mail NÃO enviado."""
     suja = {**_LINHA_LIMPA, "UF": "XX"}  # UF fora do domínio
@@ -486,8 +555,8 @@ def test_modelo_baixa_o_arquivo(client):
     r = client.get("/api/modelo", headers=_headers())
     assert r.status_code == 200
     assert "attachment" in r.headers.get("content-disposition", "").lower()
-    # O nome do download carrega a versão do modelo (v260804 = modelo de 04/08/2026)
-    # para o operador distinguir de versões antigas já baixadas. A asserção inclui o
-    # sufixo "-2" de propósito: só "v260729" passaria também com o arquivo anterior.
-    assert "v260804" in r.headers.get("content-disposition", "")
+    # O nome do download carrega a versão do modelo (v260828 = modelo de 28/08/2026)
+    # para o operador distinguir de versões antigas já baixadas. A versão é comparada
+    # inteira de propósito: um prefixo mais curto passaria também com o modelo anterior.
+    assert "v260828" in r.headers.get("content-disposition", "")
     assert len(r.content) > 0

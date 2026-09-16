@@ -311,6 +311,8 @@ async def validar_rota(
         obter_dominios(),
         referencia.chaves_uc.get(contrato_norm, set()),
         referencia.odi_ref.get(contrato_norm, {}),
+        # Workaround 2026-09-16 (config.py): "dado novo" como aviso, sob a regra estrita.
+        novo_como_aviso=obter_config().odi_uc_novo_como_aviso,
     )
     # Fase 5: sem erros → envia o arquivo como veio (respeita dry-run/falha de SMTP).
     enviado = False

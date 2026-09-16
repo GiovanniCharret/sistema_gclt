@@ -28,7 +28,9 @@ MAPA_GRUPO_SIGLAS = {
     "CERCI": {"CERCI"},
     # ÂMBAR concentra ÂMBAR + AMAZONAS + RORAIMA (2 + 1 + 4 = 7).
     "ÂMBAR": {"ÂMBAR", "AMAZONAS", "RORAIMA"},
-    # ENBPAR é curinga (vê todos os 41 selecionáveis).
+    # CEMIG → sigla CEMIG (1: ECO 044/2026, cadastrada em 2026-08-27; 1ª entrada de MG).
+    "CEMIG": {"CEMIG"},
+    # ENBPAR é curinga (vê todos os 43 selecionáveis).
     "ENBPAR": None,
 }
 
@@ -50,6 +52,8 @@ MAPA_OPERADOR_GRUPO = {
     # ÂMBAR + AMAZONAS + RORAIMA). Os operadores `amazonasenergia`/`roraimaenergia` ficam
     # FORA até os engenheiros decidirem se serão cadastrados (hoje duplicariam esta visão).
     "ambarenergia": "ÂMBAR",
+    # CEMIG (2026-08-27) — entrou com o ECO 044/2026, 5ª Tranche/MG.
+    "cemig": "CEMIG",
     # ENBPar (Agente Operacionalizador) — curinga.
     "enbpar": "ENBPAR",
 }

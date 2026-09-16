@@ -89,10 +89,10 @@ export async function baixarModelo(token) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  // Nome versionado (v260804 = modelo de 04/08/2026) — manter igual ao
+  // Nome versionado (v260828 = modelo de 28/08/2026) — manter igual ao
   // servido pelo backend (`/api/modelo`), senão o operador não distingue de versões
   // antigas já baixadas.
-  a.download = "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260804.xlsx";
+  a.download = "Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.v260828.xlsx";
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();

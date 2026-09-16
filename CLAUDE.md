@@ -62,7 +62,7 @@ under `backend/`:
   first access. ⚠️ A `git pull` on the server **overwrites the store and resets passwords
   to the seed** — back it up before pulling.
 - **`acesso.py`** — two-layer access filter: **operador** → grupo econômico
-  (EQUATORIAL, ENERGISA, NEOENERGISA, ÂMBAR, CERCI, ENBPAR) → visible UFs/contratos.
+  (EQUATORIAL, ENERGISA, NEOENERGISA, ÂMBAR, CERCI, CEMIG, ENBPAR) → visible UFs/contratos.
   ENBPAR sees all. `MAPA_OPERADOR_GRUPO` / `grupo_do_operador` / `siglas_do_grupo` /
   `contratos_visiveis`; `motivo_acesso_negado` builds the **diagnostic reason** behind a
   403 (operador's grupo × the contract's distribuidora/UF, "contrato inexistente",
@@ -71,7 +71,7 @@ under `backend/`:
 
   > **Login by `operador` (2026-07-15, temporary fallback; e-mail login deferred to V1/V2).**
   > The operador is the domain label without `nome@` and without `.com.br`/`.gov.br`:
-  > `equatorialenergia`, `energisa`, `neoenergia`, `ambarenergia`, `cerci`, `enbpar`
+  > `equatorialenergia`, `energisa`, `neoenergia`, `ambarenergia`, `cerci`, `cemig`, `enbpar`
   > (wildcard). Anything in the older docs/spec that says "e-mail domain → grupo",
   > `MAPA_DOMINIO_GRUPO` or `grupo_do_email` describes the **pre-2026-07-15** shape.
 - **`referencia.py`** — loads `entrada/**/*.csv` into memory (`chaves_uc`, `odi_ref`),
@@ -100,18 +100,35 @@ under `backend/`:
   Automated tests **mock SMTP**; real sending is a **manual smoke test** (`planning/TESTES.md`).
   Note: `enviar_credenciais` is **not called** in the current operador fallback (the CLI
   prints the password; `esqueci-senha` resets to `Senha123`) — it is kept for V1/V2.
-- **`config.py`** — process config (user store path, SMTP/secrets via `.env`).
+- **`config.py`** — process config (user store path, SMTP/secrets via `.env`), plus the
+  **temporary** flag `odi_uc_novo_como_aviso` (see the workaround note under "Validation rules").
 
 ### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
 
 Per-line — **no blank cell is allowed in a row that has ODI/UC** (since 2026-07-30): all
-14 identification columns are in `OBRIGATORIOS` → "Campos obrigatórios vazios" (**err**),
+15 identification columns are in `OBRIGATORIOS` → "Campos obrigatórios vazios" (**err**),
 and all 51 tipologia columns must hold Sim/Não → **"Tipologia em branco" (err)**, emitted
 **once per row** naming the blank columns (a per-cell finding would mean 9 310 occurrences
 on a real 490-row file). Column O keeps its own older rule, so it is excluded from this one.
 Asymmetry worth knowing: identification columns are checked even when the column is
 **absent** from the sheet (fixed list), while tipologia is only checked for columns the
-sheet actually has. Also per-line: value out of domain vs `Dominios` sheet
+sheet actually has.
+
+> **`CPF/CNPJ` — the 15th identification column (2026-08-28).** The MME appended it as the
+> **last column** of `Preenchimento` (BA; 52 → 53 columns). `COL_CPF` carries **exactly one
+> rule, the same as its peers: it must not be blank** — no mask, no digit count, no check
+> digit, so `123.456.789-01`, `12345678901` and free text all pass. It must sit in **both**
+> `OBRIGATORIOS` **and** `COLS_IDENTIFICACAO`: `_colunas_tipologia` defines tipologia by
+> exclusion, so an identification column left out of that set would be demanded as Sim/Não.
+> Test fixtures follow — `CABECALHO_PADRAO` (`tests/fixtures.py`) and both valid-line
+> builders carry the column.
+>
+> Historical note: for one day the plan was a **`Preenchimento_AUX.`** mirror sheet
+> (formulas `=Preenchimento!…` over the original 52 columns) so the parser would not have to
+> change. **That was rolled back on 2026-08-28** and never implemented — `_ABA` stays
+> `"Preenchimento"`. Ignore any reference to `Preenchimento_AUX.` or to a `STATUS` column.
+
+Also per-line: value out of domain vs `Dominios` sheet
 (**err**), coordinates non-numeric or outside **Brazil's range** (**warn** — `_FAIXA_LAT`
 = −34.5…+6.0, `_FAIXA_LON` = −74.5…−34.0, tightened from the world range on 2026-07-30),
 tipologia filled with something other than Sim/Não (**warn**),
@@ -148,6 +165,25 @@ compared via `normalizar_uf`/`normalizar_nome`, so accent/space/sigla noise in t
 does not trigger it), reference UCs missing from the sheet (**warn** — lists each missing
 ODI+UC, not just the count). Zero data rows → "Planilha sem dados" (**err**).
 
+> **⚠️ TEMPORARY WORKAROUND — "dado novo" as a warning (2026-09-16).** The legacy SQL that
+> feeds `entrada/` is broken, so newly energized UCs never reach the reference and
+> "ODI + UC não consta na referência" would block every send. Flag
+> **`odi_uc_novo_como_aviso`** in `backend/config.py` (**ships `False`** on 2026-09-16 — to
+> be switched on later; env override `ODI_UC_NOVO_COMO_AVISO`; read once per process →
+> **restart after flipping**). It touches **only that rule**, and only under a **strict** condition decided
+> over the whole sheet in `regras_cruzamento` (Fase 0): the contract's base is **not empty**
+> **and every UC already in the base ("já cadastrada") is present in the sheet**. Then each
+> unknown pair becomes **warn** ("dado novo — ainda não cadastrado na base"); otherwise it
+> stays **err**, and with the flag on the suggestion says why: *"a base tem X UCs ausentes na
+> planilha; UCs novas só são aceitas como aviso quando todas as UCs já cadastradas estiverem
+> presentes"*. With the flag on, "UCs faltando" rows also read "já cadastrada na base".
+> The strict all-or-nothing check is deliberate: a mistyped existing UC removes the correct
+> pair from the sheet, so the typo keeps erroring. **Unchanged:** the **409** for a contract
+> with no reference at all (only contracts that already received ODIs qualify), "UF /
+> município divergente" (err), and every other rule. The severity reaches the pure
+> `validar`/`regras_cruzamento` as a **parameter** (`novo_como_aviso`, default `False`) —
+> only `app.py` reads the config. **If switched on, turn it back to `False` once the SQL is fixed.**
+
 `_DESCRICOES` (`validacao.py`) is the authoritative list of rule titles + panel blurbs —
 read it rather than trusting a prose summary.
 
@@ -174,12 +210,12 @@ nao-funcional" — a leftover, like the footer; ignore it.) See "Deploy" below.
 ```bash
 uv venv                                    # create .venv (CPython 3.12) — first time only
 uv pip install -r backend/requirements.txt
-.venv\Scripts\python.exe -m pytest backend/tests/ -v            # run the suite (125 green)
+.venv\Scripts\python.exe -m pytest backend/tests/ -v            # run the suite (166 green)
 .venv\Scripts\python.exe -m pytest backend/tests/test_validacao.py -v -k tipologia   # single file / -k filter
 .venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000 # run the API
 ```
 
-The **backend HAS pytest tests** (`backend/tests/`, **125 green** as of 2026-07-29; see
+The **backend HAS pytest tests** (`backend/tests/`, **166 green** as of 2026-09-16; see
 `planning/TESTES.md`)
 — run them and report real results. `TestClient` needs **`httpx2`**, not `httpx`, on
 starlette 1.3+. On Windows, kill stray `python` before a uvicorn smoke test (an orphan
@@ -218,13 +254,42 @@ UF is just the grouping above it.
 reads "Mock · …" — a cosmetic leftover, not a description of behavior. Treat the dead
 exports as removable, not as source of truth.
 
+### `base_contratos.json` — the contract authority (and its stale front twin)
+
+**`base_contratos.json` at the repo root is the single authority** (115 contracts as of
+2026-09-01), read only by `backend/referencia.py::carregar_base_contratos` and **cached
+once per process** — edit it and you must restart uvicorn (unlike `entrada/`, which
+reloads on mtime). Each entry is keyed by the contract number and carries:
+`sigla`, `cnpj`, `tranche`, `uf`, `valor_contrato`, `valor_cde`, `participacao_cde`,
+`tipo_contrato`, `vigente`, **`data_operacionalizacao`** and **`qtd_ucs`**.
+
+- **`sigla` is the *distribuidora*, not the economic group** — deliberately. It is the
+  value `MAPA_GRUPO_SIGLAS` (`acesso.py`) matches against, so "fixing" it to the group
+  label silently breaks the access filter. The BI spreadsheets use the group form; that
+  divergence is expected, not a bug.
+- **`data_operacionalizacao` (2026-08-27) and `qtd_ucs` (2026-08-28) are carried but read
+  by no code yet** — no backend module and no front component references either. They are
+  data staged for a future feature; don't assume a consumer exists.
+- Selectable contracts = `vigente != "Encerrado"` (**43** today, what the ENBPAR wildcard
+  sees; two `test_api.py`/`test_acesso.py` tests hardcode that number — bump both when a
+  non-encerrado contract is added).
+- The file is **CRLF**. Rewrite it with a Python script (`json.dump`, `indent=2`,
+  `ensure_ascii=False`), never `sed -i`, or the whole file shows as changed.
+
+⚠️ **`modelo/src/base_contratos.json` is a SECOND, STALE copy** (113 contracts, missing
+`data_operacionalizacao`/`qtd_ucs`). It exists only because `seedData.js` imports it to
+build the **dead** `CONTRATOS`/`UFS`/`contratosDaUf` exports (see above). **Do not sync it**
+— the real contract list reaches the front through `/api/contexto`. It is removable along
+with the rest of the mock vestiges.
+
 ### The official model file is VERSIONED
 
 The Anexo V model lives in **`manuais/`** (committed to the repo) with a **version-stamped
 name**: `Anexo V - Planilha - Painel de Monitoramento - MME-CC_UF.vDDMMAA.xlsx`, plus an
-optional `-N` suffix for a same-day revision (current: **`.v260804.xlsx`** = model of
-04/08/2026 — `VERSAO_DATA` = `04/08/2026`; structure identical to `.v260729-2`: header and
-`Dominios` unchanged). `GET /api/modelo` serves it from disk each request (no
+optional `-N` suffix for a same-day revision (current: **`.v260828.xlsx`** = model of
+28/08/2026 — `VERSAO_DATA` = `28/08/2026`; **`Dominios` byte-identical to `.v260804`**, the
+only change being the new **`CPF/CNPJ`** column at the end of `Preenchimento`, 52 → 53
+columns). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
 (`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`
@@ -251,6 +316,39 @@ Note that `POST /api/validar` returns **diagnostic** `detail` strings (403 says 
 vs which owner; 409 says the contract is visible but has no ODIs/UCs loaded), and
 `UploadAnexoV.jsx` shows the raw status + detail on screen. That is deliberate (2026-07-22)
 — don't "soften" those messages back.
+
+### The sibling production repo (`monitoramentolpt_producao_enbpar/`)
+
+Deploy target 2 lives in a **separate local repo and separate GitHub remote**:
+`../monitoramentolpt_producao_enbpar` → **`github.com/enbpar/enbpar-sistema-gclt`**
+(this repo's remote is `github.com/GiovanniCharret/sistema_gclt`). It is a near-copy of
+this codebase, and **backend/front changes must be applied to both by hand** — there is no
+automation. Push to its `main` **triggers the production deploy**, so commit/push there
+only when explicitly asked.
+
+Files that must **not** be blindly copied across:
+- **`modelo/src/lib/api.js`** — line 9 diverges *on purpose*: production uses
+  `http://backend:8000/api` (the compose service name), this repo `http://127.0.0.1:8000/api`.
+  **Edit, never copy.**
+- **`backend/usuarios.json`** — production holds real password hashes. Never touch it.
+  Its deploy workflow (`.github/workflows/compose-gclt.yml`) **deliberately discards any
+  `usuarios.json` arriving via git** and restores the container's copy, so a new operador
+  pushed through git never reaches production — it has to be created on the VM with
+  `docker exec docker-backend-1 python -m backend.admin_usuarios add <operador>`.
+- **`base_contratos.json`** — sync field-by-field with a script that asserts nothing else
+  changed; the two copies have known pre-existing divergences (`data_termo`,
+  `meta_excepcional`) where **production is the correct one**.
+
+Most untouched files differ only by line endings (CRLF here, LF there) — that is noise;
+compare normalized (`tr -d '\r'`) before concluding a file is out of sync.
+
+Architectural changes in that repo require the company's IT — keep changes there minimal.
+
+**Testing that repo:** it has grown a login subsystem (`backend/identidade/`, tests under
+`backend/tests/identidade/`) that needs **`SQLAlchemy`**, absent from this repo's `.venv`.
+Run its suite in an ephemeral env built from **its own** requirements, from its root:
+`uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m pytest backend/`.
+(A venv under the session scratchpad fails on Windows: the path exceeds 260 chars.)
 
 ### Real client-side download (`src/lib/relatorioCsv.js`)
 

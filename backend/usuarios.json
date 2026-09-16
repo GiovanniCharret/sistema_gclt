@@ -8,9 +8,9 @@
   },
   "energisa": {
     "operador": "energisa",
-    "senha_hash": "a06ec7023369c45be08821eb5624eff8f358237b78d3d725759e8f9bb1eec88d",
-    "salt": "8b72bcaf6c7cb88512e7bf2759a269c8",
-    "precisa_trocar_senha": true,
+    "senha_hash": "367393cbcee2a738ada1288be4971c3e7497d19e212619d4e058b4c33463636e",
+    "salt": "67fd2f111b12828c84bea8d8a6637a06",
+    "precisa_trocar_senha": false,
     "ativo": true
   },
   "neoenergia": {
@@ -38,6 +38,13 @@
     "operador": "enbpar",
     "senha_hash": "1a1412ab9eaa01bc481caf76240c1ee5ae71d9c4672d45604dc27e8e711c7d09",
     "salt": "fa5a808ef1f2c629dd58ea230dd8282c",
+    "precisa_trocar_senha": false,
+    "ativo": true
+  },
+  "cemig": {
+    "operador": "cemig",
+    "senha_hash": "a72a94742d776a8c0682ac1df79630baefa02c6d26d7f9cae0040cee1a60443c",
+    "salt": "5735c4d4ac4fbf389d52f9de132fe933",
     "precisa_trocar_senha": false,
     "ativo": true
   }

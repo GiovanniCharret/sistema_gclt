@@ -3,7 +3,7 @@
 Por que existe: a §5.1 da spec define o filtro de escopo em duas camadas
 (domínio do e-mail → grupo econômico → siglas/contratos visíveis), com `ENBPAR`
 como curinga. Estes testes cobrem a resolução do grupo, o curinga, o caso
-ÂMBAR (3 siglas) e o domínio desconhecido. As contagens reais (18 / 41 / 7) usam
+ÂMBAR (3 siglas) e o domínio desconhecido. As contagens reais (18 / 43 / 7) usam
 a `base_contratos.json` de verdade — é o critério de aceite da A4.
 
 Nota: a sigla "ÂMBAR" usa o caractere precomposto U+00C2 (`Â`); referencia-se
@@ -78,6 +78,7 @@ def test_operadores_das_distribuidoras_resolvem_grupos():
         "coelba": "NEOENERGISA",
         "ambarenergia": AMBAR,
         "cerci": "CERCI",
+        "cemig": "CEMIG",
         "enbpar": "ENBPAR",
     }
     # Cada operador deve mapear ao grupo esperado.
@@ -117,15 +118,15 @@ def test_contratos_visiveis_equatorial_sao_18():
     assert all(c["sigla"] == "EQUATORIAL" for c in visiveis)
 
 
-def test_enbpar_curinga_ve_todos_os_41():
-    """ENBPAR é curinga: enxerga todos os 41 contratos selecionáveis.
+def test_enbpar_curinga_ve_todos_os_43():
+    """ENBPAR é curinga: enxerga todos os 43 contratos selecionáveis.
 
     Entrada: contratos reais + grupo ENBPAR.
-    Saída: 41 contratos visíveis.
+    Saída: 43 contratos visíveis (41 + ECO 044/2026 e ECO 045/2026, 2026-08-27).
     """
     # ENBPAR (curinga) → todos os selecionáveis.
     visiveis = contratos_visiveis("ENBPAR", _contratos_reais())
-    assert len(visiveis) == 41
+    assert len(visiveis) == 43
 
 
 def test_ambar_inclui_amazonas_e_roraima():
@@ -142,6 +143,28 @@ def test_ambar_inclui_amazonas_e_roraima():
     # Fase 2: na base real, somam 7 contratos selecionáveis.
     visiveis = contratos_visiveis(AMBAR, _contratos_reais())
     assert len(visiveis) == 7
+
+
+def test_cemig_ve_apenas_o_contrato_de_mg():
+    """CEMIG enxerga só o seu único contrato — o ECO 044/2026 (MG), 2026-08-27.
+
+    Por que existe: a CEMIG é a distribuidora mais nova da base e trouxe a primeira UF
+    de MG; o risco a travar é o vazamento de escopo (ver contrato de outro grupo) e o
+    inverso (não ver o próprio, que era o estado antes deste cadastro).
+
+    Entrada: contratos reais + grupo resolvido do operador `cemig`.
+    Fase 1: operador → grupo → contratos visíveis.
+    Fase 2: confere que é exatamente 1 contrato, o ECO 044/2026, sigla CEMIG e UF MG.
+    Saída: asserções.
+    """
+    # Fase 1: camada 1 (operador→grupo) encadeada com a camada 2 (grupo→contratos).
+    grupo = grupo_do_operador("cemig")
+    visiveis = contratos_visiveis(grupo, _contratos_reais())
+    # Fase 2: um único contrato, e é o da CEMIG em Minas Gerais.
+    assert len(visiveis) == 1
+    assert visiveis[0]["numero"] == "ECO 044/2026"
+    assert visiveis[0]["sigla"] == "CEMIG"
+    assert visiveis[0]["uf"] == "MG"
 
 
 def test_grupo_desconhecido_nao_ve_contratos():

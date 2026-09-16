@@ -27,6 +27,7 @@ claude resume.txt
 DEPLOY.md
 DEPLOY_HOSTINGER.html
 deploy_hostinger.sh
+DEPLOY_VPS_DOCKER_VIA_SSH.md
 
 # ── Segredos (NÃO versionar) ─────────────────────────────
 # NOTA (2026-07-17): `backend/usuarios.json` VOLTOU ao versionamento (para o handoff) —

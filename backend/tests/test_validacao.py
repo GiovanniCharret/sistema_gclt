@@ -54,6 +54,8 @@ def linha_valida(**over):
         "Tipo de Atendimento": "Extensão de Rede",
         "Tipo de Comunidade": "11 - Rural geral / demais comunidades rurais",
         "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
+        # Última coluna do modelo, obrigatória desde 2026-08-28 (só não pode vir vazia).
+        "CPF/CNPJ": "12345678901",
         "0 - Não é prioridade": "Não",
         "I - Baixa renda": "Sim",
     }
@@ -187,6 +189,38 @@ def test_colunas_de_identificacao_viraram_obrigatorias():
         achados = regras_formato_dominio([linha_valida(**{coluna: ""})], DOM)
         vazios = [a for a in achados if a["regra"] == "Campos obrigatórios vazios"]
         assert coluna in {a["campo"] for a in vazios}, coluna
+
+
+# ── D3 (cont.) · CPF/CNPJ (2026-08-28) ──
+# O MME acrescentou "CPF/CNPJ" como ÚLTIMA coluna da aba Preenchimento. A regra pedida é
+# só uma — a mesma das demais colunas de identificação: não pode vir vazia. Sem máscara,
+# sem contagem de dígitos, sem dígito verificador.
+
+def test_cpf_cnpj_vazio_e_erro():
+    """CPF/CNPJ em branco numa linha com ODI/UC → 'Campos obrigatórios vazios'."""
+    achados = regras_formato_dominio([linha_valida(**{"CPF/CNPJ": ""})], DOM)
+    vazios = [a for a in achados if a["regra"] == "Campos obrigatórios vazios"]
+    assert "CPF/CNPJ" in {a["campo"] for a in vazios}
+
+
+def test_cpf_cnpj_nao_e_cobrado_como_tipologia():
+    """CPF/CNPJ é identificação, não tipologia: em branco NÃO pode virar também
+    'Tipologia em branco' (seria mensagem duplicada), e preenchido com um número NÃO pode
+    virar 'Tipologia inválida' por não ser Sim/Não. Trava `COLS_IDENTIFICACAO`."""
+    # Vazio: acusa o campo obrigatório, mas não a tipologia.
+    regras_vazio = _regras(regras_formato_dominio([linha_valida(**{"CPF/CNPJ": ""})], DOM))
+    assert ("err", "Campos obrigatórios vazios") in regras_vazio
+    assert ("err", "Tipologia em branco") not in regras_vazio
+    # Preenchido com CNPJ: nenhum achado (não é cobrado como Sim/Não).
+    achados = regras_formato_dominio([linha_valida(**{"CPF/CNPJ": "06981180000116"})], DOM)
+    assert achados == []
+
+
+def test_cpf_cnpj_aceita_qualquer_formato_nao_vazio():
+    """Não há validação de formato: máscara, só dígitos ou texto passam igual."""
+    for valor in ("123.456.789-01", "12345678901", "06.981.180/0001-16", "isento"):
+        achados = regras_formato_dominio([linha_valida(**{"CPF/CNPJ": valor})], DOM)
+        assert achados == [], valor
 
 
 # ── D3 (cont.) · Coordenada: faixa do Brasil (2026-07-30) ──
@@ -659,6 +693,133 @@ def test_cruzamento_consistente_sem_achados():
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
                                 odi_ref={"O1": ("AM", "MANACAPURU")})
     assert achados == []
+
+
+# ── Workaround 2026-09-16 · "dado novo" como aviso (flag odi_uc_novo_como_aviso) ──
+#
+# Regra ESTRITA: com a flag ligada, ODI+UC fora da base vira aviso só se a base do
+# contrato não estiver vazia e TODAS as UCs já cadastradas estiverem na planilha.
+
+def _linha_par(odi, uc, lat):
+    """Linha válida com o par (odi, uc) dado e latitude própria.
+
+    Por que existe: os testes do workaround precisam de várias linhas no mesmo arquivo;
+    a latitude distinta evita que a regra de coordenada duplicada entre no caminho.
+    """
+    # Sobrescreve só ODI, UC e latitude da linha-base.
+    return linha_valida(**{"Número ODI": odi, "Número da Unidade Consumidora": uc,
+                           "Latitude": lat})
+
+
+def test_workaround_desligado_dado_novo_continua_erro():
+    """Flag desligada (default): base completa + par novo → continua ERRO, como antes."""
+    # Planilha com a UC já cadastrada (O1/U1) e uma nova (O2/U2).
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")}, odi_ref={})
+    # Sem a flag, o dado novo é erro e nunca aviso.
+    assert ("err", "ODI + UC não consta na referência") in _regras(achados)
+    assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
+
+
+def test_workaround_ligado_base_completa_dado_novo_vira_aviso():
+    """Flag ligada + todas as UCs já cadastradas na planilha → dado novo vira AVISO."""
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")}, odi_ref={},
+                                novo_como_aviso=True)
+    # O par novo sai como aviso, e não sobra nenhum erro de "não consta".
+    assert ("warn", "ODI + UC não consta na referência") in _regras(achados)
+    assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
+    # O texto identifica o par como dado novo.
+    novo = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
+    assert len(novo) == 1
+    assert "dado novo" in novo[0]["problema"] and "U2" in novo[0]["problema"]
+
+
+def test_workaround_ligado_base_incompleta_continua_erro_explicado():
+    """Flag ligada, mas uma UC já cadastrada sumiu → dado novo continua ERRO, com o motivo."""
+    # A base tem O1/U1 e O3/U3; a planilha traz O1/U1 e o novo O2/U2 — falta O3/U3.
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
+                                novo_como_aviso=True)
+    # A regra estrita falhou: erro, não aviso.
+    assert ("err", "ODI + UC não consta na referência") in _regras(achados)
+    assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
+    # A sugestão diz quantas UCs já cadastradas faltam e por que o aviso não foi aceito.
+    erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
+    assert erro["sug"] == ("a base tem 1 UC ausente na planilha; UCs novas só são aceitas "
+                           "como aviso quando todas as UCs já cadastradas estiverem presentes")
+
+
+def test_workaround_mensagem_no_plural():
+    """Com 2+ UCs já cadastradas faltando, a sugestão usa o plural."""
+    linhas = [_linha_par("O2", "U2", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
+                                novo_como_aviso=True)
+    erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
+    assert erro["sug"].startswith("a base tem 2 UCs ausentes na planilha;")
+
+
+def test_workaround_pega_digitacao_errada_de_uc_existente():
+    """Digitar errado uma UC já cadastrada NÃO passa como dado novo.
+
+    O par correto some da planilha, a regra estrita falha e o par digitado errado
+    continua erro — é o caso que a regra estrita existe para pegar.
+    """
+    # Base O1/U1 e O2/U2; o operador digitou U9 no lugar de U2.
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U9", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O2", "U2")}, odi_ref={},
+                                novo_como_aviso=True)
+    assert ("err", "ODI + UC não consta na referência") in _regras(achados)
+    assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
+
+
+def test_workaround_base_vazia_nao_aceita_dado_novo():
+    """Contrato sem nenhuma UC na base: a flag não se aplica (só vale p/ quem já tem ODIs)."""
+    linhas = [_linha_par("O2", "U2", "-3.2")]
+    achados = regras_cruzamento(linhas, chaves_uc=set(), odi_ref={}, novo_como_aviso=True)
+    erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
+    # Continua erro, com a sugestão original (não fala em "UCs ausentes").
+    assert erro and erro[0]["sev"] == "err"
+    assert erro[0]["sug"] == "conferir ODI e UC contra a base de referência"
+
+
+def test_workaround_ucs_faltando_fala_em_ja_cadastrada():
+    """Flag ligada: o aviso 'UCs faltando' deixa explícito que é UC JÁ CADASTRADA."""
+    linhas = [_linha_par("O1", "U1", "-3.1")]
+    ligada = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
+                               novo_como_aviso=True)
+    desligada = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={})
+    # Mesma regra e severidade nos dois casos — só o texto muda.
+    faltou_l = [a for a in ligada if a["regra"] == "UCs faltando"][0]
+    faltou_d = [a for a in desligada if a["regra"] == "UCs faltando"][0]
+    assert faltou_l["sev"] == faltou_d["sev"] == "warn"
+    assert faltou_l["problema"] == "UC U3 (ODI O3) já cadastrada na base não está na planilha"
+    assert faltou_d["problema"] == "UC U3 (ODI O3) não está na planilha"
+
+
+def test_workaround_nao_afeta_uf_municipio_divergente():
+    """Flag ligada não relaxa 'UF / município divergente' — continua erro."""
+    linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",
+                              "UF": "PA", "Município": "BELEM"})]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
+                                odi_ref={"O1": ("AM", "MANACAPURU")}, novo_como_aviso=True)
+    assert ("err", "UF / município divergente") in _regras(achados)
+
+
+def test_validar_workaround_base_completa_fica_ok():
+    """Ponta a ponta de `validar`: flag ligada + base completa → ok=True (envia)."""
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
+    r = validar(linhas, DOM, chaves_uc={("O1", "U1")}, odi_ref={}, novo_como_aviso=True)
+    # Nenhum erro bloqueia; o dado novo aparece só como aviso.
+    assert r["ok"] is True and r["totalErros"] == 0
+    assert r["totalAvisos"] >= 1
+
+
+def test_validar_workaround_desligado_mesma_planilha_bloqueia():
+    """A MESMA planilha, com a flag desligada, bloqueia (ok=False) — comportamento original."""
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
+    r = validar(linhas, DOM, chaves_uc={("O1", "U1")}, odi_ref={})
+    assert r["ok"] is False and r["totalErros"] >= 1
 
 
 # ── D5 · Montagem da resposta ──

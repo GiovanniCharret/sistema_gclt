@@ -26,6 +26,10 @@ COL_DATA = "Data de Energização da UC"
 COL_TIPO_ATEND = "Tipo de Atendimento"
 COL_TIPO_COM = "Tipo de Comunidade"
 COL_ENQUAD = "Enquadramento do beneficiário"
+# Última coluna do modelo (BA), acrescentada pelo MME em 2026-08-28. É identificação, não
+# tipologia: a única regra que a alcança é a de célula vazia (entra em OBRIGATORIOS).
+# Não há checagem de formato/dígito verificador — o pedido foi só "não vir em branco".
+COL_CPF = "CPF/CNPJ"
 COL_TIPOLOGIA_ZERO = "0 - Não é prioridade"
 # Tipologias de família dos povos tradicionais (colunas U/V/W/X do modelo) — usadas na
 # regra de correspondência com o Tipo de Comunidade (erro).
@@ -73,17 +77,22 @@ _FAIXA_LON = (-74.5, -34.0)
 # ODI/UC", e antes disso Distribuidora, Tipo de Atendimento, os dois campos de Nome, Tipo
 # de Comunidade e Enquadramento podiam ficar vazios sem crítica. As 51 colunas de
 # tipologia são cobertas pela regra "Tipologia em branco", logo abaixo.
+# Desde 2026-08-28 entra também o CPF/CNPJ, sob a MESMA regra das demais (só não pode
+# vir vazio) — sem validação de formato, máscara ou dígito verificador.
 OBRIGATORIOS = [
     "Distribuidora", COL_TIPO_ATEND, COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF,
     "Nome da Comunidade", "Nome da Unidade Consumidora", COL_LAT, COL_LON, COL_DATA,
-    COL_TIPO_COM, COL_ENQUAD,
+    COL_TIPO_COM, COL_ENQUAD, COL_CPF,
 ]
 
-# As 14 colunas de identificação/localização/classificação (não são tipologia).
+# As 15 colunas de identificação/localização/classificação (não são tipologia).
+# O CPF/CNPJ precisa estar AQUI também, e não só em OBRIGATORIOS: `_colunas_tipologia`
+# define tipologia por exclusão, então uma coluna de identificação fora deste conjunto
+# passaria a ser cobrada como Sim/Não pela regra "Tipologia em branco".
 COLS_IDENTIFICACAO = {
     "Distribuidora", COL_TIPO_ATEND, COL_ODI, COL_UC, COL_IBGE, COL_MUNICIPIO, COL_UF,
     "Nome da Comunidade", "Nome da Unidade Consumidora", COL_LAT, COL_LON, COL_DATA,
-    COL_TIPO_COM, COL_ENQUAD,
+    COL_TIPO_COM, COL_ENQUAD, COL_CPF,
 }
 
 # Mapa coluna → chave da lista de domínios (para a regra de domínio).
@@ -131,7 +140,7 @@ def _achado(sev, regra, loc, campo, problema, sug):
 
 def _colunas_tipologia(linha):
     """Colunas de tipologia da linha = todas menos as de identificação e `_linha`."""
-    # Tipologia = o que sobra depois de tirar as 14 colunas de identificação.
+    # Tipologia = o que sobra depois de tirar as 15 colunas de identificação.
     return [c for c in linha if c not in COLS_IDENTIFICACAO and c != "_linha"]
 
 
@@ -377,19 +386,50 @@ def regras_formato_dominio(linhas, dominios):
     return achados
 
 
-def regras_cruzamento(linhas, chaves_uc, odi_ref):
+def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
     """Aplica as regras de cruzamento com `entrada/` (D4, §7) para UM contrato.
 
+    Por que `novo_como_aviso` existe: workaround de 2026-09-16 (flag
+    `odi_uc_novo_como_aviso` em `config.py`). O SQL do legado parou de alimentar a base,
+    então UCs recém-energizadas ("dado novo") não constam nela. A severidade vem por
+    parâmetro — e não lida da config aqui dentro — para a função continuar pura e
+    testável; o default False preserva o comportamento original.
+
     Entrada: `linhas` (parseadas), `chaves_uc` (set de `(odi, uc)` da referência do
-             contrato) e `odi_ref` (dict `odi -> (uf, municipio)` do contrato).
-    Fase 1: por linha — (ODI,UC) inexistente na referência (erro); UF/município divergente
-            do ODI (erro). Acumula os pares enviados.
-    Fase 2: UCs da referência ausentes da planilha → aviso agregado.
+             contrato), `odi_ref` (dict `odi -> (uf, municipio)` do contrato) e
+             `novo_como_aviso` (bool da flag do workaround).
+    Fase 0: coleta os pares (ODI, UC) da planilha inteira e mede quais UCs já cadastradas
+            na base sumiram dela. Decide a severidade do dado novo pela regra ESTRITA:
+            aviso só se a flag estiver ligada, a base não estiver vazia e NENHUMA UC já
+            cadastrada faltar na planilha. Senão, erro (como antes).
+    Fase 1: por linha — (ODI,UC) inexistente na referência (erro, ou aviso de "dado novo"
+            pela Fase 0); UF/município divergente do ODI (erro, inalterada).
+    Fase 2: UCs da referência ausentes da planilha → aviso por UC.
     Saída: lista de achados.
     """
-    # Acumuladores.
+    # Acumulador de achados.
     achados = []
+
+    # Fase 0: pares (odi, uc) de TODA a planilha — a decisão depende do conjunto inteiro,
+    # não de uma linha, por isso é calculada antes do laço por linha.
     enviados = set()
+    # Percorre as linhas só para montar o conjunto de pares enviados.
+    for linha in linhas:
+        # Mesma normalização usada no laço principal (zeros à esquerda, espaços, tipo).
+        odi = normalizar_id(linha.get(COL_ODI))
+        uc = normalizar_id(linha.get(COL_UC))
+        # Só entram pares completos — igual ao critério da checagem de existência.
+        if odi and uc:
+            enviados.add((odi, uc))
+    # UCs "já cadastradas" (estão na base) que não vieram na planilha.
+    faltando = chaves_uc - enviados
+    # Regra estrita: flag ligada + base não vazia + nenhuma UC já cadastrada faltando.
+    aceita_dado_novo = novo_como_aviso and bool(chaves_uc) and not faltando
+    # Texto de sugestão para quando a flag está ligada mas a regra estrita falhou.
+    qtd_faltando = f"{len(faltando)} UC ausente" if len(faltando) == 1 else f"{len(faltando)} UCs ausentes"
+    # Explica ao operador por que o dado novo NÃO foi aceito como aviso.
+    sug_base_incompleta = (f"a base tem {qtd_faltando} na planilha; UCs novas só são aceitas "
+                           f"como aviso quando todas as UCs já cadastradas estiverem presentes")
 
     # Fase 1: checagens por linha.
     for linha in linhas:
@@ -398,11 +438,22 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
         loc = _loc(linha)
         # Par (odi, uc) — existência na referência.
         if odi and uc:
-            enviados.add((odi, uc))
             if (odi, uc) not in chaves_uc:
-                achados.append(_achado("err", "ODI + UC não consta na referência", loc,
-                                        "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
-                                        "conferir ODI e UC contra a base de referência"))
+                # Workaround ativo e base completa na planilha → dado novo vira aviso.
+                if aceita_dado_novo:
+                    achados.append(_achado("warn", "ODI + UC não consta na referência", loc,
+                                            "ODI + UC", f'ODI "{odi}" + UC "{uc}" é dado novo — ainda não cadastrado na base do contrato',
+                                            "aceito como aviso enquanto a base não é atualizada: todas as UCs já cadastradas estão na planilha"))
+                # Workaround ativo, mas UCs já cadastradas sumiram da planilha → erro explicado.
+                elif novo_como_aviso and faltando:
+                    achados.append(_achado("err", "ODI + UC não consta na referência", loc,
+                                            "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
+                                            sug_base_incompleta))
+                # Workaround desligado (ou base vazia) → comportamento original.
+                else:
+                    achados.append(_achado("err", "ODI + UC não consta na referência", loc,
+                                            "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
+                                            "conferir ODI e UC contra a base de referência"))
         # UF/município divergentes do que a referência tem para aquele ODI.
         if odi and odi in odi_ref:
             uf_ref, mun_ref = odi_ref[odi]
@@ -422,10 +473,17 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref):
     # por UC, listando ODI+UC, para o operador saber exatamente quais reenviar; antes
     # era um único agregado só com a contagem). Ordena por (odi, uc) p/ saída estável;
     # o teto de linhas por grupo (o "+N outras" do front) é aplicado em `_agrupar`.
-    faltando = chaves_uc - enviados
+    # `faltando` já foi calculado na Fase 0 (mesmo conjunto: base − enviados).
     for odi, uc in sorted(faltando):
+        # Com o workaround ligado, o texto deixa explícito que é dado JÁ CADASTRADO que
+        # sumiu da planilha — é isso que impede o dado novo de virar aviso.
+        if novo_como_aviso:
+            problema_faltando = f'UC {uc} (ODI {odi}) já cadastrada na base não está na planilha'
+        # Workaround desligado → texto original.
+        else:
+            problema_faltando = f'UC {uc} (ODI {odi}) não está na planilha'
         achados.append(_achado("warn", "UCs faltando", "—", "UC",
-                                f'UC {uc} (ODI {odi}) não está na planilha',
+                                problema_faltando,
                                 "incluir na planilha ou confirmar a exclusão da UC"))
 
     # Saída: achados de cruzamento.
@@ -534,11 +592,12 @@ def _preview(linhas, achados):
     return preview
 
 
-def validar(linhas, dominios, chaves_uc, odi_ref):
+def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False):
     """Valida a planilha inteira e monta a resposta do painel (D5, §6/§7).
 
     Entrada: `linhas` (parseadas), `dominios` (aba Dominios), `chaves_uc`/`odi_ref` (da
-             referência do contrato).
+             referência do contrato) e `novo_como_aviso` (flag do workaround de
+             2026-09-16, repassada a `regras_cruzamento`; default False = regra original).
     Fase 1: guarda — 0 linhas de dados → erro 'Planilha sem dados' (não envia).
     Fase 2: roda as regras (formato/domínio + cruzamento) e agrupa os achados.
     Fase 3: calcula totais e monta o preview.
@@ -556,7 +615,9 @@ def validar(linhas, dominios, chaves_uc, odi_ref):
             "previewRows": [],
         }
     # Fase 2: regras + agrupamento.
-    achados = regras_formato_dominio(linhas, dominios) + regras_cruzamento(linhas, chaves_uc, odi_ref)
+    achados = (regras_formato_dominio(linhas, dominios)
+               # A flag do workaround só afeta o cruzamento com a base.
+               + regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=novo_como_aviso))
     grupos = _agrupar(achados)
     # Fase 3: totais, preview e ok.
     total_erros = sum(g["count"] for g in grupos if g["sev"] == "err")

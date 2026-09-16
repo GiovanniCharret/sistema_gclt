@@ -23,6 +23,10 @@ CABECALHO_PADRAO = [
     "Latitude", "Longitude", "Data de Energização da UC",
     "Tipo de Comunidade", "Enquadramento do beneficiário",
     "0 - Não é prioridade", "I - Baixa renda", "IV.1 - Família indígena",
+    # Última coluna do modelo real (BA), obrigatória desde 2026-08-28. Fica no fim aqui
+    # também: as colunas são casadas por NOME, mas manter a ordem do modelo evita que um
+    # teste futuro que dependa de posição divirja da planilha de verdade.
+    "CPF/CNPJ",
 ]
 
 
