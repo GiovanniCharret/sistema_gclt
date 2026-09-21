@@ -13,8 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   and they are invisible to anyone who clones the repo. They are still the working log:
   keep writing to them, and **cross-check `git log`** when reading history (decisions from
   2026-07-16 → 07-22 were backfilled into PLAN.md on 2026-07-29 from the commit messages).
-- **Product versioning (since 2026-07-07): V0 DELIVERED** (production live at
-  `gerenciador-gclt.com`); **V1 in planning**. Version scope, known limitations and
+- **Product versioning (since 2026-07-07): V0 DELIVERED** (first live at
+  `gerenciador-gclt.com`; **production is now the Azure deploy**, and the Hostinger VPS is a
+  test bed — see "Deploy"); **V1 in planning**. Version scope, known limitations and
   the V1 backlog live in **`planning/VERSOES.md`** — V1 work is tracked there
   (dated decisions still go to PLAN.md). Each closed version gets a git tag (`v0`, …).
 - Deliver in **small, individually human-testable parts** (see PLAN.md "Fases").
@@ -45,7 +46,7 @@ Domain: Programa Luz para Todos / MME / ENBPar.
 ## Backend — FastAPI (V0 delivered; spec in `planning/specs/2026-06-26-…-design.md`)
 
 The backend is **real and complete** (Blocos A–G). FastAPI + uvicorn behind the same
-Nginx at **`/api`** in production (`/opt/anexov`, systemd unit `anexov-api`). Modules
+Nginx at **`/api`** (Docker compose in both live targets — see "Deploy"). Modules
 under `backend/`:
 
 - **`app.py`** — the ASGI `app`; dev CORS (Vite :5175); all routes:
@@ -59,8 +60,8 @@ under `backend/`:
   the temporary password (the credentials e-mail is not wired in the operador fallback).
   Users live in **`backend/usuarios.json`** (pbkdf2 hashes) — **tracked again since the
   handoff (2026-07-17)**, seeded with the 6 operadores at `Senha123` + forced change on
-  first access. ⚠️ A `git pull` on the server **overwrites the store and resets passwords
-  to the seed** — back it up before pulling.
+  first access. ⚠️ Anything that replaces the file on a server **resets passwords to the
+  seed** — a `git pull`, or a Docker `--build` that bakes the repo's copy into the image.
 - **`acesso.py`** — two-layer access filter: **operador** → grupo econômico
   (EQUATORIAL, ENERGISA, NEOENERGISA, ÂMBAR, CERCI, CEMIG, ENBPAR) → visible UFs/contratos.
   ENBPAR sees all. `MAPA_OPERADOR_GRUPO` / `grupo_do_operador` / `siglas_do_grupo` /
@@ -293,22 +294,31 @@ columns). `GET /api/modelo` serves it from disk each request (no
 restart to swap contents). **Per new model version, update all of:** `_MODELO_PADRAO`
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
 (`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`
-asserts the version string). Then **commit the `.xlsx`** — `manuais/` is tracked, so the VPS
-`git pull` carries the new model (**no scp needed**). See the latest model-swap decision in PLAN.md.
+asserts the version string). Then **commit the `.xlsx`** — `manuais/` is tracked, so the deploy
+carries the new model (Azure: the workflow's `git pull`; Hostinger: inside the `git archive`
+package) — **no separate scp needed**. See the latest model-swap decision in PLAN.md.
 
 ### Deploy — two live targets
 
-1. **Hostinger VPS (V0 production, `gerenciador-gclt.com`)** — Nginx serving
-   `modelo/dist/` + uvicorn systemd `anexov-api` in `/opt/anexov`; update via
-   `git pull` + `npm run build` + `systemctl restart anexov-api`. Its docs
-   (`DEPLOY.md`, `DEPLOY_HOSTINGER.html`, `deploy_hostinger.sh`) still exist locally but
-   were **gitignored at the 2026-07-17 handoff**.
-2. **Azure / Ubuntu 24 + Docker (handed to the company's engineers)** — **`DEPLOY_AZURE.md`**
+1. **Hostinger VPS (`gerenciador-gclt.com`) — TEST BED, not production.** Rebuilt from
+   scratch on **2026-09-02**: the old stack (`/opt/anexov`, systemd `anexov-api`,
+   `git pull` + `npm run build`) **no longer exists**. It now runs the **production repo**
+   (`enbpar-sistema-gclt`) with its `docker/docker-compose.yml` in `/opt/enbpar`; a
+   `docker-compose.override.yml` binds the front container to `127.0.0.1:8080`, behind the
+   host's Nginx + certbot. There are **no git credentials on the server**: updates are
+   `git archive` + `scp` + `docker compose up -d --build` (runbook
+   `DEPLOY_VPS_DOCKER_VIA_SSH.md`, gitignored). It is where the branch
+   **`feature/login-canonico-e-perfis`** is tested before being merged (see "Branches" under
+   the sibling repo). `DEPLOY.md`, `DEPLOY_HOSTINGER.html` and `deploy_hostinger.sh`
+   (gitignored at the 2026-07-17 handoff) describe the **pre-2026-09-02** stack.
+2. **Azure / Ubuntu 24 + Docker — PRODUCTION (handed to the company's engineers)**, deployed
+   from the production repo's `main` — **`DEPLOY_AZURE.md`**
    (+ `.html`) is the current guide, aimed at `monitoramentolpt.enbpar.gov.br`.
    `docker/docker-compose.yml` builds two images from the repo root: `Dockerfile-backend`
    (python:3.12-slim, `uvicorn backend.app:app` on :8000, **runs from the repo root** because
    `config.py`/`planilha.py`/`referencia.py` read relative paths) and `Dockerfile-frontend`
-   (nginx:alpine serving a **pre-built `modelo/dist/`** + `modelo/nginx.conf`, published on
+   (a Node stage **runs `npm run build` inside the image**, then nginx:alpine serves that
+   `dist/` + `modelo/nginx.conf` — no pre-built `dist/` needed; published on
    :80). In compose the front proxies `/api/` to `http://backend:8000` (service name, not
    `127.0.0.1`), `client_max_body_size 50m`.
 
@@ -325,6 +335,27 @@ Deploy target 2 lives in a **separate local repo and separate GitHub remote**:
 this codebase, and **backend/front changes must be applied to both by hand** — there is no
 automation. Push to its `main` **triggers the production deploy**, so commit/push there
 only when explicitly asked.
+
+**Branches — check `git branch --show-current` before touching that clone.**
+- **`main`** — what production (Azure) runs; a push deploys. **Everything this project changes
+  in that repo goes to `main`**, including the routine data commits (`base MM-DD` =
+  `entrada/`).
+- **`feature/login-canonico-e-perfis`** — the new login (e-mail + perfis: `backend/identidade/`,
+  SQLAlchemy, tests under `backend/tests/identidade/`). **Owned by another project** — the
+  Claude Code project in **`../site_sistema_amostral_com_os`**, whose `docs/PLAN.md` numbers the
+  production phases **P1–P9** and whose `docs/` holds the specs (login: `2026-09-08-…`,
+  `2026-09-15-…`). **The admin + audit area of the `gerente` profile is its P2**, not work for
+  this project. The branch is tested on the Hostinger VPS and only then merged into `main`.
+  From here, **don't commit, stash, merge, rebase or push on it — and don't suggest doing so**
+  (not even merging `main` into it).
+- Pitfalls already paid: (2026-09-16) the clone was left on the feature branch and a
+  workaround was applied there by mistake, then moved to `main`; (2026-09-21) a daily data
+  commit (`base 09-18`) went to the feature branch, so production never got `ECO 045/2026`'s
+  base and answered **409** — fixed with `git checkout <commit> -- <csv>` on `main` (a
+  cherry-pick would conflict on `base_contratos.json`). **If the branch isn't `main`, stop and
+  ask before editing anything.** When diagnosing what production serves, read
+  **`origin/main`** (`git show origin/main:<path>`), never the clone's working tree — it may be
+  on the feature branch; and before concluding data "doesn't exist", check the other branch too.
 
 Files that must **not** be blindly copied across:
 - **`modelo/src/lib/api.js`** — line 9 diverges *on purpose*: production uses
@@ -344,9 +375,9 @@ compare normalized (`tr -d '\r'`) before concluding a file is out of sync.
 
 Architectural changes in that repo require the company's IT — keep changes there minimal.
 
-**Testing that repo:** it has grown a login subsystem (`backend/identidade/`, tests under
-`backend/tests/identidade/`) that needs **`SQLAlchemy`**, absent from this repo's `.venv`.
-Run its suite in an ephemeral env built from **its own** requirements, from its root:
+**Testing that repo (on `main`):** from its root, either this repo's `.venv`
+(`..\site_classificacao_beneficiarios_programa\.venv\Scripts\python.exe -m pytest backend/tests/ -q`)
+or an ephemeral env built from **its own** requirements:
 `uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m pytest backend/`.
 (A venv under the session scratchpad fails on Windows: the path exceeds 260 chars.)
 
@@ -393,12 +424,12 @@ don't see internal planning/Hostinger artifacts — they still exist locally. Al
 
 It is **not** front code — don't import it into `modelo/src/`. `backend/referencia.py` reads it.
 
-**Daily update of `entrada/` (provisional; Hostinger VPS):** the reference CSVs are
-refreshed daily in production. As of **2026-07-09** the transport moved from git-pull to
-**SSH/scp** (script
-lives in the neighboring `atualizacao_clientes` project; see PLAN.md + `VERSOES.md`).
-Consequence: scp'ed CSVs diverge from the VPS working tree — **before any `git pull` on
-the VPS, run `git checkout -- entrada/` first**; there is no VPS pull cron.
+**Daily update of `entrada/`:** the reference CSVs come daily from legacy systems (scripts in
+the neighboring `atualizacao_clientes` project) and are **committed to the production repo's
+`main`** as `base MM-DD`; the Azure deploy picks them up. ⚠️ In the Docker images `entrada/`
+is **baked in** (`COPY . .`, no volume): copying CSVs onto a server's disk has **no effect**
+until the image is rebuilt. (From 2026-07-09 to 2026-09-02 the old Hostinger stack received
+them by scp and needed `git checkout -- entrada/` before pulling — that stack is gone.)
 
 ### Secrets — never commit
 
@@ -409,11 +440,13 @@ the VPS, run `git checkout -- entrada/` first**; there is no VPS pull cron.
 `.gitignore` before assuming: versioned (MVP 2026-07-07) → gitignored (2026-07-08, because a
 versioned copy overwrites real production users) → **versioned again (2026-07-17 handoff)**,
 now shipped as a *seed* (6 operadores, public documented password `Senha123`, forced change
-on first access). Consequence to keep in mind: **`git pull` on the server resets every
-password to the seed** — back the file up first, or re-provision via
+on first access). Consequence to keep in mind: **anything that replaces the file on a server
+resets every password to the seed** (a `git pull`, or a Docker `--build`) — back the file up
+first, or re-provision via
 `admin_usuarios add <operador>` / "esqueci minha senha". Old real hashes remain in git
-history, so **the repo must stay PRIVATE**. On the VPS, always run git/npm as
-`sudo -u deploy`; the git remote uses a read-only PAT; no force-push, no touching tags.
+history, so **the repo must stay PRIVATE**. No force-push, no touching tags. (`sudo -u deploy`
+and the read-only PAT were rules of the pre-2026-09-02 Hostinger stack; the rebuilt VPS has
+no git remote.)
 
 ## Coding Style
 
