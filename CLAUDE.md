@@ -102,7 +102,8 @@ under `backend/`:
   Note: `enviar_credenciais` is **not called** in the current operador fallback (the CLI
   prints the password; `esqueci-senha` resets to `Senha123`) — it is kept for V1/V2.
 - **`config.py`** — process config (user store path, SMTP/secrets via `.env`), plus the
-  **temporary** flag `odi_uc_novo_como_aviso` (see the workaround note under "Validation rules").
+  flag `odi_uc_novo_como_aviso` — **`True` is the rule since 2026-09-22** (see the note
+  under "Validation rules").
 
 ### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
 
@@ -166,24 +167,27 @@ compared via `normalizar_uf`/`normalizar_nome`, so accent/space/sigla noise in t
 does not trigger it), reference UCs missing from the sheet (**warn** — lists each missing
 ODI+UC, not just the count). Zero data rows → "Planilha sem dados" (**err**).
 
-> **⚠️ TEMPORARY WORKAROUND — "dado novo" as a warning (2026-09-16).** The legacy SQL that
-> feeds `entrada/` is broken, so newly energized UCs never reach the reference and
-> "ODI + UC não consta na referência" would block every send. Flag
-> **`odi_uc_novo_como_aviso`** in `backend/config.py` (**ships `False`** on 2026-09-16 — to
-> be switched on later; env override `ODI_UC_NOVO_COMO_AVISO`; read once per process →
-> **restart after flipping**). It touches **only that rule**, and only under a **strict** condition decided
+> **⚠️ "Dado novo" as a warning — flag `odi_uc_novo_como_aviso` (created 2026-09-16; THE RULE
+> since 2026-09-22).** Born as a workaround: the legacy SQL that feeds `entrada/` broke, so
+> newly energized UCs never reached the reference and "ODI + UC não consta na referência" would
+> block every send. The flag in `backend/config.py` is **`True` — the rule** (the user switched
+> production on with web commit `aa53514` and declared it the default); **`False` is the second
+> path**: every ODI+UC outside the base is an error again, as before 2026-09-16, used only by
+> explicit decision. Env override `ODI_UC_NOVO_COMO_AVISO`; read once per process → **restart
+> after flipping**. It touches **only that rule**, and only under a **strict** condition decided
 > over the whole sheet in `regras_cruzamento` (Fase 0): the contract's base is **not empty**
 > **and every UC already in the base ("já cadastrada") is present in the sheet**. Then each
 > unknown pair becomes **warn** ("dado novo — ainda não cadastrado na base"); otherwise it
-> stays **err**, and with the flag on the suggestion says why: *"a base tem X UCs ausentes na
-> planilha; UCs novas só são aceitas como aviso quando todas as UCs já cadastradas estiverem
-> presentes"*. With the flag on, "UCs faltando" rows also read "já cadastrada na base".
-> The strict all-or-nothing check is deliberate: a mistyped existing UC removes the correct
-> pair from the sheet, so the typo keeps erroring. **Unchanged:** the **409** for a contract
-> with no reference at all (only contracts that already received ODIs qualify), "UF /
-> município divergente" (err), and every other rule. The severity reaches the pure
-> `validar`/`regras_cruzamento` as a **parameter** (`novo_como_aviso`, default `False`) —
-> only `app.py` reads the config. **If switched on, turn it back to `False` once the SQL is fixed.**
+> stays **err**, and the suggestion says why: *"a base tem X UCs ausentes na planilha; UCs novas
+> só são aceitas como aviso quando todas as UCs já cadastradas estiverem presentes"*. "UCs
+> faltando" rows also read "já cadastrada na base". The strict all-or-nothing check is
+> deliberate: a mistyped existing UC removes the correct pair from the sheet, so the typo keeps
+> erroring. **Unchanged:** the **409** for a contract with no reference at all (only contracts
+> that already received ODIs qualify), "UF / município divergente" (err), and every other rule.
+> The severity reaches the pure `validar`/`regras_cruzamento` as a **parameter**
+> (`novo_como_aviso`; their `False` default only keeps the functions pure — the system default
+> comes from `config.py`); only `app.py` reads the config. Same value and same text on the
+> production repo's `main` **and** both feature branches (kept identical so merges don't conflict).
 
 `_DESCRICOES` (`validacao.py`) is the authoritative list of rule titles + panel blurbs —
 read it rather than trusting a prose summary.

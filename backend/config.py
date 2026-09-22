@@ -52,17 +52,17 @@ class Config(BaseSettings):
     # E-mail do administrador que recebe os alertas críticos (§8).
     alerta_email: str = ""
 
-    # --- Workaround temporário: base de ODIs/UCs parada no legado (2026-09-16) ---
-    # O SQL do sistema legado que alimenta `entrada/` está com erro, então UCs recém-
-    # energizadas ("dado novo") ainda não chegaram à base e a regra "ODI + UC não consta
+    # --- ODI+UC "dado novo" como aviso (criada em 2026-09-16; REGRA desde 2026-09-22) ---
+    # Nasceu como workaround: o SQL do sistema legado que alimenta `entrada/` parou, e UCs
+    # recém-energizadas ("dado novo") não chegavam à base — a regra "ODI + UC não consta
     # na referência" travaria o envio. Com True, esse dado novo vira AVISO — mas só pela
     # regra ESTRITA de `regras_cruzamento`: a base do contrato não pode estar vazia e
     # TODAS as UCs já cadastradas precisam estar na planilha. Nenhuma outra regra muda.
-    # Sobe DESLIGADA (False) em 2026-09-16: ligar (True) quando decidido e voltar para
-    # False assim que o SQL do legado for corrigido. É lida uma vez por processo
-    # (singleton): mudar exige reiniciar o backend. Pode ser sobrescrita pela variável de
-    # ambiente ODI_UC_NOVO_COMO_AVISO (ex.: no `backend/.env`).
-    odi_uc_novo_como_aviso: bool = False
+    # REGRA (padrão): True. SEGUNDO CAMINHO: False — todo ODI+UC fora da base volta a ser
+    # erro, como antes de 2026-09-16; só por decisão explícita. É lida uma vez por
+    # processo (singleton): mudar exige reiniciar o backend. Pode ser sobrescrita pela
+    # variável de ambiente ODI_UC_NOVO_COMO_AVISO (ex.: no `backend/.env`).
+    odi_uc_novo_como_aviso: bool = True
 
 
 # Singleton de configuração (carregado uma vez por processo).
