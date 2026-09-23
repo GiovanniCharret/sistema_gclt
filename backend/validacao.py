@@ -398,10 +398,11 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
     Entrada: `linhas` (parseadas), `chaves_uc` (set de `(odi, uc)` da referência do
              contrato), `odi_ref` (dict `odi -> (uf, municipio)` do contrato) e
              `novo_como_aviso` (bool da flag do workaround).
-    Fase 0: coleta os pares (ODI, UC) da planilha inteira e mede quais UCs já cadastradas
-            na base sumiram dela. Decide a severidade do dado novo pela regra ESTRITA:
-            aviso só se a flag estiver ligada, a base não estiver vazia e NENHUMA UC já
-            cadastrada faltar na planilha. Senão, erro (como antes).
+    Fase 0: coleta os pares (ODI, UC) da planilha inteira e conta, POR ODI, quantas UCs já
+            cadastradas na base sumiram dela. É esse número que decide a severidade do dado
+            novo, linha a linha (regra de completude POR ODI, 2026-09-23): aviso se a flag
+            estiver ligada, a base não estiver vazia e o ODI daquela linha não tiver nenhuma
+            UC já cadastrada ausente. Senão, erro (como antes).
     Fase 1: por linha — (ODI,UC) inexistente na referência (erro, ou aviso de "dado novo"
             pela Fase 0); UF/município divergente do ODI (erro, inalterada).
     Fase 2: UCs da referência ausentes da planilha → aviso por UC.
@@ -423,13 +424,16 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
             enviados.add((odi, uc))
     # UCs "já cadastradas" (estão na base) que não vieram na planilha.
     faltando = chaves_uc - enviados
-    # Regra estrita: flag ligada + base não vazia + nenhuma UC já cadastrada faltando.
-    aceita_dado_novo = novo_como_aviso and bool(chaves_uc) and not faltando
-    # Texto de sugestão para quando a flag está ligada mas a regra estrita falhou.
-    qtd_faltando = f"{len(faltando)} UC ausente" if len(faltando) == 1 else f"{len(faltando)} UCs ausentes"
-    # Explica ao operador por que o dado novo NÃO foi aceito como aviso.
-    sug_base_incompleta = (f"a base tem {qtd_faltando} na planilha; UCs novas só são aceitas "
-                           f"como aviso quando todas as UCs já cadastradas estiverem presentes")
+    # Quantas dessas ausências pertencem a CADA ODI. A completude é exigida por ODI, e não
+    # pelo contrato inteiro (mudança de 2026-09-23): no `ECM 026/2025` a base tem 11 928 UCs
+    # e a planilha do mês trazia 5 — exigir o contrato completo recusava justamente o caso
+    # que a flag existe para destravar. Um ODI que não está na base não aparece aqui e, com
+    # contagem zero, é aceito como ODI novo.
+    faltando_por_odi = {}
+    # Percorre as ausências uma vez, acumulando a contagem por ODI.
+    for odi_ausente, _uc_ausente in faltando:
+        # `get` com 0 evita um ramo especial para a primeira ausência de cada ODI.
+        faltando_por_odi[odi_ausente] = faltando_por_odi.get(odi_ausente, 0) + 1
 
     # Fase 1: checagens por linha.
     for linha in linhas:
@@ -439,16 +443,24 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
         # Par (odi, uc) — existência na referência.
         if odi and uc:
             if (odi, uc) not in chaves_uc:
-                # Workaround ativo e base completa na planilha → dado novo vira aviso.
-                if aceita_dado_novo:
+                # Quantas UCs já cadastradas DESTE ODI não vieram na planilha. ODI que não
+                # existe na base dá zero: é ODI novo, e não há com o que comparar.
+                ausentes_do_odi = faltando_por_odi.get(odi, 0)
+                # Workaround ativo, base não vazia e ODI completo → dado novo vira aviso.
+                if novo_como_aviso and chaves_uc and not ausentes_do_odi:
                     achados.append(_achado("warn", "ODI + UC não consta na referência", loc,
                                             "ODI + UC", f'ODI "{odi}" + UC "{uc}" é dado novo — ainda não cadastrado na base do contrato',
-                                            "aceito como aviso enquanto a base não é atualizada: todas as UCs já cadastradas estão na planilha"))
-                # Workaround ativo, mas UCs já cadastradas sumiram da planilha → erro explicado.
-                elif novo_como_aviso and faltando:
+                                            "aceito como aviso enquanto a base não é atualizada: nenhuma UC já cadastrada deste ODI está faltando"))
+                # Workaround ativo, mas o ODI tem UCs já cadastradas fora da planilha → erro
+                # explicado, citando o ODI e quantas faltam (é o que o operador precisa achar).
+                elif novo_como_aviso and chaves_uc:
+                    # Singular e plural escritos à mão: a frase aparece na tela do operador.
+                    qtd_do_odi = (f"{ausentes_do_odi} UC já cadastrada ausente" if ausentes_do_odi == 1
+                                  else f"{ausentes_do_odi} UCs já cadastradas ausentes")
                     achados.append(_achado("err", "ODI + UC não consta na referência", loc,
                                             "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
-                                            sug_base_incompleta))
+                                            f'o ODI "{odi}" tem {qtd_do_odi} na planilha; UCs novas de um ODI '
+                                            f'só são aceitas como aviso quando todas as dele estiverem presentes'))
                 # Workaround desligado (ou base vazia) → comportamento original.
                 else:
                     achados.append(_achado("err", "ODI + UC não consta na referência", loc,

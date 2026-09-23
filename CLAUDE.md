@@ -46,8 +46,8 @@ Domain: Programa Luz para Todos / MME / ENBPar.
 ## Backend — FastAPI (V0 delivered; spec in `planning/specs/2026-06-26-…-design.md`)
 
 The backend is **real and complete** (Blocos A–G). FastAPI + uvicorn behind the same
-Nginx at **`/api`** (Docker compose in both live targets — see "Deploy"). Modules
-under `backend/`:
+Nginx at **`/api`** (Docker compose on Azure; the Hostinger test bed runs natively — see
+"Deploy"). Modules under `backend/`:
 
 - **`app.py`** — the ASGI `app`; dev CORS (Vite :5175); all routes:
   `GET /api/health`, `POST /api/login`, `POST /api/trocar-senha`,
@@ -174,16 +174,21 @@ ODI+UC, not just the count). Zero data rows → "Planilha sem dados" (**err**).
 > production on with web commit `aa53514` and declared it the default); **`False` is the second
 > path**: every ODI+UC outside the base is an error again, as before 2026-09-16, used only by
 > explicit decision. Env override `ODI_UC_NOVO_COMO_AVISO`; read once per process → **restart
-> after flipping**. It touches **only that rule**, and only under a **strict** condition decided
-> over the whole sheet in `regras_cruzamento` (Fase 0): the contract's base is **not empty**
-> **and every UC already in the base ("já cadastrada") is present in the sheet**. Then each
-> unknown pair becomes **warn** ("dado novo — ainda não cadastrado na base"); otherwise it
-> stays **err**, and the suggestion says why: *"a base tem X UCs ausentes na planilha; UCs novas
-> só são aceitas como aviso quando todas as UCs já cadastradas estiverem presentes"*. "UCs
-> faltando" rows also read "já cadastrada na base". The strict all-or-nothing check is
-> deliberate: a mistyped existing UC removes the correct pair from the sheet, so the typo keeps
-> erroring. **Unchanged:** the **409** for a contract with no reference at all (only contracts
-> that already received ODIs qualify), "UF / município divergente" (err), and every other rule.
+> after flipping**. It touches **only that rule**, and only under a **per-ODI completeness**
+> condition (**since 2026-09-23**; `regras_cruzamento`, Fase 0 counts the missing base UCs **per
+> ODI**): the contract's base is **not empty** and the **line's own ODI** has no already-registered
+> UC missing from the sheet. An ODI absent from the base counts zero — it is a new ODI and passes.
+> Then that pair becomes **warn** ("dado novo — ainda não cadastrado na base"); otherwise it stays
+> **err**, and the suggestion names the ODI: *"o ODI "X" tem N UCs já cadastradas ausentes na
+> planilha; UCs novas de um ODI só são aceitas como aviso quando todas as dele estiverem
+> presentes"*. "UCs faltando" rows also read "já cadastrada na base". ⚠️ **The first version
+> (2026-09-16) required the WHOLE contract in the sheet and was replaced on 2026-09-23**: measured
+> on the `ECM 026/2025` ticket, a monthly sheet of 5 UCs against a base of 11 928 could never
+> satisfy it, so the flag refused exactly the case it exists for. Per-ODI keeps the typo guard —
+> a mistyped UC of a **known** ODI leaves that ODI incomplete, so the typo keeps erroring — but a
+> mistyped UC under a **new** ODI has nothing to compare against and passes as a warning.
+> **Unchanged:** the **409** for a contract with no reference at all (only contracts that
+> already received ODIs qualify), "UF / município divergente" (err), and every other rule.
 > The severity reaches the pure `validar`/`regras_cruzamento` as a **parameter**
 > (`novo_como_aviso`; their `False` default only keeps the functions pure — the system default
 > comes from `config.py`); only `app.py` reads the config. Same value and same text on the
@@ -299,22 +304,31 @@ restart to swap contents). **Per new model version, update all of:** `_MODELO_PA
 (`backend/planilha.py`), the `a.download` filename (`modelo/src/lib/api.js`), `VERSAO_DATA`
 (`VersaoPlanilha.jsx` + `relatorioCsv.js`), and the download test (`backend/tests/test_api.py`
 asserts the version string). Then **commit the `.xlsx`** — `manuais/` is tracked, so the deploy
-carries the new model (Azure: the workflow's `git pull`; Hostinger: inside the `git archive`
-package) — **no separate scp needed**. See the latest model-swap decision in PLAN.md.
+carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pull` in its clone)
+— **no separate scp needed**. See the latest model-swap decision in PLAN.md.
 
 ### Deploy — two live targets
 
-1. **Hostinger VPS (`gerenciador-gclt.com`) — TEST BED, not production.** Rebuilt from
-   scratch on **2026-09-02**: the old stack (`/opt/anexov`, systemd `anexov-api`,
-   `git pull` + `npm run build`) **no longer exists**. It now runs the **production repo**
-   (`enbpar-sistema-gclt`) with its `docker/docker-compose.yml` in `/opt/enbpar`; a
-   `docker-compose.override.yml` binds the front container to `127.0.0.1:8080`, behind the
-   host's Nginx + certbot. There are **no git credentials on the server**: updates are
-   `git archive` + `scp` + `docker compose up -d --build` (runbook
-   `DEPLOY_VPS_DOCKER_VIA_SSH.md`, gitignored). It is where the branch
-   **`feature/login-canonico-e-perfis`** is tested before being merged (see "Branches" under
-   the sibling repo). `DEPLOY.md`, `DEPLOY_HOSTINGER.html` and `deploy_hostinger.sh`
-   (gitignored at the 2026-07-17 handoff) describe the **pre-2026-09-02** stack.
+1. **Hostinger VPS (`gerenciador-gclt.com`) — TEST BED, not production.** It is where the
+   branch **`feature/login-canonico-e-perfis`** is tested before being merged (see "Branches"
+   under the sibling repo), and it is **operated by that branch's project**
+   (`../site_sistema_amostral_com_os`), not by this one. State **verified on 2026-09-22**:
+   - The VPS was **reinstalled again around 2026-09-10** (host key `Z2Hc…` → `GeYEX…`). Whatever
+     was built before is gone — including the Docker stack this project set up on 2026-09-02
+     in `/opt/enbpar` (runbook `DEPLOY_VPS_DOCKER_VIA_SSH.md`, gitignored — still valid as a
+     generic recipe, **not** as a description of this server).
+   - **No Docker** is installed. The app runs **natively from a git clone at
+     `/var/www/gclt-branch`** (the feature branch). An update is `git pull` there — **after**
+     pushing the branch from here, or the pull brings nothing — plus a **backend restart**.
+     ⚠️ **How the backend is started there (systemd / pm2 / other) is still UNKNOWN** — find
+     out before restarting anything (`systemctl list-units --type=service | grep -i -E
+     "gclt|uvicorn|api"`, `ps aux | grep uvicorn`).
+   - **This project has no shell access**: the `deploy-dev` SSH key was wiped by the
+     reinstall. The user runs commands in the Hostinger **browser terminal**. Remember the
+     terminal opens in `~` (`/root`), which is not the repo — `cd /var/www/gclt-branch` first.
+   - Older docs describe stacks that no longer exist: `DEPLOY.md`, `DEPLOY_HOSTINGER.html`,
+     `deploy_hostinger.sh` (pre-2026-09-02, systemd `anexov-api` in `/opt/anexov`) and the
+     2026-09-02 Docker layout above.
 2. **Azure / Ubuntu 24 + Docker — PRODUCTION (handed to the company's engineers)**, deployed
    from the production repo's `main` — **`DEPLOY_AZURE.md`**
    (+ `.html`) is the current guide, aimed at `monitoramentolpt.enbpar.gov.br`.
@@ -370,6 +384,17 @@ Files that must **not** be blindly copied across:
   `usuarios.json` arriving via git** and restores the container's copy, so a new operador
   pushed through git never reaches production — it has to be created on the VM with
   `docker exec docker-backend-1 python -m backend.admin_usuarios add <operador>`.
+  ⚠️ **Corollary paid on 2026-09-22:** because each deploy copies the **container's own**
+  `usuarios.json` out and back, a broken copy placed in the container **survives every push** —
+  git never repairs it. Symptom: **every** real operador gets **500** on `/api/login`, while an
+  unknown operador still gets 403, `/api/health` 200, and a protected route with a fake token
+  401 (config fine). `carregar_usuarios` returns `{}` (→ 401) when the file is missing, so a 500
+  means it exists but can't be read. The file handed to IT was valid; the copy that landed in
+  the container was not. Diagnose on the VM with `docker exec docker-backend-1 sha256sum
+  /app/backend/usuarios.json` (compare with `git show origin/main:backend/usuarios.json |
+  sha256sum`) and `docker logs docker-backend-1 --tail 30`; fix with `docker cp` of an intact
+  file (sent by scp/upload, never pasted into a terminal editor). No restart needed — the store
+  is re-read on every login.
 - **`base_contratos.json`** — sync field-by-field with a script that asserts nothing else
   changed; the two copies have known pre-existing divergences (`data_termo`,
   `meta_excepcional`) where **production is the correct one**.
@@ -449,8 +474,9 @@ resets every password to the seed** (a `git pull`, or a Docker `--build`) — ba
 first, or re-provision via
 `admin_usuarios add <operador>` / "esqueci minha senha". Old real hashes remain in git
 history, so **the repo must stay PRIVATE**. No force-push, no touching tags. (`sudo -u deploy`
-and the read-only PAT were rules of the pre-2026-09-02 Hostinger stack; the rebuilt VPS has
-no git remote.)
+and the read-only PAT were rules of the pre-2026-09-02 Hostinger stack. The current Hostinger
+server does have a git clone, `/var/www/gclt-branch`, set up by the other project — how its
+remote authenticates is unknown here.)
 
 ## Coding Style
 

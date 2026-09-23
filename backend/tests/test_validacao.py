@@ -697,8 +697,10 @@ def test_cruzamento_consistente_sem_achados():
 
 # ── Workaround 2026-09-16 · "dado novo" como aviso (flag odi_uc_novo_como_aviso) ──
 #
-# Regra ESTRITA: com a flag ligada, ODI+UC fora da base vira aviso só se a base do
-# contrato não estiver vazia e TODAS as UCs já cadastradas estiverem na planilha.
+# Completude POR ODI (desde 2026-09-23): com a flag ligada, ODI+UC fora da base vira aviso
+# se a base do contrato não estiver vazia e o ODI daquela linha não tiver nenhuma UC já
+# cadastrada ausente da planilha. ODI que não está na base é ODI novo e passa. A regra
+# anterior exigia o CONTRATO inteiro na planilha, o que recusava a planilha mensal.
 
 def _linha_par(odi, uc, lat):
     """Linha válida com o par (odi, uc) dado e latitude própria.
@@ -729,34 +731,71 @@ def test_workaround_ligado_base_completa_dado_novo_vira_aviso():
     # O par novo sai como aviso, e não sobra nenhum erro de "não consta".
     assert ("warn", "ODI + UC não consta na referência") in _regras(achados)
     assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
-    # O texto identifica o par como dado novo.
+    # O texto identifica o par como dado novo, e a sugestão fala do ODI (não do contrato).
     novo = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
     assert len(novo) == 1
     assert "dado novo" in novo[0]["problema"] and "U2" in novo[0]["problema"]
+    assert "deste ODI" in novo[0]["sug"]
 
 
-def test_workaround_ligado_base_incompleta_continua_erro_explicado():
-    """Flag ligada, mas uma UC já cadastrada sumiu → dado novo continua ERRO, com o motivo."""
-    # A base tem O1/U1 e O3/U3; a planilha traz O1/U1 e o novo O2/U2 — falta O3/U3.
+def test_workaround_odi_incompleto_continua_erro_explicado():
+    """UC nova de um ODI que tem UC já cadastrada ausente → ERRO, com o motivo."""
+    # A base tem O2/U8 (além de O1/U1); a planilha traz O1/U1 e o novo O2/U2, sem o U8.
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
-    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O2", "U8")}, odi_ref={},
                                 novo_como_aviso=True)
-    # A regra estrita falhou: erro, não aviso.
+    # O ODI da linha está incompleto: erro, não aviso.
     assert ("err", "ODI + UC não consta na referência") in _regras(achados)
     assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
-    # A sugestão diz quantas UCs já cadastradas faltam e por que o aviso não foi aceito.
+    # A sugestão nomeia o ODI e quantas UCs dele faltam — é o que o operador vai procurar.
     erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
-    assert erro["sug"] == ("a base tem 1 UC ausente na planilha; UCs novas só são aceitas "
-                           "como aviso quando todas as UCs já cadastradas estiverem presentes")
+    assert erro["sug"] == ('o ODI "O2" tem 1 UC já cadastrada ausente na planilha; UCs novas '
+                           'de um ODI só são aceitas como aviso quando todas as dele estiverem presentes')
 
 
 def test_workaround_mensagem_no_plural():
-    """Com 2+ UCs já cadastradas faltando, a sugestão usa o plural."""
+    """Com 2+ UCs já cadastradas do MESMO ODI faltando, a sugestão usa o plural."""
+    # O ODI O2 tem duas UCs na base (U8 e U9) e nenhuma delas veio na planilha.
     linhas = [_linha_par("O2", "U2", "-3.2")]
-    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
+    achados = regras_cruzamento(linhas, chaves_uc={("O2", "U8"), ("O2", "U9")}, odi_ref={},
                                 novo_como_aviso=True)
     erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
-    assert erro["sug"].startswith("a base tem 2 UCs ausentes na planilha;")
+    assert erro["sug"].startswith('o ODI "O2" tem 2 UCs já cadastradas ausentes na planilha;')
+
+
+def test_workaround_odi_novo_passa_mesmo_com_a_base_incompleta():
+    """O caso do chamado: planilha mensal de um ODI NOVO, base do contrato quase toda ausente.
+
+    Reproduz o `ECM 026/2025` (23/09): 5 UCs de um ODI que não existe na base, enquanto o
+    contrato tem 11 928 UCs cadastradas. Pela regra anterior, que exigia o contrato inteiro,
+    isso era erro; pela completude por ODI, é aviso — o ODI novo não tem o que faltar.
+    """
+    # A base tem duas UCs de O1; a planilha traz só uma UC de O9, ODI que não está na base.
+    linhas = [_linha_par("O9", "U9", "-3.9")]
+    achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O1", "U2")}, odi_ref={},
+                                novo_como_aviso=True)
+    assert ("warn", "ODI + UC não consta na referência") in _regras(achados)
+    assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
+
+
+def test_workaround_decide_por_odi_na_mesma_planilha():
+    """Dois ODIs novos na mesma planilha: o de ODI completo passa, o de ODI incompleto não.
+
+    É o que prova que a decisão é por ODI, e não do arquivo inteiro: uma única planilha
+    produz aviso numa linha e erro na outra.
+    """
+    # Base: O1 completo na planilha (U1), e O2 com uma UC (U8) que não vem.
+    chaves = {("O1", "U1"), ("O2", "U8")}
+    # Planilha: O1/U1 (já cadastrada), O1/U5 (nova, ODI completo) e O2/U6 (nova, ODI incompleto).
+    linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O1", "U5", "-3.2"),
+              _linha_par("O2", "U6", "-3.3")]
+    achados = regras_cruzamento(linhas, chaves_uc=chaves, odi_ref={}, novo_como_aviso=True)
+    # As duas severidades convivem, cada uma na sua linha.
+    novos = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
+    assert {a["sev"] for a in novos} == {"warn", "err"}
+    # O aviso é o do ODI completo (O1/U5); o erro é o do ODI incompleto (O2/U6).
+    assert [a["sev"] for a in novos if 'UC "U5"' in a["problema"]] == ["warn"]
+    assert [a["sev"] for a in novos if 'UC "U6"' in a["problema"]] == ["err"]
 
 
 def test_workaround_pega_digitacao_errada_de_uc_existente():
