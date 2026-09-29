@@ -560,3 +560,69 @@ def test_modelo_baixa_o_arquivo(client):
     # inteira de propósito: um prefixo mais curto passaria também com o modelo anterior.
     assert "v260828" in r.headers.get("content-disposition", "")
     assert len(r.content) > 0
+
+
+# ── Envio de e-mail: o sucesso da tela não pode mentir (28/09/2026) ───────────
+# Achado em produção: `SMTP_DRYRUN=1` + `SMTP_HOST` de exemplo faziam `enviar`
+# devolver False sem erro; a rota respondia 200 e a tela dizia "Planilha
+# enviada." Estes testes fixam as três situações que passaram a importar.
+
+
+def test_validar_envio_que_falha_responde_502_com_motivo(client, validar_env, monkeypatch):
+    """SMTP estourando, fora do dry-run → 502 dizendo que nada foi entregue."""
+    from backend.config import obter_config
+    # Sem dry-run: este ambiente promete entregar de verdade.
+    monkeypatch.setattr(obter_config(), "smtp_dryrun", False)
+    # O envio estoura como estouraria um servidor recusando conexão.
+    validar_env["planilha"].side_effect = RuntimeError("conexao recusada")
+    # Planilha limpa: o erro não é dela.
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", gerar_xlsx([_LINHA_LIMPA]))},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    # 502: o defeito está a jusante, não no arquivo.
+    assert r.status_code == 502
+    # A mensagem tem de dizer o que aconteceu e citar o motivo real.
+    detalhe = r.json()["detail"]
+    assert "NÃO foi enviado" in detalhe and "conexao recusada" in detalhe
+
+
+def test_validar_sem_smtp_configurado_responde_502(client, validar_env, monkeypatch):
+    """Sem servidor configurado, `enviar` devolve False calado → 502 assim mesmo."""
+    from backend.config import obter_config
+    # Sem dry-run, mas também sem SMTP: o caso da produção de 28/09/2026.
+    monkeypatch.setattr(obter_config(), "smtp_dryrun", False)
+    # `enviar` devolvendo False é exatamente o que acontece com SMTP_HOST vazio.
+    validar_env["planilha"].return_value = False
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", gerar_xlsx([_LINHA_LIMPA]))},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    assert r.status_code == 502
+    # Sem exceção para citar, a mensagem nomeia a causa provável.
+    assert "SMTP não configurado" in r.json()["detail"]
+
+
+def test_validar_em_dryrun_continua_200_e_marca_enviado_false(client, validar_env, monkeypatch):
+    """Dry-run é escolha de quem roda em dev: segue 200, com `enviado` falso."""
+    from backend.config import obter_config
+    # Dry-run ligado — o padrão de desenvolvimento e teste.
+    monkeypatch.setattr(obter_config(), "smtp_dryrun", True)
+    # Em dry-run o envio real não acontece e a função devolve False.
+    validar_env["planilha"].return_value = False
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", gerar_xlsx([_LINHA_LIMPA]))},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
+    # Nada de 502 aqui: quem denuncia dry-run em produção é o /api/health.
+    assert r.status_code == 200
+    assert r.json()["enviado"] is False
+
+
+def test_health_publica_o_estado_do_envio_de_email(client):
+    """`/api/health` diz se ESTE ambiente entrega e-mail — sem revelar segredo."""
+    r = client.get("/api/health")
+    assert r.status_code == 200
+    email = r.json()["email"]
+    # As três respostas que só se conseguiria com terminal na VM.
+    assert set(email) == {"dryrun", "smtpConfigurado", "destinatarios"}
+    assert isinstance(email["dryrun"], bool)
+    assert isinstance(email["smtpConfigurado"], bool)
+    assert isinstance(email["destinatarios"], int)

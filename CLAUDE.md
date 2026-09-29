@@ -340,6 +340,59 @@ carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pul
    :80). In compose the front proxies `/api/` to `http://backend:8000` (service name, not
    `127.0.0.1`), `client_max_body_size 50m`.
 
+> **⚠️ How configuration reaches production — and the failure that killed the first merge
+> (2026-09-28).** **`backend/.env` is TRACKED in the production repo** (added by the company's
+> first commit, `Nova Aplicação`; that repo's `.gitignore` never covered it), and that is how
+> config reaches the Azure VM: compose declares `env_file: ../backend/.env`, and the deploy
+> workflow's `git pull` is what updates it. **So the file production reads is the one in git,
+> not a file someone edits on the VM.** The versioned copy had **no `BANCO_URL`** — the database
+> data had been typed into the *Hostinger* file (`/var/www/…`), another machine — so every
+> identity route answered **500** after the merge. That, and not "code to rewrite", is what the
+> first merge attempt failed on.
+>
+> - **A hand edit on the VM freezes every future deploy.** `git pull` refuses (*"Your local
+>   changes to the following files would be overwritten by merge: backend/.env"*), the step dies
+>   (`bash -e`), `docker compose` never runs, **and the site keeps serving the previous build**.
+>   Run **#68** failed exactly so: the VM stayed at the merge commit `e31b51a`, so reverting
+>   `main` had **no effect on production**, and the four `.env` commits made after the merge
+>   never arrived either. The only signal is the **Actions tab** — the site looks fine.
+> - The workflow's **first** line, `docker cp docker-backend-1:…/usuarios.json`, aborts the whole
+>   deploy when that container is absent or renamed.
+> - **Fixed 2026-09-28** (`339f98f`): `|| true` on the backup; `git fetch` + **`git reset --hard
+>   origin/main`** in place of `git pull` — the VM is now always equal to `main`, and a manual
+>   edit there is **discarded silently**, which is the policy already implied by versioning
+>   `.env`; plus `workflow_dispatch`, so a deploy can be triggered without a push.
+> - **The two environments diverge on purpose, and the divergence is the trap.** Hostinger runs
+>   the **feature branch**, **natively**, from `/var/www/…`, with a `.env` **edited by hand**;
+>   Azure runs **`main`**, in **Docker**, from `/home/gclt/enbpar-sistema-gclt`, with the `.env`
+>   **from git**. Configuring one teaches nothing about the other. ⚠️ The Hostinger clone was
+>   hand-edited on 2026-09-28 as well, so **its** `git pull` is blocked the same way.
+> - Measured while planning, and it contradicts `bd.py`'s own comment: **`ssl={}` does not
+>   "require" TLS.** In PyMySQL 2.2.8 an empty dict is falsy, so it lands in the **PREFERRED**
+>   branch (`_ssl_required = False`, no certificate check). The Azure connection is still
+>   encrypted — the server offers and demands TLS — but the reasoning in the comment is wrong.
+> - The prerequisites for a second merge attempt are listed in **`planning/PLAN.md`**
+>   (2026-09-28); do not retry the merge without them.
+
+> **⚠️ "Planilha enviada." was a lie in production (2026-09-29).** `POST /api/validar` always
+> returned `enviado` (and `erroEnvio`), but **no front component reads either field** —
+> `SucessoEnvio.jsx` prints *"Planilha enviada."* unconditionally. The versioned `backend/.env`
+> of the production repo carries `SMTP_DRYRUN=1` and `SMTP_HOST=smtp.exemplo.com.br`, so
+> `email_envio.enviar` returned **False without raising**: every operator of the seven companies
+> saw success while **nothing was delivered**, since the Azure deploy went live.
+> **Fixed in the backend** (the front is the sibling project's truth, untouched): when the sheet
+> is valid, the send did **not** happen and **dry-run is off**, the route answers **502** naming
+> the reason — the SMTP exception, or *"SMTP não configurado (SMTP_HOST vazio)"*. It reaches the
+> screen through the raw status+detail `UploadAnexoV.jsx` already shows (2026-07-22 decision).
+> **Dry-run still answers 200 on purpose** — it is a developer's choice, not a defect; what
+> denounces dry-run *in production* is `GET /api/health`, which now publishes
+> `email: {dryrun, smtpConfigurado, destinatarios}` — booleans and a count, never an address or a
+> credential. 4 tests, applied to **both repos**, 172 green each.
+> ⚠️ **Ordering that matters:** flipping `SMTP_DRYRUN=0` while `SMTP_HOST` is still the example
+> value turns every upload into a **502** — set the real SMTP in the same change, never before.
+> And the screen still says "Planilha enviada." whenever a send *does* happen; reading `enviado`
+> honestly is the sibling project's call.
+
 Note that `POST /api/validar` returns **diagnostic** `detail` strings (403 says which grupo
 vs which owner; 409 says the contract is visible but has no ODIs/UCs loaded), and
 `UploadAnexoV.jsx` shows the raw status + detail on screen. That is deliberate (2026-07-22)
@@ -362,10 +415,48 @@ only when explicitly asked.
   SQLAlchemy, tests under `backend/tests/identidade/`). **Owned by another project** — the
   Claude Code project in **`../site_sistema_amostral_com_os`**, whose `docs/PLAN.md` numbers the
   production phases **P1–P9** and whose `docs/` holds the specs (login: `2026-09-08-…`,
-  `2026-09-15-…`). **The admin + audit area of the `gerente` profile is its P2**, not work for
-  this project. The branch is tested on the Hostinger VPS and only then merged into `main`.
-  From here, **don't commit, stash, merge, rebase or push on it — and don't suggest doing so**
-  (not even merging `main` into it).
+  `2026-09-15-…`). The branch is tested on the Hostinger VPS and only then merged into `main`.
+
+  > **⚠️ Truth split (user, 2026-09-23).** `../site_sistema_amostral_com_os` is the truth for
+  > the **frontend**; **this repository is the truth for architecture and backend.** So on
+  > those branches: **frontend and product decisions are theirs** (screens, the `gerente`
+  > admin + audit area, which is their P2) — don't touch them. **Backend and architecture
+  > changes are this project's call**, and several have already been made there at the user's
+  > request (the `odi_uc_novo_como_aviso` flag, per-ODI completeness, the database rule
+  > below). Still: **never push those branches or merge them without being asked**, keep the
+  > shared files textually identical across `main` and both branches so merges don't conflict,
+  > and tell them what changed.
+
+  > **⚠️ The identity subsystem has ONE database: MySQL (2026-09-23).** `BANCO_URL` (in
+  > `backend/.env`) is **mandatory and has no default**. Missing it, or an unreachable server,
+  > **raises `RuntimeError` with an instruction** (`montagem.obter_engine`) — the message
+  > names the database with the **password masked** (`bd.url_sem_senha`) and states that no
+  > alternative database will be created. Rationale, measured: the old default
+  > `sqlite:///backend/dados/gclt.db` made a missing/mistyped variable open a **local file
+  > silently** — people registered there and the next deploy wiped it, with no error line.
+  > ⚠️ **SQLite still exists, but only as the test substrate**: 83 tests pass an explicit
+  > URL, so none of them goes through that default. The engine is **lazy** (opened on the
+  > first identity call), so an unreachable database does **not** take the site down — the
+  > operador login and the upload keep working; only the identity routes fail.
+
+  > **⚠️ Flag `login_operador_habilitado` — turning the `usuarios.json` login off (2026-09-28).**
+  > In `backend/config.py`, env `LOGIN_OPERADOR_HABILITADO`, **ships `True`** (stage 1: both
+  > logins coexist). Set to **`False`** (stage 2: e-mail only) and the three legacy routes —
+  > `POST /api/login`, `/api/trocar-senha`, `/api/esqueci-senha` — answer **403** with
+  > *"Entre com o seu e-mail corporativo; se ainda não tem senha, use 'Solicitar acesso' na
+  > tela de entrada."* (one guard, `_exigir_login_operador_habilitado`, so no route can be
+  > forgotten). **This is where the documented vulnerability dies**: `esqueci-senha` resets
+  > any operador to the public `Senha123` **without authentication**; with the flag off it
+  > refuses and does not touch the store (a test compares the hash before and after).
+  > **403 with text, not 404**, because the login screen already shows the `detail`, so the
+  > person gets the instruction without the front changing. `GET /api/health` publishes
+  > `loginOperador` so the front can hide the old path when it wants.
+  > ⚠️ **Lives only on the feature branches, on purpose**: flipping it to `False` where the
+  > e-mail login does not exist (i.e. `main` today) locks everyone out. It reaches `main`
+  > with the merge. Unlike the sibling spec's §9 (delete the route in a single deploy), the
+  > flag is **reversible**. Untouched: `usuarios.json`, the workflow and the front; operador
+  > tokens already issued stay valid until they expire (up to 8h), so the cut is complete at
+  > most 8 hours after flipping.
 - Pitfalls already paid: (2026-09-16) the clone was left on the feature branch and a
   workaround was applied there by mistake, then moved to `main`; (2026-09-21) a daily data
   commit (`base 09-18`) went to the feature branch, so production never got `ECO 045/2026`'s

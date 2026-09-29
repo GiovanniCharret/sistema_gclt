@@ -95,7 +95,10 @@ def health():
             refletindo a atualização diária sem reiniciar o serviço.
     Fase 2: cruza com a autoridade `base_contratos.json` para classificar a integridade.
     Fase 3: monta o corpo com status + resumo numérico + integridade.
-    Saída: JSON `{"status": "ok", "referencia": {...}, "integridade": {...}}` (HTTP 200).
+    Fase 4: publica o estado do envio de e-mail (dry-run ligado? SMTP configurado?
+            quantos destinatários) — sem terminal na VM, é a única forma de ver.
+    Saída: JSON `{"status": "ok", "referencia": {...}, "integridade": {...},
+           "email": {...}}` (HTTP 200).
     """
     # Fase 1: pega o singleton e atualiza os índices se `entrada/` mudou.
     referencia = obter_referencia()
@@ -103,11 +106,22 @@ def health():
     # Fase 2: autoridade (selecionáveis + todos) para classificar a integridade.
     base = obter_base_contratos()
     integridade = referencia.integridade(base["selecionaveis"], base["todos"])
-    # Fase 3/Saída: status + contagens + integridade; FastAPI serializa em JSON 200.
+    # Fase 4: config do processo, para dizer se ESTE ambiente entrega e-mail.
+    cfg = obter_config()
+    # Fase 3/Saída: status + contagens + integridade + estado do envio; JSON 200.
     return {
         "status": "ok",
         "referencia": referencia.resumo(),
         "integridade": integridade,
+        # ⚠️ Só booleanos e uma contagem: nenhum endereço, nenhuma credencial.
+        "email": {
+            # True = nada sai de verdade (dev/teste); em produção é defeito.
+            "dryrun": cfg.smtp_dryrun,
+            # False = `SMTP_HOST` vazio; `enviar` devolveria False sem erro nenhum.
+            "smtpConfigurado": bool(cfg.smtp_host),
+            # Quantos destinatários a lista tem (0 = ninguém receberia).
+            "destinatarios": len([d for d in cfg.destinatarios.split(",") if d.strip()]),
+        },
     }
 
 
@@ -276,7 +290,9 @@ async def validar_rota(
     Fase 3: parsing — lê a aba Preenchimento (não-.xlsx/sem aba → 400).
     Fase 4: valida (regras D3/D4) e monta o painel (D5).
     Fase 5: se 0 erros, envia o `.xlsx` como veio aos destinatários (marca `enviado`).
+    Fase 6: validou mas NÃO entregou, fora do dry-run → 502 dizendo o motivo.
     Saída: JSON do painel + `ok`/`enviado` (+ `erroEnvio` em falha de SMTP).
+    Levanta: HTTPException 502 (a planilha passou, mas o e-mail não saiu).
     """
     # Número do contrato normalizado (casa com as chaves da referência/base).
     contrato_norm = _norm_contrato(contrato)
@@ -322,6 +338,25 @@ async def validar_rota(
             enviado = enviar_planilha_validada(conteudo, contrato, uf)
         except Exception as erro:  # falha de SMTP não derruba a resposta
             erro_envio = str(erro)
+    # Fase 6: validou mas NÃO entregou — e não é dry-run. Isso precisa aparecer.
+    #
+    # ⚠️ Medido em 28/09/2026 na produção: com `SMTP_DRYRUN=1` e um `SMTP_HOST` de
+    # exemplo no `.env`, `enviar` devolve False SEM levantar nada, o backend
+    # respondia 200 e a tela dizia "Planilha enviada." — as sete empresas viram
+    # sucesso e nada foi entregue. O 502 aparece na tela pelo caminho que já
+    # existe: o front mostra status + detail crus (decisão de 22/07/2026).
+    #
+    # O dry-run continua sendo sucesso de propósito — é escolha de quem roda em
+    # desenvolvimento. Quem denuncia dry-run ligado em produção é o /api/health.
+    if resultado["ok"] and not enviado and not obter_config().smtp_dryrun:
+        # Motivo concreto: exceção do SMTP, ou nenhum servidor configurado.
+        motivo = erro_envio or "SMTP não configurado (SMTP_HOST vazio)"
+        # 502: o defeito não é da planilha que subiu, é do sistema a jusante.
+        raise HTTPException(
+            status_code=502,
+            detail=("A planilha passou na validação, mas o e-mail NÃO foi enviado: "
+                    f"{motivo}. Nada chegou aos destinatários — avise o administrador."),
+        )
     # Saída: painel + status de envio.
     resposta = {**resultado, "enviado": enviado}
     if erro_envio:
