@@ -58,7 +58,7 @@ Nginx at **`/api`** (Docker compose on Azure; the Hostinger test bed runs native
   below). `admin_usuarios.py` is the CLI that provisions users
   (`python -m backend.admin_usuarios add <operador>` / `disable <operador>`) and **prints**
   the temporary password (the credentials e-mail is not wired in the operador fallback).
-  Users live in **`backend/usuarios.json`** (pbkdf2 hashes) — **tracked again since the
+  Users live in **`backend/parametros/usuarios.json`** (pbkdf2 hashes) — **tracked again since the
   handoff (2026-07-17)**, seeded with the 6 operadores at `Senha123` + forced change on
   first access. ⚠️ Anything that replaces the file on a server **resets passwords to the
   seed** — a `git pull`, or a Docker `--build` that bakes the repo's copy into the image.
@@ -104,6 +104,34 @@ Nginx at **`/api`** (Docker compose on Azure; the Hostinger test bed runs native
 - **`config.py`** — process config (user store path, SMTP/secrets via `.env`), plus the
   flag `odi_uc_novo_como_aviso` — **`True` is the rule since 2026-09-22** (see the note
   under "Validation rules").
+
+### `backend/parametros/` — business config out of `.env` (2026-09-29)
+
+**The e-mail business data lives in `backend/parametros/email.json`, not in `.env`.** Server,
+port, TLS, user, sender, dry-run, the recipient list and the alert address are **business
+config**: they change often and are not secrets. Living in `.env`, changing one recipient meant
+opening the same file that holds `SMTP_PASS` and `SECRET_KEY`, and shipping a deploy.
+
+- **`config.py::obter_parametros_email()`** merges the two: **the JSON wins**, and any key it
+  omits falls back to the old `.env` variable, so the transition breaks nothing and tests without
+  the file stay valid. A config passed explicitly (tests) short-circuits the JSON entirely.
+- **The password never comes from the JSON** — `smtp_pass` is read from `.env` only, and a test
+  fixes that (a `senha` key inside the JSON is ignored).
+- **Reloaded by mtime**, like `entrada/`: editing the file counts on the next request, no
+  restart. That is the operational gain — swapping a recipient no longer needs a deploy.
+- `GET /api/health` publishes `email.origem` = `json` or `env`, so the browser says which source
+  is in force. Without a terminal on the VM, that is the only way to tell.
+- ⚠️ **The two repos' `email.json` diverge on purpose**: dev ships `"dryrun": true` (nothing
+  ever leaves a developer's machine), production `false`. Same rule as `modelo/src/lib/api.js`:
+  **edit, never copy**.
+- **`usuarios.json` moved too** — it is now `backend/parametros/usuarios.json`, so the backend's
+  JSON files sit together. `config.usuarios_path`, `auth._USUARIOS_PADRAO` and the **four paths
+  in the deploy workflow** follow it.
+- Dropped in the same change: `ACESSO_DOMINIO_GRUPO` and `ACESSO_GRUPOS_CURINGA` were in `.env`
+  but **no module ever read them** (the maps are hardcoded in `acesso.py`).
+- ⚠️ This split **does not reduce exposure** while `.env` stays versioned in the production repo:
+  both files are in git. The gain is operational; secrecy only improves when `.env` leaves the
+  repository.
 
 ### Validation rules (`backend/validacao.py`) — only `sev="err"` blocks the send
 
@@ -470,7 +498,7 @@ Files that must **not** be blindly copied across:
 - **`modelo/src/lib/api.js`** — line 9 diverges *on purpose*: production uses
   `http://backend:8000/api` (the compose service name), this repo `http://127.0.0.1:8000/api`.
   **Edit, never copy.**
-- **`backend/usuarios.json`** — production holds real password hashes. Never touch it.
+- **`backend/parametros/usuarios.json`** — production holds real password hashes. Never touch it.
   Its deploy workflow (`.github/workflows/compose-gclt.yml`) **deliberately discards any
   `usuarios.json` arriving via git** and restores the container's copy, so a new operador
   pushed through git never reaches production — it has to be created on the VM with
@@ -482,7 +510,7 @@ Files that must **not** be blindly copied across:
   401 (config fine). `carregar_usuarios` returns `{}` (→ 401) when the file is missing, so a 500
   means it exists but can't be read. The file handed to IT was valid; the copy that landed in
   the container was not. Diagnose on the VM with `docker exec docker-backend-1 sha256sum
-  /app/backend/usuarios.json` (compare with `git show origin/main:backend/usuarios.json |
+  /app/backend/parametros/usuarios.json` (compare with `git show origin/main:backend/parametros/usuarios.json |
   sha256sum`) and `docker logs docker-backend-1 --tail 30`; fix with `docker cp` of an intact
   file (sent by scp/upload, never pasted into a terminal editor). No restart needed — the store
   is re-read on every login.
@@ -525,7 +553,7 @@ reference for what that download should produce.
 This **is** a git repository; `origin` is
 `github.com/GiovanniCharret/sistema_gclt.git` (default branch `main`). The `.gitignore`
 started as a **"commit everything" policy** — **`manuais/`** (domain source material +
-**the official model**), **`entrada/`**, **`backend/usuarios.json`** and this **`CLAUDE.md`**
+**the official model**), **`entrada/`**, **`backend/parametros/usuarios.json`** and this **`CLAUDE.md`**
 are **committed** and ride `git pull` to the server. The **2026-07-17 handoff** carved out a
 second, non-secret exclusion: **`planning/`, `.claude/`, `claude resume.txt`, `DEPLOY.md`,
 `DEPLOY_HOSTINGER.html`, `deploy_hostinger.sh`** are gitignored so the company's engineers
@@ -556,7 +584,7 @@ them by scp and needed `git checkout -- entrada/` before pulling — that stack 
 `.env` / `backend/.env`, the SSH private key (only the `.pub` goes to the server), and
 `senha e-mail hostinger` (repo root).
 
-**`backend/usuarios.json` is the exception, and its status has flipped three times** — check
+**`backend/parametros/usuarios.json` is the exception, and its status has flipped three times** — check
 `.gitignore` before assuming: versioned (MVP 2026-07-07) → gitignored (2026-07-08, because a
 versioned copy overwrites real production users) → **versioned again (2026-07-17 handoff)**,
 now shipped as a *seed* (6 operadores, public documented password `Senha123`, forced change

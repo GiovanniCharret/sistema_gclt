@@ -1,0 +1,17 @@
+{
+  "_leia": "Dados de negocio do envio de e-mail. Esta e a fonte PRIMARIA: o que estiver aqui vence o backend/.env, que fica so com o que nao pode vazar (SMTP_PASS, SECRET_KEY). Arquivo relido por mtime: editar e salvar vale na requisicao seguinte, sem reiniciar o processo. NUNCA coloque senha aqui.",
+  "_divergencia": "ATENCAO: este e o repositorio de DESENVOLVIMENTO, e por isso dryrun fica TRUE — nada sai daqui. No repositorio de producao o mesmo arquivo tem dryrun false. E a mesma divergencia deliberada de modelo/src/lib/api.js: edite, nunca copie.",
+  "smtp": {
+    "host": "smtp.office365.com",
+    "porta": 587,
+    "tls": true,
+    "usuario": "smtp@enbpar.gov.br",
+    "remetente": "smtp@enbpar.gov.br",
+    "dryrun": true
+  },
+  "destinatarios": [
+    "gestaolpt@enbpar.gov.br",
+    "lais.brito@enbpar.gov.br"
+  ],
+  "alerta": "giovanni.charret@enbpar.gov.br"
+}

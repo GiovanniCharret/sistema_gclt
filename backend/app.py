@@ -32,7 +32,7 @@ from pydantic import BaseModel
 # Cache de referência de `entrada/` (A2), autoridade (A3) e normalização do nº de contrato.
 from backend.referencia import obter_referencia, obter_base_contratos, _norm_contrato
 # Configuração do processo (caminho do store de usuários) e auth (B2–B4).
-from backend.config import obter_config
+from backend.config import obter_config, obter_parametros_email
 from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_token, LimitadorReset
 # E-mails: credenciais (B1), planilha validada e alerta crítico (E1) — mockáveis nos testes.
 from backend.email_envio import enviar_credenciais, enviar_planilha_validada, enviar_alerta_critico
@@ -106,8 +106,9 @@ def health():
     # Fase 2: autoridade (selecionáveis + todos) para classificar a integridade.
     base = obter_base_contratos()
     integridade = referencia.integridade(base["selecionaveis"], base["todos"])
-    # Fase 4: config do processo, para dizer se ESTE ambiente entrega e-mail.
-    cfg = obter_config()
+    # Fase 4: parametros em vigor (JSON de negocio por cima do `.env`), para dizer
+    # se ESTE ambiente entrega e-mail e de onde os valores vieram.
+    cfg = obter_parametros_email()
     # Fase 3/Saída: status + contagens + integridade + estado do envio; JSON 200.
     return {
         "status": "ok",
@@ -121,6 +122,9 @@ def health():
             "smtpConfigurado": bool(cfg.smtp_host),
             # Quantos destinatários a lista tem (0 = ninguém receberia).
             "destinatarios": len([d for d in cfg.destinatarios.split(",") if d.strip()]),
+            # "json" = os dados primarios vieram de backend/parametros/email.json;
+            # "env" = o JSON nao foi encontrado e valeu a reserva do `.env`.
+            "origem": cfg.origem,
         },
     }
 

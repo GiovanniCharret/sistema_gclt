@@ -1,7 +1,7 @@
 """Autenticação — hashing de senha e store de usuários em arquivo (Bloco B1, §5.2).
 
 Por que existe: o sistema tem login/senha reais, mas **sem banco** — os usuários
-ficam em `backend/usuarios.json` (tratado como segredo, fora do git). Este módulo
+ficam em `backend/parametros/usuarios.json` (tratado como segredo, fora do git). Este módulo
 concentra o hashing seguro (pbkdf2 + salt por usuário, só stdlib) e o CRUD mínimo do
 store (criar com senha temporária, obter, desativar), com **escrita atômica** para não
 corromper o arquivo em gravações concorrentes (risco #6 da spec). O token de sessão e
@@ -33,8 +33,9 @@ from backend.config import obter_config
 
 # Nº de iterações do pbkdf2 (custo do hashing; alto o bastante para senhas humanas).
 _ITERACOES = 200_000
-# Store padrão: `backend/usuarios.json` (ao lado deste módulo).
-_USUARIOS_PADRAO = Path(__file__).resolve().parent / "usuarios.json"
+# Store padrão: `backend/parametros/usuarios.json` — desde 29/09/2026 os JSONs
+# do backend moram todos em `backend/parametros/`, para não ficarem espalhados.
+_USUARIOS_PADRAO = Path(__file__).resolve().parent / "parametros" / "usuarios.json"
 
 
 def gerar_hash(senha, salt=None):

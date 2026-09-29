@@ -621,8 +621,10 @@ def test_health_publica_o_estado_do_envio_de_email(client):
     r = client.get("/api/health")
     assert r.status_code == 200
     email = r.json()["email"]
-    # As três respostas que só se conseguiria com terminal na VM.
-    assert set(email) == {"dryrun", "smtpConfigurado", "destinatarios"}
+    # As respostas que só se conseguiria com terminal na VM.
+    assert set(email) == {"dryrun", "smtpConfigurado", "destinatarios", "origem"}
+    # 'origem' diz se os dados primários vieram do JSON de parâmetros ou da reserva.
+    assert email["origem"] in ("json", "env")
     assert isinstance(email["dryrun"], bool)
     assert isinstance(email["smtpConfigurado"], bool)
     assert isinstance(email["destinatarios"], int)

@@ -18,7 +18,9 @@ import smtplib
 from email.message import EmailMessage
 
 # Configuração (SMTP, remetente, dry-run) — default do processo se nenhuma for passada.
-from backend.config import obter_config
+# `obter_parametros_email` mescla o JSON de negocio sobre o `.env`:
+# os dados primarios (servidor, remetente, destinatarios) estao no JSON.
+from backend.config import obter_config, obter_parametros_email
 
 # Assunto padrão do e-mail de credenciais (§9).
 _ASSUNTO_CREDENCIAIS = "Acesso ao sistema — senha temporária"
@@ -45,7 +47,7 @@ def montar_email_credenciais(email, senha_temporaria, config=None):
     Saída: o `EmailMessage` pronto para envio.
     """
     # Fase 1: config efetiva (remetente vem dela).
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     # Fase 2: monta a mensagem e os cabeçalhos.
     msg = EmailMessage()
     msg["From"] = cfg.smtp_from                 # remetente configurado
@@ -76,7 +78,7 @@ def enviar(msg, config=None):
     Saída: True se enviou de verdade; False se foi dry-run.
     """
     # Fase 1: config efetiva.
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     # Fase 2: dry-run ou sem host configurado ⇒ não envia (dev/testes).
     if cfg.smtp_dryrun or not cfg.smtp_host:
         # Não abre SMTP; sinaliza que nada foi entregue de fato.
@@ -123,7 +125,7 @@ def montar_email_planilha(arquivo, contrato, uf, config=None):
     Saída: o `EmailMessage`.
     """
     # Fase 1: config + data de hoje (DD/MM/AAAA) para o assunto.
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     hoje = datetime.date.today().strftime("%d/%m/%Y")
     # Fase 2: cabeçalhos e corpo.
     msg = EmailMessage()
@@ -147,7 +149,7 @@ def enviar_planilha_validada(arquivo, contrato, uf, config=None):
     Saída: True se enviou; False em dry-run.
     """
     # Monta e transporta.
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     return enviar(montar_email_planilha(arquivo, contrato, uf, cfg), cfg)
 
 
@@ -160,7 +162,7 @@ def montar_email_alerta(contrato, uf, nome_arquivo, config=None):
     Saída: o `EmailMessage`.
     """
     # Fase 1: config efetiva.
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     # Fase 2: mensagem de alerta.
     msg = EmailMessage()
     msg["From"] = cfg.smtp_from
@@ -182,5 +184,5 @@ def enviar_alerta_critico(contrato, uf, nome_arquivo, config=None):
     Saída: True se enviou; False em dry-run.
     """
     # Monta e transporta.
-    cfg = config if config is not None else obter_config()
+    cfg = obter_parametros_email(config)
     return enviar(montar_email_alerta(contrato, uf, nome_arquivo, cfg), cfg)
