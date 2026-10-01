@@ -672,8 +672,11 @@ only when explicitly asked.
   >   linhas em `evento` (auditoria), entre elas **uma de distribuidora** (`@energisa.com.br`,
   >   perfil `usuario`). Um cadastro "de teste" com domínio de distribuidora cria conta **real**,
   >   capaz de enviar Anexo V — teste só com `@enbpar.gov.br`.
-  > - O firewall do MySQL **já libera o IP da estação** (o erro de senha errada chegou como 1045,
-  >   não timeout). Falta confirmar o **IP de saída da VM da Azure**, que é outro endereço.
+  > - **Firewall do MySQL liberado para os dois lados (2026-10-01)**: o IP da estação (provado
+  >   pelo erro 1045, de credencial, e não timeout) **e o da VM de produção**. Endereços da VM,
+  >   informados pelo usuário: hostname **`lpt-vm-monitoramentolpt-geral-prd-brs`**, IP interno
+  >   **`10.41.20.4/28`**, IP externo **`191.234.162.83`**. Com isso o **pré-requisito 5 do merge
+  >   está fechado** — era o que impedia a produção de alcançar o `db_lpt`.
   > - **A senha do `usr_lpt` fica em `minhas_notas/dados_bd_lpt.md`** (gitignored, só local);
   >   nenhum documento versionado a contém.
 
