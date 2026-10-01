@@ -119,8 +119,10 @@ opening the same file that holds `SMTP_PASS` and `SECRET_KEY`, and shipping a de
   fixes that (a `senha` key inside the JSON is ignored).
 - **Reloaded by mtime**, like `entrada/`: editing the file counts on the next request, no
   restart. That is the operational gain — swapping a recipient no longer needs a deploy.
-- `GET /api/health` publishes `email.origem` = `json` or `env`, so the browser says which source
-  is in force. Without a terminal on the VM, that is the only way to tell.
+- **`GET /api/health/detalhado`** publishes `email.origem` = `json` or `env`, so the browser says
+  which source is in force. Without a terminal on the VM, that is the only way to tell. ⚠️ It moved
+  out of the public `/api/health` on 2026-10-01 and **now needs a token** — same information, same
+  shape, one header more.
 - ⚠️ **The two repos' `email.json` diverge on purpose**: dev ships `"dryrun": true` (nothing
   ever leaves a developer's machine), production `false`. Same rule as `modelo/src/lib/api.js`:
   **edit, never copy**.
@@ -227,6 +229,176 @@ read it rather than trusting a prose summary.
 
 > **The old "Data de energização fora de 2026" rule was removed (2026-07-09)** — any date
 > is accepted; a **blank** date is still an error (it's a required field).
+
+### `SECRET_KEY` has no default: the process refuses to start without one (2026-10-01)
+
+`config.py` used to carry `secret_key = "dev-inseguro-troque-em-producao-com-uma-chave-longa"`. With
+`.env` missing — a fresh clone, an image built without the file, a misspelled variable — **nothing
+failed**: the system signed session tokens with a public constant that anyone with repo access knows.
+That is silent identity forgery for any account, and it is the same fail-open shape the database had
+until 2026-09-23. **Demonstrated** in a worktree at the previous commit with `.env` absent: the old
+code issued a valid JWT signed with that constant; the new code refuses to sign.
+
+Three layers, deliberately:
+1. **`config.py`**: `secret_key: str = ""`, and `exigir_secret_key()` holds the rule — minimum **32
+   characters** (RFC 7518's floor for HS256).
+2. **`app.py`**: a `lifespan` check **at startup**, so uvicorn never opens the port and the failure
+   lands in the container log, where whoever deployed is looking. Uses `asynccontextmanager`, the
+   non-deprecated form (`on_event` still exists in starlette 1.7 but is on its way out).
+3. **`auth.py`**: the check runs **before signing**, covering anyone who imports the module without
+   starting the server — a CLI, a maintenance script, a test.
+
+- ⚠️ **The error message never contains the key**, not even part of it or its real length, and a test
+  pins that by searching the message for the short key it rejected. Error messages reach logs, screens
+  and, sooner or later, a support ticket.
+- ⚠️ **Operational consequence:** a clone **without `.env` no longer starts**, and its API tests fail.
+  The production repo is unaffected (its `.env` is tracked); the dev repo is. That is the price of
+  failing closed, and it was the user's call.
+- The other half of this finding — pydantic's `Config` repr printing `secret_key` in tracebacks —
+  was closed the same day with `SecretStr`; see the next block.
+- 6 tests per branch. Suites: **198** (main), **438** (login), **517** (fase2).
+
+### Secrets are `SecretStr`: no accidental leak through repr or traceback (2026-10-01)
+
+`secret_key`, `smtp_pass` and `banco_senha` are `SecretStr`, so the configuration object's repr shows
+`**********`. **This closed a real leak, not a hypothetical one:** while running the suite against the
+previous commit, an `AttributeError` made pytest print the `Config` repr **with the whole SECRET_KEY**
+on screen. The vector is not an attack — it is a traceback, a log line, a `print(config)`, a support
+ticket with the output pasted in.
+
+The value leaves the box at **four** points, each at the moment of use: `exigir_secret_key`
+(validation), `jwt.decode` in `auth.py`, `sessao.login` in `email_envio.py`, and the URL assembly in
+`config_identidade.py`. `texto_do_segredo` concentrates the unwrapping.
+
+- ⚠️ **`texto_do_segredo` accepts `SecretStr` *and* `str`, and that is measured, not defensive
+  habit**: the same field receives a plain `str` through two legitimate paths —
+  `types.SimpleNamespace(smtp_pass="…")` in `test_parametros_email`, and the `senha` parameter the
+  database CLI passes by hand. A bare `.get_secret_value()` there would raise `AttributeError`. Each
+  call to it marks exactly where a secret leaves the box, which is what you want to be able to audit.
+- ⚠️ **What this does not do:** `.env` is still versioned (the user's decision), so read access to the
+  repo still yields the key from the file. This closes carelessness, not access. And a deliberate
+  `print(get_secret_value())` would still leak — the type protects the object, not the programmer.
+- The regression test **reproduces the finding**: it searches `repr(cfg)` and `str(cfg)` for the key
+  and the SMTP password. Verified against the previous commit in a throwaway worktree, where it fails
+  with `assert 'kkk…' not in 'Config(secr…'`.
+- Checked on the real configuration (no e-mail sent): `obter_parametros_email()` still reads
+  `origem: json`, the password unwraps to a non-empty `str`, and neither secret appears in the repr.
+- Suites: **202** (main), **444** (login), **523** (fase2).
+
+### Health split, and the database diagnosis the VM never had (2026-10-01)
+
+| Route | Who sees it | Body |
+|---|---|---|
+| `GET /api/health` | **public** | `{"status": "ok"}` — plus `loginOperador` on the branches |
+| `GET /api/health/detalhado` | **token** | what used to be public: `referencia`, `integridade`, `email` |
+| `GET /api/health/banco` | **token**, branches only | `ok` / `faltam_tabelas` / `inacessivel` / `nao_configurado` |
+
+Measured before touching it: **the front does not consume `/api/health`** (no component calls it) and
+no healthcheck in compose, the Dockerfile, nginx or the workflow points at it — so the cut broke
+nothing. `loginOperador` stays public on purpose: the login screen needs it **before** a token exists,
+and it is a boolean about which door exists, not about what is inside.
+
+- ⚠️ **`/api/health/banco` does NOT use `usuario_autenticado`.** That dependency loads the account
+  **from the database**, so the route would be useless exactly when the database is down. It uses
+  `token_valido` (signature only, no query), which covers both logins because both tokens come from
+  the same `gerar_token`.
+- ⚠️ **No response carries the URL, host, user or password.** "Unreachable" returns only the
+  exception's **class name** — SQLAlchemy's message embeds host and user, and this is an HTTP body.
+  A test proves it by searching the body for the password, the host and the user.
+- The `faltam_tabelas` answer **only became possible because of the change above**: while
+  `obter_engine` created the schema, the check created what it was looking for.
+- The route opens **its own** engine and disposes it (`finally`): the process singleton raises when a
+  table is missing, which would collapse "database down" and "schema incomplete" into one exception.
+- Smoke-tested end to end (uvicorn on :8123, real MySQL): public health returns status +
+  `loginOperador`; detalhado answers 401 without a token and the full body with one; banco answers
+  401 without a token and `{"status":"ok","tabelas":["convite","evento","usuario"]}` with one.
+- Suites: **192** (main), **432** (login), **511** (fase2) — 3 tests on main were **migrated** from the
+  public route, not deleted.
+
+### `obter_engine` verifies the schema; creating it is a human command (2026-10-01)
+
+**No DDL on the request path any more.** Until today the first identity request to arrive ran
+`create_all` — schema creation triggered by web traffic, in a production database, with a user that
+can `DROP`. It also made an honest "tables are missing" diagnosis impossible, because the check
+would create what it was looking for.
+
+⚠️ This is **not** the homonym-table fear, which was dismissed on 2026-09-23 (the database is ours
+alone). The reason is different: least privilege, and no DDL by traffic.
+
+- **`bd.tabelas_ausentes(engine)`** compares the database catalogue with `METADATA` and returns the
+  sorted list of missing names. It **returns a list instead of raising** because two callers want the
+  same question with different answers: the assembly wants to fail, a diagnosis wants to show.
+- **`montagem.obter_engine`** now verifies. Missing a table, it raises naming which ones **and the
+  command that fixes it**. The singleton is still filled only at the end (fase2's M3 preserved —
+  its test was re-pointed at `tabelas_ausentes` and proves the same guarantee).
+- **`backend/identidade/admin_schema.py`** (new, identical on both branches): `conferir` and `criar`.
+  It deliberately **does not accept a URL argument** — a target typed on a command line is exactly
+  how a parallel database gets created by accident. `criar()` returns what it created, because "ok"
+  is not an account of what changed in a production database.
+- **Measured against the real `db_lpt`** (catalogue read only): missing tables **none**, so the
+  switch does not break production. **424** tests on the login branch, **503** on fase2.
+- ⚠️ **Operational consequence:** a brand-new database (or a future environment) now needs
+  `python -m backend.identidade.admin_schema criar` **once**, by hand, before the identity routes
+  work. That is the point, not an oversight.
+
+## Security audit against `planning/seguranca_saas_vibecoding.md` (2026-10-01)
+
+Audited all three branches of the production repo against the guide's 5 categories. **What the
+guide calls "vibe coding" failures is mostly already handled here** — the real gaps are elsewhere.
+
+**Passed, with evidence** (don't "fix" these; they are already right): no client→database path at
+all (nothing like Supabase/`anon` keys), so RLS is not applicable; **zero** `localStorage`/
+`sessionStorage` in the front; the perfil is **re-read from the database on every request**
+(`usuario_autenticado`), never trusted from the token, and an inactive account is refused;
+sensitive routes gate on `matriz_perfis.pode_fazer` and **fail closed**; `/api/validar` enforces
+contract ownership (`acesso.py`); ids are UUIDv4 and the invite token is `secrets.token_urlsafe(32)`
+stored as **sha256**; no raw SQL anywhere (SQLAlchemy Core, bound params); React escapes by default
+with **zero** `dangerouslySetInnerHTML`; and the exported CSV **neutralizes formulas** (`=+-@	`).
+
+**Open findings, worst first** (full write-up in PLAN.md, 2026-10-01):
+1. **`POST /api/esqueci-senha` resets any operador to the public `Senha123` with no
+   authentication** — open on all three branches today. Operador names are guessable. The
+   `login_operador_habilitado` flag that kills it ships `True`, so the merge does not close it.
+   ⚠️ **The user decided on 2026-10-01 NOT to fix it**: the operador login is being discontinued
+   shortly, and the flag already exists for the day it is. **Do not "fix" this unasked** — it is a
+   known, accepted exposure with a decided end date, not an oversight. Until then it remains the
+   only remotely exploitable finding on this list: a guessable operador name buys a password reset,
+   a login, and the ability to send Anexo V as that distribuidora — while locking the legitimate
+   operador out, because the reset forces a password change.
+2. **`backend/.env` is tracked** (⚠️ the *code* half of this finding was closed on 2026-10-01 — see
+   "SECRET_KEY has no default" below; what remains is the file being in git) (SECRET_KEY, SMTP_PASS and, since 2026-10-01, BANCO_SENHA), and
+   `.gitignore` does not cover it: read access to the repo means **forging a JWT for any account**
+   and connecting to production MySQL. ⚠️ **The user decided on 2026-10-01 to keep it in git**
+   (moving to GitHub Secrets would deepen the dependency on the company's IT) — so the repo staying
+   **private** is a load-bearing operational control, not a nicety. Related, found while testing:
+   pydantic's `Config` repr **printed `secret_key` in tracebacks** — **fixed on 2026-10-01 with
+   `SecretStr`**, see below.
+3. **No rate limiting** anywhere except `LimitadorReset` (3/h per e-mail, **in-process memory**, so
+   a restart clears it and workers don't share it). `/api/login`, `/api/login-email`,
+   `/api/solicitar-acesso` and `/api/validar` take requests as fast as they arrive.
+4. **`usr_lpt` can `DROP`/`ALTER`** (`WITH GRANT OPTION`), and `create_all` runs **on the first
+   identity request** — schema change triggered by web traffic. Splitting into a DML-only app user
+   needs **IT for one command** (`CREATE USER`; the global scope here is `USAGE` only, and a `GRANT`
+   has not created users since MySQL 5.7). Self-revoking our own DDL is possible but **one-way** and
+   would block the P5–P9 migrations, so it was rejected.
+5. **TLS to MySQL does not verify the CA** (`ssl={}` lands in PyMySQL's PREFERRED branch, measured
+   2026-09-28). Encrypted because Azure demands it, not because we ask.
+6. `/api/logout` does not revoke: a leaked token lives up to 8h (`TOKEN_TTL`).
+
+**Decided NOT to do** (user, 2026-10-01): take `.env` out of git; soften the 403/409 diagnostic
+`detail` strings (naming the owning distribuidora stays for now).
+
+### Fixed the same day — input limits (commits `7d3f94d` / `67aabf7` / `f639ad2`)
+
+`max_length` on every input model (operador 64, senha 200, e-mail 254, token 128, perfil 32,
+`contrato`/`uf` 40) — a 10 MB password used to reach pbkdf2's 200 000 iterations, which is
+unauthenticated CPU exhaustion; `_ler_upload_limitado` in `app.py` checks the extension and reads
+in 1 MB chunks up to `config.upload_max_mb` (20), answering **413**; and `_conferir_expansao` in
+`planilha.py` sums the zip's declared sizes before openpyxl and refuses above 300 MB (a zip bomb is
+tiny compressed, so it sails through Nginx). ⚠️ **Measured on the way: a valid `.xlsx` renamed to
+`.txt` used to return 200 and send the e-mail** — the extension was never looked at. The access
+check still runs **before** any byte is read. 9–11 tests per branch, each verified to fail against
+the previous commit in a throwaway worktree: **189 / 419 / 498**.
 
 ## Commands
 
@@ -341,6 +513,15 @@ carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pul
    branch **`feature/login-canonico-e-perfis`** is tested before being merged (see "Branches"
    under the sibling repo), and it is **operated by that branch's project**
    (`../site_sistema_amostral_com_os`), not by this one. State **verified on 2026-09-22**:
+
+   > ⚠️ **It dies with the successful merge (user, 2026-10-01).** Once the login branch is
+   > merged and the Azure deploy works, **this VPS is wiped**: the server gets formatted and
+   > sits empty, waiting for new code to test. It comes back **in the later phases**, when
+   > the heavier features arrive (the sibling project's **P5–P9**, see "Roadmap" below).
+   > Consequence for planning: **do not treat Hostinger as a prerequisite for the merge, and
+   > do not spend effort repairing it** — its hand-edited `.env`, its blocked `git pull` and
+   > its unknown service manager stop mattering the day the merge lands. Anything below about
+   > this machine describes a state with an expiry date.
    - The VPS was **reinstalled again around 2026-09-10** (host key `Z2Hc…` → `GeYEX…`). Whatever
      was built before is gone — including the Docker stack this project set up on 2026-09-02
      in `/opt/enbpar` (runbook `DEPLOY_VPS_DOCKER_VIA_SSH.md`, gitignored — still valid as a
@@ -413,9 +594,9 @@ carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pul
 > the reason — the SMTP exception, or *"SMTP não configurado (SMTP_HOST vazio)"*. It reaches the
 > screen through the raw status+detail `UploadAnexoV.jsx` already shows (2026-07-22 decision).
 > **Dry-run still answers 200 on purpose** — it is a developer's choice, not a defect; what
-> denounces dry-run *in production* is `GET /api/health`, which now publishes
-> `email: {dryrun, smtpConfigurado, destinatarios}` — booleans and a count, never an address or a
-> credential. 4 tests, applied to **both repos**, 172 green each.
+> denounces dry-run *in production* is **`GET /api/health/detalhado`** (public `/api/health` until
+> 2026-10-01, token-gated since), which publishes `email: {dryrun, smtpConfigurado, destinatarios}`
+> — booleans and a count, never an address or a credential. 4 tests, applied to **both repos**, 172 green each.
 > ⚠️ **Ordering that matters:** flipping `SMTP_DRYRUN=0` while `SMTP_HOST` is still the example
 > value turns every upload into a **502** — set the real SMTP in the same change, never before.
 > And the screen still says "Planilha enviada." whenever a send *does* happen; reading `enviado`
@@ -455,8 +636,10 @@ only when explicitly asked.
   > shared files textually identical across `main` and both branches so merges don't conflict,
   > and tell them what changed.
 
-  > **⚠️ The identity subsystem has ONE database: MySQL (2026-09-23).** `BANCO_URL` (in
-  > `backend/.env`) is **mandatory and has no default**. Missing it, or an unreachable server,
+  > **⚠️ The identity subsystem has ONE database: MySQL (2026-09-23).** Its connection data is
+  > **mandatory and has no default** — and ⚠️ **since 2026-10-01 it no longer comes from
+  > `BANCO_URL`**, but from `backend/parametros/banco.json` plus `BANCO_SENHA` (see the next
+  > block). Missing it, or an unreachable server,
   > **raises `RuntimeError` with an instruction** (`montagem.obter_engine`) — the message
   > names the database with the **password masked** (`bd.url_sem_senha`) and states that no
   > alternative database will be created. Rationale, measured: the old default
@@ -466,6 +649,128 @@ only when explicitly asked.
   > URL, so none of them goes through that default. The engine is **lazy** (opened on the
   > first identity call), so an unreachable database does **not** take the site down — the
   > operador login and the upload keep working; only the identity routes fail.
+
+  > **✅ `db_lpt` é NOSSO — inventário medido em 2026-10-01 (leitura pura).** Decisão do usuário:
+  > *"O db é nosso! Nós podemos usá-lo como quisermos."* Medido com
+  > `minhas_notas/verificar_banco_identidade.py` (gitignored; só leitura, nenhum `CREATE`/`INSERT`/
+  > `UPDATE`/`DELETE`) contra `lpt-mysql-geral-prd-brs.mysql.database.azure.com:3306`:
+  > - **O banco tem 3 tabelas, e são as nossas**: `usuario`, `convite`, `evento`. **Zero tabelas de
+  >   outro sistema** — apesar do nome "geral", nada mais mora ali. As colunas conferem
+  >   **exatamente** com o que o código declara (nenhuma faltando, nenhuma a mais).
+  > - ⚠️ **Consequência que cancela um pré-requisito do merge:** o medo de `create_all(checkfirst=True)`
+  >   achar uma `usuario` alheia — não criar, não avisar, e os repositórios gravarem no cadastro de
+  >   outro sistema — **não se aplica**. `obter_engine` pode continuar como está; não há necessidade
+  >   de trocar criar por conferir.
+  > - `usr_lpt` tem `SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER, …,
+  >   TRIGGER ON db_lpt.*` **com `GRANT OPTION`**.
+  > - **Primeiro `gerente` já existe**: `giovanni.charret@enbpar.gov.br` (criado 2026-09-16) — o
+  >   único perfil com `alterar_perfil`, então a promoção de novos perfis já tem quem faça.
+  > - **A conexão sai cifrada de fato**: cifra negociada `TLS_AES_256_GCM_SHA384` (o servidor está
+  >   com `ssl-mode=require`). Isso **não** contradiz a medição de 28/09: quem exige o TLS é o
+  >   servidor, não o `ssl={}` do `bd.py`.
+  > - ⚠️ **O cadastro já está em uso, e é compartilhado com a produção**: 7 contas ativas e 85
+  >   linhas em `evento` (auditoria), entre elas **uma de distribuidora** (`@energisa.com.br`,
+  >   perfil `usuario`). Um cadastro "de teste" com domínio de distribuidora cria conta **real**,
+  >   capaz de enviar Anexo V — teste só com `@enbpar.gov.br`.
+  > - O firewall do MySQL **já libera o IP da estação** (o erro de senha errada chegou como 1045,
+  >   não timeout). Falta confirmar o **IP de saída da VM da Azure**, que é outro endereço.
+  > - **A senha do `usr_lpt` fica em `minhas_notas/dados_bd_lpt.md`** (gitignored, só local);
+  >   nenhum documento versionado a contém.
+
+  > **⚠️ Database config: data in `backend/parametros/banco.json`, password in `.env` (2026-10-01).**
+  > `BANCO_URL` **is no longer read**. The JSON is the **single source** of `host`, `porta`, `base`
+  > and `usuario`; `backend/.env` keeps **only `BANCO_SENHA`**. Same split as `email.json`
+  > (2026-09-29) — business/infra data out of the secrets file — with **one deliberate difference**:
+  > `email.json` missing falls back to `.env` on purpose, while here **there is nothing to fall back
+  > to**, so a missing file, an unreadable one, a blank key or an empty password each raise
+  > `RuntimeError` **naming what is missing**, and no alternative database is opened (the 2026-09-23
+  > rule). Why it changed: the first merge died (2026-09-28) because `BANCO_URL` existed only in the
+  > *Hostinger* `.env`, and changing a database address meant opening the same file that holds
+  > `SECRET_KEY` and `SMTP_PASS`.
+  > - **`config_identidade.py`** gained `ler_parametros_banco` (mtime cache, like `email.json`) and
+  >   `montar_url_banco(caminho=None, senha=None)` — an explicit `senha` wins, which is how tests
+  >   inject without touching `.env`. `montagem.obter_engine` calls it; `bd.py` is untouched.
+  > - The URL is built with `sa.engine.URL.create` and returned by
+  >   `render_as_string(hide_password=False)`. **Not by concatenation**: a password containing `@`,
+  >   `:` or `/` would silently turn half of itself into the server address. A test pins it with
+  >   `p@ss:w/ord#1`. ⚠️ `str(URL)` would mask the password as `***` and the driver would fail.
+  > - ⚠️ **mtime reload buys nothing here**: the engine is a per-process singleton, so switching
+  >   databases **requires restarting** the backend. The docstring says so.
+  > - **Driver is fixed** (`mysql+pymysql`), not configurable — a `driver` key in the JSON would be
+  >   an invitation to point somewhere else.
+  > - Measured against the real server on 2026-10-01: the URL built by this path **connects**
+  >   (`TLS_AES_256_GCM_SHA384`, the 3 tables in place). **12 tests** in
+  >   `test_montagem_banco.py` (were 3). Applied to **both feature branches**, suites at
+  >   **408** (login) and **487** (fase2).
+  > - ⚠️ **It lives only on the feature branches**, like every identity file — `main` has no
+  >   `backend/identidade/`, so nothing there reads it. The JSON is **tracked**, so the merge
+  >   carries it to Azure; what the user still has to add to the versioned `.env` is
+  >   **`BANCO_SENHA`** (plus `BASE_URL_PUBLICA`, `CONVITE_TTL_MIN`, `PERFIL_INICIAL_ENBPAR`,
+  >   `DOMINIOS_PATH`).
+
+  > **Roadmap of the sibling project (`../site_sistema_amostral_com_os/docs/PLAN.md`), read 2026-10-01.**
+  > Its production phases are numbered **P1–P9**, and the naming is deliberate so "Fase 2" and "P2"
+  > never collide. **P1–P4 are implemented and live on the two feature branches** — P1 perfis de
+  > acesso, P2 área administrativa e auditoria, P3 conta e senha no banco, P4 perfil de gerente +
+  > revisão. **P5–P9 are the heavier features still untouched**: P5 trilha de amostra e OS (só a
+  > operadora), P6 coordenador/gerente/superintendente na trilha, P7 diretor + emissão de documentos,
+  > P8 documentos da OS para o coordenador, P9 menu de planejamento da inspeção. That is the work the
+  > reinstalled Hostinger will serve as test bed for (see "Deploy", target 1). Specs per phase live in
+  > that repo's `docs/` (`2026-09-08-…`, `2026-09-15-…` for the login, `2026-09-21-…` for the gerente
+  > area) and `docs/aproved/` holds the approved reference of each step.
+
+  > **⚠️ NEVER `git merge main` into the feature branches — it deletes `backend/identidade/`
+  > (measured 2026-10-01).** `main` carries the **revert of merge #1** (`b660a37`, merge `f2fa9eb`),
+  > and that revert is **not** an ancestor of either branch. A `git merge main` therefore applies it:
+  > the 7 identity files this project has edited would show up as `modify/delete` conflicts, and
+  > **every identity file nobody touched would be deleted silently**, with no conflict to warn you.
+  > The branches are 21 commits behind `main` and will stay that way. Consequences:
+  > - To bring something from `main` into a branch, **cherry-pick that commit**, never merge. Measured
+  >   cost for the two 2026-09-29 e-mail commits (`ac5d26c`, `0639c0c`): both conflict on
+  >   `backend/app.py` and `backend/tests/test_api.py` (the branches' `app.py` carries the identity
+  >   router and the `login_operador_habilitado` guard). Resolvable, not free.
+  > - The re-merge path stays the one in PLAN.md's prerequisite 9: **revert the revert**
+  >   (`git revert b660a37` on a new branch), not a plain merge.
+  >
+  > **`backend/.env` is now byte-identical on all three branches (2026-10-01).** It was not: `main`
+  > holds the post-`parametros/` shape (only `SECRET_KEY`, `TOKEN_TTL`, `SMTP_PASS` — the e-mail
+  > business data moved to `email.json` on 2026-09-29), while both branches still carried the old
+  > shape, 10 keys more, with placeholder values (`smtp.exemplo.com.br`, `SMTP_DRYRUN=1`) and two keys
+  > **no module reads** (`ACESSO_DOMINIO_GRUPO`, `ACESSO_GRUPOS_CURINGA`). Normalized by copying
+  > `main`'s file (its real `SMTP_PASS` and rotated `SECRET_KEY` win) and appending the **identity
+  > block that until today existed only in the hand-edited Hostinger `.env`** — the very absence that
+  > made the first merge answer 500: `BANCO_SENHA`, `BASE_URL_PUBLICA`, `CONVITE_TTL_MIN`,
+  > `PERFIL_INICIAL_ENBPAR`, `DOMINIOS_PATH`. ⚠️ **`PERFIL_INICIAL_ENBPAR=analista`**, which reproduces
+  > the behavior already in use (every internal account in `db_lpt` is `analista`); `sem_perfil` is the
+  > tighter alternative. On `main` none of it has any effect — there is no `backend/identidade/`
+  > there to read it; the keys start mattering the day the merge lands. **This closes prerequisite 4.**
+  > Suites after the change: **180** (`main`), **408** (login), **487** (fase2).
+
+  > **`backend/parametros/` now holds every config file — on the login branch (2026-10-01).** The
+  > user asked for `usuarios.json` and `dominios_autorizados.json` to join `email.json` and
+  > `banco.json` there, so `backend/` keeps only code. Done with `git mv` (history preserved) plus
+  > **12 reference fixes** found by `git grep`: `config.py::usuarios_path`, `auth.py::_USUARIOS_PADRAO`,
+  > `config_identidade.py::dominios_path`, four tests, `.env.example`, `.gitignore`, that repo's
+  > `CLAUDE.md` and the `Dockerfile-backend` comment. The deploy workflow was **aligned with `main`'s**,
+  > which has pointed at `parametros/usuarios.json` since 2026-09-29 (the branch still had the old path
+  > and lacked the `|| true` / `reset --hard` of 2026-09-28).
+  > - ⚠️ **`DOMINIOS_PATH` was removed from `.env`** instead of being updated. The variable **wins over
+  >   the code default**, and the default is the only value that knows where the file lives **on that
+  >   branch** — a fixed path in `.env` would break whichever branch didn't move the file. Removing it
+  >   keeps the three `.env` byte-identical and lets each branch use its own default.
+  > - The three tests that read the **real** files (`test_premissa_roteamento`, `test_autorizacao`,
+  >   `test_dominios_arquivo`) are the proof the new paths resolve — they'd fail on a missing file.
+  >   **408 pass.**
+  > - **Applied to `fase2` too** (same day, commit `9d9f962`, 487 pass) — the same 12 references, none
+  >   unique to that branch: its gerente/audit code never touches these paths. Keeping the two
+  >   identity branches on the same paths is what stops a rename conflict at merge time.
+  > - **Per-branch layout now**, which is what a merge will see: `main` has
+  >   `parametros/{email,usuarios}.json`; **both identity branches** have
+  >   `parametros/{banco,dominios_autorizados,usuarios}.json` (**no `email.json`** — they lack the
+  >   2026-09-29 commit). Verified identical across all three: `backend/.env`, the **deploy workflow**,
+  >   `config.py::usuarios_path` and `auth.py::_USUARIOS_PADRAO`; and `config_identidade.py`'s
+  >   `dominios_path` line matches on both branches. `usuarios.json` now sits at the **same path**
+  >   everywhere, which removes a rename-vs-path ambiguity the merge would otherwise resolve by guess.
 
   > **⚠️ Flag `login_operador_habilitado` — turning the `usuarios.json` login off (2026-09-28).**
   > In `backend/config.py`, env `LOGIN_OPERADOR_HABILITADO`, **ships `True`** (stage 1: both
@@ -549,6 +854,14 @@ reference for what that download should produce.
   (dated), not in PROJECT_BUILDING.md.
 
 ## Repo layout & ignored paths
+
+**`ferramentas/` (tracked, 2026-10-01)** holds **reusable** diagnostics — the `db_lpt` inspector and
+the SMTP tester — with their own `LEIA-ME.md`. Two rules worth knowing before adding to it: a
+**one-shot migration script does not belong there** (it runs, the change is committed, and the script
+is deleted — its reasoning lives in the commit message and in PLAN.md), and **no tool carries a
+secret** (passwords come from `getpass` at the moment of use, or from a gitignored file; host, port
+and user may stay). This repository deploys nothing — production comes from the sibling repo — so
+nothing here reaches a server.
 
 This **is** a git repository; `origin` is
 `github.com/GiovanniCharret/sistema_gclt.git` (default branch `main`). The `.gitignore`
