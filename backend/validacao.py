@@ -51,17 +51,42 @@ _COMUNIDADE_FAMILIA = {
 # Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
 _COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
 
-# Colunas do grupo V (equipamentos públicos/comunitários), nas posições AF, AG e AH da aba
-# Preenchimento. Os nomes foram CONFERIDOS no modelo oficial, não digitados de memória: um
-# espaço a mais faz a coluna não ser encontrada, e aí o sistema a dá como vazia enquanto a
-# trata como tipologia Sim/Não — foi exatamente isso que aconteceu com "CPF / CNPJ" num
-# Anexo II em 2026-10-02.
-COL_ESCOLA = "V.1 - Escolas"
-COL_SAUDE = "V.2 - Unidades de Saúde"
-COL_POCO = "V.3 - Poços de água comunitários"
-
-# Os três, na ordem da planilha — a regra conta quantos estão "Sim".
-_EQUIPAMENTOS_V = (COL_ESCOLA, COL_SAUDE, COL_POCO)
+# Colunas de EQUIPAMENTO/INFRAESTRUTURA/ESPAÇO COLETIVO — AF até AZ da aba Preenchimento,
+# ou seja os grupos V (escolas, saúde, poços), VI (serviços públicos e infraestrutura
+# comunitária) e VII (associações, igrejas, projetos produtivos). São as 21 colunas entre
+# as quais a regra abaixo exige exatamente uma marcação.
+#
+# ⚠️ Os nomes foram GERADOS a partir do próprio modelo oficial, não digitados: são 21 textos
+# longos, com acento e numeração romana, e um caractere errado faria a coluna não ser
+# encontrada — a regra contaria errado em silêncio. Foi o que aconteceu com "CPF / CNPJ"
+# (com espaços) num Anexo II em 2026-10-02. Ao trocar a versão do modelo, reconferir esta
+# lista contra o cabeçalho novo.
+#
+# ⚠️ A ordem é a da planilha, e o comentário à direita é a letra da coluna no Excel — é
+# assim que o operador enxerga, e é como o pedido chega ("de AF até AZ").
+_COLS_EQUIPAMENTO = (
+    "V.1 - Escolas",                                                                                               # AF
+    "V.2 - Unidades de Saúde",                                                                                     # AG
+    "V.3 - Poços de água comunitários",                                                                            # AH
+    "VI.1 - Instalação de serviços públicos de conectividade à internet",                                          # AI
+    "VI.2 - Instalação de serviços públicos de acesso à água",                                                     # AJ
+    "VI.3 - Infraestrutura pública de assistência social",                                                         # AK
+    "VI.4 - Outra instalação ou infraestrutura de prestação de serviços públicos",                                 # AL
+    "VI.5 - Infraestrutura comunitária de segurança alimentar",                                                    # AM
+    "VI.6 - Cozinha comunitária",                                                                                  # AN
+    "VI.7 - Câmara fria comunitária",                                                                              # AO
+    "VI.8 - Sistema coletivo de bombeamento e abastecimento de água",                                              # AP
+    "VI.9 - Infraestrutura comunitária de comunicação e conectividade",                                            # AQ
+    "VI.10 - Outra instalação ou infraestrutura de base comunitária",                                              # AR
+    "VII.1 - Associação",                                                                                          # AS
+    "VII.2 - Cooperativa",                                                                                         # AT
+    "VII.3 - Igreja",                                                                                              # AU
+    "VII.4 - Outros espaços coletivos",                                                                            # AV
+    "VII.5 - Projeto ou instalação produtiva comunitária vinculada à sociobioeconomia",                            # AW
+    "VII.6 - Projeto ou instalação produtiva comunitária vinculada às cadeias de valor da sociobiodiversidade",    # AX
+    "VII.7 - Outro projeto ou instalação produtiva de base comunitária",                                           # AY
+    "VII.8 - Micro e pequenos empreendimentos voltados para o desenvolvimento da economia local",                  # AZ
+)
 
 # Enquadramentos (coluna N) que descrevem um EQUIPAMENTO, e não uma família: quando a UC é
 # um desses, ela é necessariamente um — e só um — tipo de equipamento do grupo V.
@@ -396,30 +421,33 @@ def regras_formato_dominio(linhas, dominios):
                                         f'“{tipo_com}” exige “{esperada}” = “Sim”',
                                         f'preencher “{esperada}” com “Sim”'))
 
-        # (erro) Enquadramento de EQUIPAMENTO (8, 9, 10 ou 11) × o grupo V (AF/AG/AH):
-        # exatamente UMA das três colunas — V.1 Escolas, V.2 Unidades de Saúde, V.3 Poços de
-        # água comunitários — deve estar "Sim", e as outras duas "Não". QUAL delas é livre;
-        # o que a regra exige é a contagem. Pedido do usuário em 2026-10-02.
+        # (erro) Enquadramento de EQUIPAMENTO (8, 9, 10 ou 11) × as colunas AF:AZ: exatamente
+        # UMA das 21 colunas dos grupos V, VI e VII deve estar "Sim", e as demais "Não".
+        # QUAL delas é livre; o que a regra exige é a contagem. Pedido do usuário em
+        # 2026-10-02 (nasceu com as três do grupo V e foi ampliado no mesmo dia para AF:AZ).
         #
         # Por que contagem, e não correspondência: ao contrário de Tipo de Comunidade → família
         # (1→IV.1, 2→IV.2…), estes quatro enquadramentos NÃO apontam para uma coluna específica
-        # — "9 - Infraestruturas comunitárias" pode ser escola, posto de saúde ou poço. O que
-        # não pode é a linha ficar sem nenhum equipamento marcado, nem acumular dois na mesma UC.
+        # — "9 - Infraestruturas comunitárias" pode ser escola, cozinha comunitária ou poço. O
+        # que não pode é a linha ficar sem nenhum equipamento marcado, nem acumular dois na
+        # mesma UC: uma UC é um equipamento, e um só.
         enquad_linha = _txt(linha, COL_ENQUAD)
         # Só os quatro enquadramentos de equipamento disparam a regra (sem direção reversa:
         # marcar "V.1 - Escolas" com outro enquadramento não gera achado).
         if enquad_linha.casefold() in _ENQUAD_EQUIPAMENTO_CF:
             # Branco conta como não marcado — célula vazia já é cobrada por "Tipologia em branco".
-            marcados = [c for c in _EQUIPAMENTOS_V if _eh(linha, c, "Sim")]
+            marcados = [c for c in _COLS_EQUIPAMENTO if _eh(linha, c, "Sim")]
             if len(marcados) != 1:
-                # Dizer o que está marcado hoje evita que a correção vire adivinhação.
+                # Dizer o que está marcado hoje evita que a correção vire adivinhação. Com 21
+                # colunas, listar todas na frase afogaria a informação — então sai só o que a
+                # pessoa marcou, que é o que ela precisa olhar.
                 atual = ", ".join(f'“{c}”' for c in marcados) if marcados else "nenhuma"
                 achados.append(_achado(
-                    "err", "Enquadramento × equipamento (V.1/V.2/V.3)", loc, COL_ENQUAD,
-                    f'“{enquad_linha}” exige exatamente uma das três colunas do grupo V em '
-                    f'“Sim” (marcadas agora: {atual})',
-                    'assinalar “Sim” em uma só entre “%s”, “%s” e “%s”, e “Não” nas outras duas'
-                    % _EQUIPAMENTOS_V))
+                    "err", "Enquadramento × equipamento (AF:AZ)", loc, COL_ENQUAD,
+                    f'“{enquad_linha}” exige exatamente UMA marcação entre as '
+                    f'{len(_COLS_EQUIPAMENTO)} colunas de equipamento (AF:AZ — grupos V, VI e '
+                    f'VII); marcadas agora: {atual}',
+                    'assinalar “Sim” em uma só das colunas de AF a AZ e “Não” em todas as demais'))
 
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
@@ -579,7 +607,7 @@ _DESCRICOES = {
     "Tipologia em branco": "Toda coluna de tipologia deve conter “Sim” ou “Não” — nenhuma pode ficar vazia",
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
     "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” e os de equipamento (8, 9, 10 e 11) exigem “Não”; “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
-    "Enquadramento × equipamento (V.1/V.2/V.3)": "Enquadramento 8, 9, 10 ou 11 exige exatamente um “Sim” entre “V.1 - Escolas”, “V.2 - Unidades de Saúde” e “V.3 - Poços de água comunitários” (as outras duas em “Não”)",
+    "Enquadramento × equipamento (AF:AZ)": "Enquadramento 8, 9, 10 ou 11 exige exatamente um “Sim” entre as 21 colunas de equipamento (AF a AZ — grupos V, VI e VII), com “Não” em todas as demais",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 

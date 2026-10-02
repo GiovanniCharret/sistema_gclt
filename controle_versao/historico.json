@@ -13,7 +13,7 @@
     "fase": "F9",
     "subfase": "F9.5",
     "titulo": "Regra nova: equipamento público exige um e só um tipo",
-    "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das três colunas do grupo V — escola, unidade de saúde ou poço de água — deve estar marcada. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade."
+    "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das 21 colunas de equipamento da planilha — escolas, unidades de saúde, poços, infraestrutura comunitária, associações, igrejas e projetos produtivos — deve estar marcada, e todas as demais não. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade."
   },
   "contadores": {
     "fases": 9,
@@ -524,7 +524,7 @@
           "data": "2026-10-02",
           "tipo": "decisao",
           "titulo": "Regra nova: equipamento público exige um e só um tipo",
-          "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das três colunas do grupo V — escola, unidade de saúde ou poço de água — deve estar marcada. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade.",
+          "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das 21 colunas de equipamento da planilha — escolas, unidades de saúde, poços, infraestrutura comunitária, associações, igrejas e projetos produtivos — deve estar marcada, e todas as demais não. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade.",
           "impacto": "A segunda parte não é detalhe: sem ela a linha ficaria impossível de preencher, com dois erros se contradizendo.",
           "fonte": "backend/validacao.py"
         }

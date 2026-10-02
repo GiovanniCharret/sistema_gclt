@@ -900,7 +900,7 @@ def test_validar_zero_linhas_e_erro_sem_dados():
     assert any(g["title"] == "Planilha sem dados" for g in r["grupos"])
 
 
-# ── Enquadramento de equipamento (8/9/10/11) × grupo V — AF/AG/AH (2026-10-02) ──────────
+# ── Enquadramento de equipamento (8/9/10/11) × colunas AF:AZ (2026-10-02) ──────────────
 #
 # A regra: nesses quatro enquadramentos a UC É um equipamento, e é UM só — exatamente uma
 # das três colunas do grupo V em "Sim", as outras duas em "Não". Qual delas é livre.
@@ -936,27 +936,27 @@ def test_equipamento_com_exatamente_um_sim_e_valido():
         for v1, v2, v3 in (("Sim", "Não", "Não"), ("Não", "Sim", "Não"), ("Não", "Não", "Sim")):
             achados = regras_formato_dominio([_com_grupo_v(enquadramento, v1, v2, v3)], DOM)
             # A mensagem nomeia o caso: sem ela, a falha diria só "assert False".
-            assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(achados),                 "%s com (%s, %s, %s) deveria passar" % (enquadramento, v1, v2, v3)
+            assert ("err", "Enquadramento × equipamento (AF:AZ)") not in _regras(achados),                 "%s com (%s, %s, %s) deveria passar" % (enquadramento, v1, v2, v3)
 
 
 def test_equipamento_sem_nenhum_sim_e_erro():
     """Nenhuma das três marcada → erro: um equipamento tem de ser algum tipo de equipamento."""
     for enquadramento in EQUIP:
         achados = regras_formato_dominio([_com_grupo_v(enquadramento, "Não", "Não", "Não")], DOM)
-        assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados),             "%s sem nenhuma marcada deveria dar erro" % enquadramento
+        assert ("err", "Enquadramento × equipamento (AF:AZ)") in _regras(achados),             "%s sem nenhuma marcada deveria dar erro" % enquadramento
 
 
 def test_equipamento_com_dois_sim_e_erro():
     """Duas marcadas → erro: a mesma UC não é escola e posto de saúde ao mesmo tempo."""
     for enquadramento in EQUIP:
         achados = regras_formato_dominio([_com_grupo_v(enquadramento, "Sim", "Sim", "Não")], DOM)
-        assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados),             "%s com duas marcadas deveria dar erro" % enquadramento
+        assert ("err", "Enquadramento × equipamento (AF:AZ)") in _regras(achados),             "%s com duas marcadas deveria dar erro" % enquadramento
 
 
 def test_equipamento_com_as_tres_marcadas_e_erro():
     """As três em "Sim" também é erro — o limite é exatamente uma."""
     achados = regras_formato_dominio([_com_grupo_v(EQUIP[2], "Sim", "Sim", "Sim")], DOM)
-    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados)
+    assert ("err", "Enquadramento × equipamento (AF:AZ)") in _regras(achados)
 
 
 def test_equipamento_em_branco_conta_como_nao_marcada():
@@ -966,7 +966,7 @@ def test_equipamento_em_branco_conta_como_nao_marcada():
     guarda é que o branco não seja interpretado como marcação.
     """
     achados = regras_formato_dominio([_com_grupo_v(EQUIP[0], "", "", "")], DOM)
-    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados)
+    assert ("err", "Enquadramento × equipamento (AF:AZ)") in _regras(achados)
 
 
 def test_equipamento_ignora_a_caixa_do_enquadramento_e_do_sim():
@@ -978,7 +978,7 @@ def test_equipamento_ignora_a_caixa_do_enquadramento_e_do_sim():
         "Enquadramento do beneficiário": "10 - ESPAÇOS COLETIVOS",
         V1: "SIM", V2: "NÃO", V3: "Não",
     })
-    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(
+    assert ("err", "Enquadramento × equipamento (AF:AZ)") not in _regras(
         regras_formato_dominio([linha], DOM))
 
 
@@ -993,14 +993,14 @@ def test_outros_enquadramentos_nao_disparam_a_regra():
         "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
         V1: "Sim", V2: "Sim", V3: "Não",
     })
-    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(
+    assert ("err", "Enquadramento × equipamento (AF:AZ)") not in _regras(
         regras_formato_dominio([linha], DOM))
 
 
 def test_equipamento_tem_descricao_no_painel():
     """Regra sem texto em `_DESCRICOES` aparece sem explicação na tela do operador."""
     from backend.validacao import _DESCRICOES
-    assert "Enquadramento × equipamento (V.1/V.2/V.3)" in _DESCRICOES
+    assert "Enquadramento × equipamento (AF:AZ)" in _DESCRICOES
 
 
 # ── Enquadramento de equipamento (8/9/10/11) × coluna "0" (2026-10-02) ──────────────────
@@ -1035,3 +1035,68 @@ def test_equipamento_com_zero_nao_e_valido():
             V1: "Não", V2: "Sim", V3: "Não",
         })
         assert regras_formato_dominio([linha], DOM) == [],             "%s no caminho correto não deveria gerar achado" % enquadramento
+
+
+# ── O intervalo ampliado: AF:AZ, e não só o grupo V (2026-10-02) ───────────────────────
+#
+# A regra nasceu com as três colunas do grupo V e foi ampliada no mesmo dia para as 21
+# colunas de AF a AZ (grupos V, VI e VII). Os casos abaixo cobrem o que a ampliação trouxe:
+# marcar em VI ou VII vale como marcação, e misturar grupos continua sendo duas marcações.
+
+# Uma coluna de cada grupo novo, para os casos não dependerem só do V.
+VI6 = "VI.6 - Cozinha comunitária"
+VII3 = "VII.3 - Igreja"
+
+
+def test_equipamento_marcado_no_grupo_vi_e_valido():
+    """Cozinha comunitária (VI.6) sozinha satisfaz a regra — não é preciso ser do grupo V."""
+    for enquadramento in EQUIP:
+        linha = linha_valida(**{
+            "Enquadramento do beneficiário": enquadramento,
+            "0 - Não é prioridade": "Não",
+            VI6: "Sim",
+        })
+        # Asserção FORTE (lista vazia), não "o título não aparece": a segunda passa de
+        # graça no dia em que a regra mudar de nome, como se descobriu em 2026-10-02.
+        assert regras_formato_dominio([linha], DOM) == [],             "%s com VI.6 marcada deveria passar sem nenhum achado" % enquadramento
+
+
+def test_equipamento_marcado_no_grupo_vii_e_valido():
+    """Igreja (VII.3) sozinha também satisfaz — AZ é o fim do intervalo, VII está dentro."""
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": EQUIP[2],
+        "0 - Não é prioridade": "Não",
+        VII3: "Sim",
+    })
+    assert regras_formato_dominio([linha], DOM) == []
+
+
+def test_marcacao_em_grupos_diferentes_conta_como_duas():
+    """Uma no grupo V e outra no VII → duas marcações → erro.
+
+    É o caso que a ampliação torna possível: antes, marcar V.1 e VII.3 passava, porque a
+    regra só enxergava as três colunas do grupo V.
+    """
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": EQUIP[1],
+        "0 - Não é prioridade": "Não",
+        V1: "Sim", VII3: "Sim",
+    })
+    assert ("err", "Enquadramento × equipamento (AF:AZ)") in _regras(
+        regras_formato_dominio([linha], DOM))
+
+
+def test_a_regra_cobre_as_21_colunas_de_af_ate_az():
+    """O conjunto da regra é exatamente AF:AZ — nem a mais, nem a menos.
+
+    ⚠️ Este caso protege a lista contra as duas formas de errar ao trocar a versão do
+    modelo: encolher (uma coluna deixa de ser contada, e duas marcações passam) e crescer
+    para dentro das famílias (IV.x), que não são equipamento.
+    """
+    from backend.validacao import _COLS_EQUIPAMENTO
+    assert len(_COLS_EQUIPAMENTO) == 21
+    # As pontas do intervalo, conferidas pelo nome.
+    assert _COLS_EQUIPAMENTO[0] == "V.1 - Escolas"
+    assert _COLS_EQUIPAMENTO[-1].startswith("VII.8 - Micro e pequenos empreendimentos")
+    # Nenhuma coluna de família (grupo IV) pode ter entrado.
+    assert not [c for c in _COLS_EQUIPAMENTO if c.startswith("IV.")]

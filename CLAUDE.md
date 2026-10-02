@@ -183,18 +183,24 @@ the tipologias are free (all "Não" is valid), which required exempting those ro
 **unsatisfiable** (N=0 → O="Sim" → clause 1 forces every tipologia to "Não", but M forces
 the family column to "Sim") — the operator must change M or N.
 
-**Enquadramento de EQUIPAMENTO × grupo V (err, since 2026-10-02)** — when N is `8 - Instalações
-de serviços públicos ou infraestruturas públicas`, `9 - Infraestruturas comunitárias`,
-`10 - Espaços coletivos` or `11 - Instalações de apoio e desenvolvimento socioeconômico local`,
-**exactly one** of `V.1 - Escolas` (AF), `V.2 - Unidades de Saúde` (AG) and `V.3 - Poços de água
-comunitários` (AH) must be "Sim" and the other two "Não" — **which one is free**. It is a *count*,
-not a correspondence: unlike M→família, these four enquadramentos do not point at a specific
-column ("9" can be a school, a clinic or a well). Blank counts as unmarked. **One-directional**,
-like M→família: marking `V.1` under another enquadramento triggers nothing (a test pins that
-choice). ⚠️ These four were added to `_ENQUAD_EXIGE_ZERO` **in the same change**, forcing
-O = "Não" — without that, O = "Sim" would make the row **unsatisfiable** (clause 1 demands every
-tipologia "Não" while this rule demands one "Sim"), and the operator would get two contradictory
-errors with no way out. The column names were read from the model file, not typed from memory.
+**Enquadramento de EQUIPAMENTO × AF:AZ (err, since 2026-10-02)** — when N is `8 - Instalações de
+serviços públicos ou infraestruturas públicas`, `9 - Infraestruturas comunitárias`, `10 - Espaços
+coletivos` or `11 - Instalações de apoio e desenvolvimento socioeconômico local`, **exactly one**
+of the **21 columns from AF to AZ** must be "Sim" and all the others "Não" — **which one is
+free**. Those 21 are groups **V** (schools, health, wells), **VI** (public services and community
+infrastructure) and **VII** (associations, churches, productive projects); `_COLS_EQUIPAMENTO`
+holds them in sheet order with the Excel letter in the comment. It is a *count*, not a
+correspondence: unlike M→família, these four enquadramentos do not point at a specific column
+("9" can be a school, a community kitchen or a well). Blank counts as unmarked.
+**One-directional**, like M→família: marking `V.1` under another enquadramento triggers nothing
+(a test pins that choice). ⚠️ These four were added to `_ENQUAD_EXIGE_ZERO` **in the same
+change**, forcing O = "Não" — without that, O = "Sim" would make the row **unsatisfiable**
+(clause 1 demands every tipologia "Não" while this rule demands one "Sim"), and the operator
+would get two contradictory errors with no way out.
+⚠️ **The 21 names are GENERATED from the model file, never typed** — a single wrong character
+makes a column unmatchable and the count silently wrong (that is how `CPF / CNPJ` burned a whole
+file on 2026-10-02). **Re-check the list against the header when the model version changes**; a
+test pins the count at 21, the two ends, and that no `IV.x` (família) leaked in.
 
 **Tipo de Comunidade × família (err, since 2026-07-29)** — direction M→U:X only, no reverse
 check: when column M is `1 - indígena` / `2 - quilombola` / `3 - ribeirinha` /
