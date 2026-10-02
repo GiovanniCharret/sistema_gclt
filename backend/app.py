@@ -38,6 +38,8 @@ from backend.auth import autenticar, trocar_senha, resetar_senha, verificar_toke
 from backend.email_envio import enviar_credenciais, enviar_planilha_validada, enviar_alerta_critico
 # Montagem do contexto, resolução do grupo e filtro de contratos por grupo (C1/E2, §5.1).
 from backend.acesso import montar_contexto, grupo_do_operador, contratos_visiveis, motivo_acesso_negado
+# Historico de versoes do produto (`controle_versao/historico.json`), que alimenta o rodape.
+from backend.versao import ler_historico, resumo_publico, HistoricoIndisponivel
 # Parsing (D1), domínios (D2) e validação (D3–D5) da planilha.
 from backend.planilha import ler_preenchimento, obter_dominios, PlanilhaInvalida, _MODELO_PADRAO
 from backend.validacao import validar
@@ -409,3 +411,54 @@ def contexto(operador=Depends(usuario_do_token)):
     ucs_por_contrato = {numero: len(pares) for numero, pares in referencia.chaves_uc.items()}
     # Fase 3/Saída: contexto filtrado pelo grupo do operador do token.
     return montar_contexto(operador, base["contratos"], ucs_por_contrato)
+
+
+@app.get("/api/versao")
+def versao():
+    """Versão no ar e data da última atualização, para o rodapé (aberta).
+
+    Por que esta rota existe: até 02/10/2026 o rodapé exibia uma constante escrita no código
+    do front (`VERSAO_APP`), que só mudava se alguém lembrasse de editá-la — e ficou quase
+    dois meses parada em `V0.0.0804`, justamente o que o rodapé existia para evitar. Agora o
+    dado vem de `controle_versao/historico.json`, a fonte única da história do projeto, lido
+    do disco a cada pedido: publicar um JSON novo vale na requisição seguinte, sem
+    reconstruir o site.
+
+    ⚠️ **Aberta, e por isso mínima.** O rodapé aparece na tela de login, antes de qualquer
+    autenticação — tudo o que esta rota devolve é público para a internet. Então sai só a
+    versão, a data e o esquema. A narrativa do histórico (incidentes, riscos aceitos, nomes
+    de arquivo e de commit) fica na rota protegida abaixo.
+
+    Entrada: nenhuma.
+    Fase 1: lê o histórico do disco.
+    Fase 2: recorta o resumo público.
+    Saída: `{versao, data, esquema}`; 503 com motivo se o arquivo não puder ser lido.
+    """
+    # Fase 1: leitura. Arquivo ausente/quebrado é problema de publicação, não do visitante —
+    # 503 ("serviço indisponível") diz isso, e o detalhe aparece na tela de quem opera.
+    try:
+        documento = ler_historico()
+    except HistoricoIndisponivel as erro:
+        raise HTTPException(status_code=503, detail=str(erro))
+    # Fase 2/Saída: só o que pode ser público.
+    return resumo_publico(documento)
+
+
+@app.get("/api/versao/historico")
+def versao_historico(operador=Depends(usuario_do_token)):
+    """Histórico completo em fases e sub-fases (protegida).
+
+    Por que separada da rota aberta: este documento conta a história por dentro — incidentes
+    de produção, decisões de segurança e um risco explicitamente aceito. É material de quem
+    opera o sistema, não de quem só abre a tela de login. Serve à futura página de evolução,
+    que vive dentro da área autenticada.
+
+    Entrada: `operador` (do token, injetado pelo guard).
+    Fase 1: lê o histórico do disco.
+    Saída: o documento inteiro como está no arquivo; 503 com motivo se não puder ser lido.
+    """
+    # Fase 1/Saída: mesma leitura, sem recorte — quem chegou aqui está autenticado.
+    try:
+        return ler_historico()
+    except HistoricoIndisponivel as erro:
+        raise HTTPException(status_code=503, detail=str(erro))

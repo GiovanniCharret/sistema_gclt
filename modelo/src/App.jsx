@@ -12,18 +12,55 @@ import SucessoEnvio from "./components/SucessoEnvio";
 import { descreverContrato } from "./seedData";
 import * as api from "./lib/api";
 
-// Versão do produto exibida no rodapé (canto esquerdo) — marcador visível do deploy:
-// serve para conferir no navegador qual versão está no ar. Atualizar a cada release.
-const VERSAO_APP = "V0.0.0804";
+// Formata a data ISO que vem do backend (2026-10-02) no padrão brasileiro (02/10/2026).
+// Por que aqui e não no backend: a rota devolve ISO porque é o formato que ordena e que
+// qualquer consumidor entende; a apresentação é decisão da tela.
+function formatarDataBr(iso) {
+  // Sem data (arquivo antigo, sem o bloco derivado), não há o que formatar.
+  if (!iso || iso.length < 10) return "";
+  // Fatia em vez de `new Date`: `new Date("2026-10-02")` é interpretada como UTC e, em
+  // fuso negativo, exibiria o dia anterior.
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+}
 
 // Rodapé único do app, com a versão no canto esquerdo. Nas telas de entrada (login,
 // menu, seleção de UF/contrato) vai FIXO ao pé da janela — elas centralizam o conteúdo
 // em tela cheia (.auth-shell) e não têm footer no fluxo; no shell logado entra no fluxo
 // normal da página, como sempre.
 function Rodape({ fixo = false }) {
+  // Versão e data da última atualização vêm do backend (GET /api/versao), que lê
+  // `controle_versao/historico.json` do disco a cada pedido. Antes era constante no código:
+  // exibia V0.0.0804 desde 04/08/2026 enquanto o histórico já ia em outubro — ou seja, o
+  // rodapé mentia justamente sobre o que existia para informar.
+  const [versao, setVersao] = useState(null);
+
+  useEffect(() => {
+    // `vivo` evita escrever estado depois que o componente saiu da tela (o rodapé é
+    // desmontado a cada troca de passo do fluxo).
+    let vivo = true;
+    api
+      .versao()
+      .then((r) => {
+        // Só aceita resposta completa: 503 (arquivo não publicado) deixa o rodapé sem
+        // versão, que é melhor do que exibir um número inventado ou velho.
+        if (vivo && r.ok && r.dados && r.dados.versao) setVersao(r.dados);
+      })
+      // Falha de rede não pode derrubar a tela por causa do rodapé.
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  // Enquanto não chega (ou se não vier), mostra só o nome do produto — sem versão falsa.
+  const data = versao ? formatarDataBr(versao.data) : "";
+  const etiqueta = versao
+    ? `${versao.versao}${data ? ` · atualizado em ${data}` : ""} · Monitoramento dos Beneficiários do Programa`
+    : "Monitoramento dos Beneficiários do Programa";
+
   return (
     <footer className={fixo ? "app-footer is-fixo" : "app-footer"}>
-      <span>{VERSAO_APP} · Monitoramento dos Beneficiários do Programa</span>
+      <span>{etiqueta}</span>
       <span>Programa Luz para Todos · MME · ENBPar</span>
     </footer>
   );

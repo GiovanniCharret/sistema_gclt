@@ -57,6 +57,15 @@ export function contexto(token) {
   return getJson("/contexto", token);
 }
 
+// GET /api/versao — { versao, data, esquema } (rota ABERTA, sem token).
+//
+// Aberta de propósito: o rodapé aparece na tela de login, antes de existir token. Por isso o
+// backend devolve só esses três campos — a narrativa do histórico (fases, incidentes) fica na
+// rota protegida /api/versao/historico, que esta camada ainda não consome.
+export function versao() {
+  return getJson("/versao");
+}
+
 // POST /api/validar — envia o arquivo real (multipart) + contrato/uf; devolve o painel.
 // Não define Content-Type: o browser monta o boundary do multipart automaticamente.
 export async function validar(token, arquivo, contrato, uf) {

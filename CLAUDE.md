@@ -52,7 +52,10 @@ Nginx at **`/api`** (Docker compose on Azure; the Hostinger test bed runs native
 - **`app.py`** — the ASGI `app`; dev CORS (Vite :5175); all routes:
   `GET /api/health`, `POST /api/login`, `POST /api/trocar-senha`,
   `POST /api/esqueci-senha`, `POST /api/validar` (multipart upload → painel),
-  `GET /api/modelo` (download the official model), `GET /api/contexto` (grupo → UFs/contratos).
+  `GET /api/modelo` (download the official model), `GET /api/contexto` (grupo → UFs/contratos),
+  **`GET /api/versao`** (open, minimal: `{versao, data, esquema}`) and
+  **`GET /api/versao/historico`** (protected, the whole history) — see
+  "`controle_versao/`" below.
 - **`auth.py`** — real login/senha; signed token on protected routes; first-access
   password change; self-service reset. **Login is by `operador`, not by e-mail** (see
   below). `admin_usuarios.py` is the CLI that provisions users
@@ -491,6 +494,41 @@ reloads on mtime). Each entry is keyed by the contract number and carries:
 build the **dead** `CONTRATOS`/`UFS`/`contratosDaUf` exports (see above). **Do not sync it**
 — the real contract list reaches the front through `/api/contexto`. It is removable along
 with the rest of the mock vestiges.
+
+### `controle_versao/` — the product history, and what feeds the footer
+
+**`controle_versao/historico.json` is the single source** of the project's history (9 phases,
+44 sub-phases as of 2026-10-02) and of the version string the footer shows. Read by
+**`backend/versao.py`** — **from disk on every request, no cache** (the file is tens of KB and
+the route is hit once per screen load, so caching would buy nothing and would raise "why
+didn't the screen update?"). Editing the JSON and deploying counts on the next request; no
+rebuild of the front.
+
+- **Two routes, two different recortes, on purpose.** `GET /api/versao` is **open** and returns
+  **only** `{versao, data, esquema}` — because the footer renders **on the login screen**, so
+  everything it shows is public to the internet. `GET /api/versao/historico` is **protected**
+  (`usuario_do_token`) and returns the whole document, for the planned evolution page.
+  ⚠️ The full history narrates production incidents and carries an entry that **describes an
+  accepted risk** (the old `esqueci-senha`); it must never move to the open route. Two tests
+  pin that boundary (`backend/tests/test_versao.py`): the public payload has exactly three
+  keys, and no narrative string appears in it.
+- **The file lives OUTSIDE `backend/`** — a dependency that is easy to forget. It rides into the
+  Docker image through `COPY . .` (dev's `.dockerignore` does not exclude it; production has
+  none). If it is missing or unreadable, both routes answer **503 naming the path** — a
+  deliberate choice over a mute 500, since there is no terminal on the VM.
+- **Editing happens in the dev repo**: `historico.json` + `atualizar.py` (validates the file,
+  recomputes the derived fields, regenerates `HISTORICO.md`) + `LEIA-ME.md`. **Production gets
+  only `historico.json`, copied by hand**, like every other cross-repo change. The derived
+  fields (`versao_app`, `ultima_atualizacao`, `contadores`) are never hand-written — that is
+  what keeps the footer from showing a stale date.
+- **The footer reads the route since 2026-10-02** (`Rodape` in `modelo/src/App.jsx`, both
+  repos): it fetches `api.versao()` on mount and renders
+  `V0.0.1002 · atualizado em 02/10/2026 · Monitoramento dos Beneficiários do Programa`.
+  **`VERSAO_APP` is gone** — there is no longer a place where the version can go stale. On
+  503 or a network failure the footer shows only the product name, **never a stale number**;
+  that silence is the point. `formatarDataBr` slices the ISO string instead of using
+  `new Date`, which would shift the day in a negative timezone. Checked in a browser against
+  the running backend (login screen, visual unchanged).
 
 ### The official model file is VERSIONED
 

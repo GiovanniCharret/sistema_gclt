@@ -1,0 +1,516 @@
+{
+  "esquema": "1.0",
+  "produto": {
+    "nome": "Classificação de Beneficiários do Programa",
+    "subtitulo": "Anexo V — Painel de Monitoramento",
+    "orgao": "Programa Luz para Todos / MME / ENBPar",
+    "producao": "https://monitoramentolpt.enbpar.gov.br"
+  },
+  "gerado_em": "2026-10-02",
+  "versao_app": "V0.0.1002",
+  "ultima_atualizacao": {
+    "data": "2026-10-02",
+    "fase": "F9",
+    "subfase": "F9.3",
+    "titulo": "O rodapé passa a ler a versão do backend",
+    "resumo": "A versão exibida deixou de ser uma constante escrita no código do front e passa a vir de `GET /api/versao`, que lê este arquivo do disco a cada pedido. O rodapé agora mostra a versão e a data da última atualização."
+  },
+  "contadores": {
+    "fases": 9,
+    "subfases": 45,
+    "primeira_data": "2026-06-23",
+    "ultima_data": "2026-10-02"
+  },
+  "legenda_tipos": {
+    "entrega": "Funcionalidade nova, disponível para quem usa o sistema",
+    "decisao": "Escolha de rumo registrada, com o motivo",
+    "correcao": "Defeito encontrado e consertado",
+    "incidente": "Algo quebrou em produção; fica registrado para não repetir",
+    "seguranca": "Redução de risco (segredo, permissão, exposição)",
+    "infra": "Servidor, banco, rede, publicação",
+    "dados": "Base de referência e cadastros"
+  },
+  "fases": [
+    {
+      "id": "F1",
+      "nome": "Origem: o mock estático aprovado",
+      "periodo": {
+        "inicio": "2026-06-23",
+        "fim": "2026-06-27"
+      },
+      "estado": "concluida",
+      "resumo": "O projeto nasceu como uma tela sem backend, para os gestores aprovarem o fluxo antes de existir validação de verdade. Aprovado o visual, foi autorizado a virar um sistema real.",
+      "subfases": [
+        {
+          "id": "F1.1",
+          "data": "2026-06-23",
+          "tipo": "entrega",
+          "titulo": "Primeiro commit: tela em React com validação simulada",
+          "resumo": "Front em React/Vite com o fluxo inteiro na tela (do login ao painel), mas sem backend: os resultados eram dados fixos, escritos à mão.",
+          "fonte": "commit d5be114"
+        },
+        {
+          "id": "F1.2",
+          "data": "2026-06-26",
+          "tipo": "decisao",
+          "titulo": "Plano do backend finalizado",
+          "resumo": "Especificação de desenho do backend fechada (blocos A a G) antes de escrever código — foi o documento que guiou toda a V0.",
+          "fonte": "planning/specs/2026-06-26-design.md; commit 23899d6"
+        },
+        {
+          "id": "F1.3",
+          "data": "2026-06-27",
+          "tipo": "decisao",
+          "titulo": "Aprovação para virar backend real",
+          "resumo": "O mock é aprovado e autorizado a se tornar aplicação funcional. Resíduos daquela fase sobrevivem no código como material morto (ex.: seedData.js).",
+          "fonte": "planning/PLAN.md"
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "nome": "V0: o sistema real entra no ar",
+      "periodo": {
+        "inicio": "2026-06-30",
+        "fim": "2026-07-07"
+      },
+      "estado": "concluida",
+      "resumo": "Em pouco mais de uma semana o backend passou a existir de verdade: login, filtro de acesso por empresa, validação da planilha contra a base de referência e envio do arquivo por e-mail. Entregue como V0, com etiqueta `v0` no histórico do código.",
+      "subfases": [
+        {
+          "id": "F2.1",
+          "data": "2026-06-30",
+          "tipo": "entrega",
+          "titulo": "Primeira fase do backend pronta",
+          "resumo": "Estrutura do FastAPI no ar, com as camadas separadas: referência, acesso, leitura da planilha e validação.",
+          "fonte": "commit b278945"
+        },
+        {
+          "id": "F2.2",
+          "data": "2026-07-01",
+          "tipo": "entrega",
+          "titulo": "Login, senha e envio de e-mail",
+          "resumo": "Autenticação real (senha guardada como resumo criptográfico com sal, sessão assinada), troca obrigatória no primeiro acesso e os quatro tipos de e-mail do sistema.",
+          "fonte": "commits 7b9b0d5, 950d959"
+        },
+        {
+          "id": "F2.3",
+          "data": "2026-07-07",
+          "tipo": "entrega",
+          "titulo": "V0 entregue e no ar em gerenciador-gclt.com",
+          "resumo": "Produto completo em produção: fluxo de sete telas, validação real contra a base de referência, painel de inconsistências e relatório .csv baixado no navegador. 101 testes automatizados passando.",
+          "impacto": "Primeira versão usável pelas sete empresas.",
+          "fonte": "planning/VERSOES.md; etiqueta v0"
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "nome": "As regras de validação endurecem",
+      "periodo": {
+        "inicio": "2026-07-08",
+        "fim": "2026-07-22"
+      },
+      "estado": "concluida",
+      "resumo": "Com o sistema em uso, cada planilha real revelou uma regra frouxa. Esta fase é uma sequência de decisões sobre o que bloqueia o envio (erro) e o que apenas avisa.",
+      "subfases": [
+        {
+          "id": "F3.1",
+          "data": "2026-07-09",
+          "tipo": "decisao",
+          "titulo": "Regra da data de energização removida",
+          "resumo": "Exigir que a data caísse em 2026 recusava planilha legítima. Qualquer data passou a ser aceita; data em branco continua erro.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.2",
+          "data": "2026-07-09",
+          "tipo": "decisao",
+          "titulo": "A coluna “0 - Não é prioridade” passa a bloquear",
+          "resumo": "Duas cláusulas viraram erro: se a coluna é “Sim”, nenhuma outra tipologia pode estar marcada; se é “Não”, ao menos uma precisa estar.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.3",
+          "data": "2026-07-09",
+          "tipo": "decisao",
+          "titulo": "O arquivo-modelo passa a ter versão no nome",
+          "resumo": "O .xlsx oficial ganhou a data no nome, para nunca haver dúvida sobre qual versão o sistema serve e valida.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.4",
+          "data": "2026-07-14",
+          "tipo": "decisao",
+          "titulo": "A coluna “0” em branco vira erro",
+          "resumo": "Fechou o buraco da linha sem nada marcado, que até então passava em silêncio.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.5",
+          "data": "2026-07-15",
+          "tipo": "decisao",
+          "titulo": "Maiúsculas deixam de importar; acentos continuam importando",
+          "resumo": "“SIM” passou a valer como “Sim”. Já “NAO” sem acento segue inválido: o acento é parte do vocabulário do modelo oficial.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.6",
+          "data": "2026-07-15",
+          "tipo": "decisao",
+          "titulo": "Município e UF comparados por forma canônica",
+          "resumo": "“RORAINÓPOLIS” e “RORAINOPOLIS” passaram a ser o mesmo nome, e a sigla “AP” equivale a “Amapá”. Ruído de acento e espaço parou de gerar erro falso.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.7",
+          "data": "2026-07-15",
+          "tipo": "decisao",
+          "titulo": "Login por “operador” (solução temporária)",
+          "resumo": "O login por e-mail foi adiado; entrou um identificador por empresa, como `equatorialenergia` ou `energisa`. Decisão registrada como provisória.",
+          "impacto": "É esta solução que o login canônico, em outubro, veio substituir.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F3.8",
+          "data": "2026-07-22",
+          "tipo": "decisao",
+          "titulo": "Mensagens de erro passam a dizer o porquê",
+          "resumo": "Em vez de uma recusa genérica, a tela mostra o motivo concreto: qual empresa é dona do contrato, ou que o contrato não tem base de referência carregada.",
+          "fonte": "planning/PLAN.md"
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "nome": "Entrega à empresa e mudança para a Azure",
+      "periodo": {
+        "inicio": "2026-07-16",
+        "fim": "2026-07-20"
+      },
+      "estado": "concluida",
+      "resumo": "O projeto deixou de ser só do desenvolvedor: passou a ter um repositório da empresa, operado pela TI, e a produção migrou da VPS para a nuvem da Azure, em contêineres.",
+      "subfases": [
+        {
+          "id": "F4.1",
+          "data": "2026-07-17",
+          "tipo": "decisao",
+          "titulo": "Documentos internos saem do código entregue",
+          "resumo": "O diário de bordo do projeto passou a ficar só na máquina local: a empresa recebe o sistema, não o registro de trabalho. Ele continua existindo e sendo escrito.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F4.2",
+          "data": "2026-07-20",
+          "tipo": "infra",
+          "titulo": "Produção passa a ser Azure com Docker, e o deploy fica automático",
+          "resumo": "Dois contêineres (a API e o site) numa máquina da Azure. A partir daqui, publicar código na linha principal dispara a atualização do ar sozinho.",
+          "impacto": "Ganho de automação e, no mesmo movimento, o risco de publicar sem querer.",
+          "fonte": "planning/PLAN.md; DEPLOY_AZURE.md"
+        }
+      ]
+    },
+    {
+      "id": "F5",
+      "nome": "Segunda rodada de regras e novos modelos oficiais",
+      "periodo": {
+        "inicio": "2026-07-29",
+        "fim": "2026-08-28"
+      },
+      "estado": "concluida",
+      "resumo": "O Ministério mudou o modelo duas vezes, e as regras de coerência entre colunas ganharam a forma final. Entrou também o marcador de versão no rodapé do site.",
+      "subfases": [
+        {
+          "id": "F5.1",
+          "data": "2026-07-29",
+          "tipo": "decisao",
+          "titulo": "Tipo de comunidade exige a família correspondente",
+          "resumo": "Comunidade indígena obriga a marcar a família indígena, e assim por diante. A verificação passou de aviso a erro, e as demais famílias ficaram livres.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F5.2",
+          "data": "2026-07-30",
+          "tipo": "decisao",
+          "titulo": "Coordenadas dentro do Brasil e sem repetição",
+          "resumo": "Coordenada fora da faixa do país virou aviso; o mesmo par de coordenadas em duas linhas virou erro, porque duas casas não ocupam o mesmo ponto.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F5.3",
+          "data": "2026-07-30",
+          "tipo": "decisao",
+          "titulo": "Nenhuma célula em branco numa linha preenchida",
+          "resumo": "Todas as colunas de identificação e as 51 de tipologia passaram a ser obrigatórias. O achado sai uma vez por linha, nomeando as colunas vazias.",
+          "impacto": "Uma ocorrência por célula daria 9.310 achados numa planilha real de 490 linhas.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F5.4",
+          "data": "2026-08-04",
+          "tipo": "entrega",
+          "titulo": "O rodapé passa a mostrar a versão do produto",
+          "resumo": "Nasceu da dificuldade de saber se um deploy tinha de fato acontecido: o rodapé exibe `V0.0.0804`, atualizada a cada liberação.",
+          "impacto": "É exatamente o lugar que este controle de versão vem alimentar.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F5.5",
+          "data": "2026-08-04",
+          "tipo": "correcao",
+          "titulo": "Resolvido o bug “a senha se perde”",
+          "resumo": "Em produção, senhas trocadas voltavam ao padrão. Causa confirmada: cada publicação substituía o arquivo de usuários pelo que vinha do repositório.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F5.6",
+          "data": "2026-08-28",
+          "tipo": "decisao",
+          "titulo": "Nova coluna CPF/CNPJ no modelo oficial",
+          "resumo": "O Ministério acrescentou a coluna no fim da planilha (de 52 para 53). Regra única: não pode ficar vazia — sem máscara e sem dígito verificador.",
+          "fonte": "planning/PLAN.md"
+        }
+      ]
+    },
+    {
+      "id": "F6",
+      "nome": "“Dado novo” deixa de bloquear o envio",
+      "periodo": {
+        "inicio": "2026-09-16",
+        "fim": "2026-09-23"
+      },
+      "estado": "concluida",
+      "resumo": "O sistema legado que alimenta a base de referência quebrou, e unidades recém-energizadas passaram a ser recusadas. A saída foi aceitar o dado novo como aviso, sob condição — e a condição teve de ser corrigida depois.",
+      "subfases": [
+        {
+          "id": "F6.1",
+          "data": "2026-09-16",
+          "tipo": "decisao",
+          "titulo": "Unidade nova entra como aviso, não como erro",
+          "resumo": "Criada uma chave de configuração que transforma “não consta na referência” de erro em aviso, enquanto a base não é atualizada.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F6.2",
+          "data": "2026-09-21",
+          "tipo": "incidente",
+          "titulo": "Base publicada no lugar errado deixou um contrato recusando envio",
+          "resumo": "Os dados diários foram para o ramo de desenvolvimento em vez da linha principal; a produção respondeu “contrato sem base” até a correção.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F6.3",
+          "data": "2026-09-22",
+          "tipo": "decisao",
+          "titulo": "O aviso passa a ser a regra",
+          "resumo": "Antes era exceção ligada caso a caso; virou o comportamento padrão do sistema. Voltar ao erro passou a exigir decisão explícita.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F6.4",
+          "data": "2026-09-23",
+          "tipo": "correcao",
+          "titulo": "A condição passa a ser medida por ODI, não pelo contrato inteiro",
+          "resumo": "A primeira versão exigia que a planilha trouxesse todas as unidades já cadastradas do contrato — impossível numa planilha mensal de 5 unidades contra uma base de 11.928. Passou a valer por ODI, mantendo a proteção contra erro de digitação.",
+          "impacto": "A planilha do chamado foi de 5 erros para 0 erros e 5 avisos.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F6.5",
+          "data": "2026-09-23",
+          "tipo": "decisao",
+          "titulo": "Banco único (MySQL), e proibido inventar outro",
+          "resumo": "Ficou vedado ao sistema criar um banco alternativo em arquivo local: sem conexão com o MySQL, ele falha com mensagem em vez de abrir um banco vazio onde ninguém vai procurar.",
+          "fonte": "planning/PLAN.md"
+        }
+      ]
+    },
+    {
+      "id": "F7",
+      "nome": "A primeira tentativa de trocar o login, e o que ela ensinou",
+      "periodo": {
+        "inicio": "2026-09-28",
+        "fim": "2026-09-29"
+      },
+      "estado": "concluida",
+      "resumo": "O login por e-mail com perfis foi levado à produção e teve de ser revertido no mesmo dia. A causa não era o código: era configuração ausente e um deploy que ficou congelado sem avisar. Dois dias que redesenharam o processo.",
+      "subfases": [
+        {
+          "id": "F7.1",
+          "data": "2026-09-28",
+          "tipo": "incidente",
+          "titulo": "Reversão: o endereço do banco nunca existiu onde a produção lê",
+          "resumo": "Os dados do banco tinham sido digitados no servidor de teste, que é outra máquina. Todas as rotas de identidade responderam erro.",
+          "fonte": "planning/PLAN.md (post-mortem)"
+        },
+        {
+          "id": "F7.2",
+          "data": "2026-09-28",
+          "tipo": "incidente",
+          "titulo": "Uma edição manual no servidor congelou todos os deploys",
+          "resumo": "A atualização morria em 8 segundos sem tocar no site, que seguia servindo a versão anterior. Nem a reversão chegou ao ar. O único sinal estava no painel de automação.",
+          "impacto": "Regra que saiu daqui: o deploy não é a publicação do código, é o que a máquina efetivamente puxa — conferir o painel antes de concluir qualquer coisa.",
+          "fonte": "planning/PLAN.md (post-mortem)"
+        },
+        {
+          "id": "F7.3",
+          "data": "2026-09-28",
+          "tipo": "correcao",
+          "titulo": "O deploy passa a sobrescrever o servidor, sem pedir licença",
+          "resumo": "A máquina de produção passou a ser forçada a ficar idêntica à linha principal, e edição manual lá é descartada — política que já estava implícita no desenho.",
+          "fonte": "commit 339f98f"
+        },
+        {
+          "id": "F7.4",
+          "data": "2026-09-29",
+          "tipo": "correcao",
+          "titulo": "“Planilha enviada.” era mentira em produção",
+          "resumo": "A configuração publicada mantinha o envio em modo de ensaio: operadores das sete empresas viam sucesso e nada era entregue. Agora, se o envio não acontece e o modo de ensaio está desligado, a tela mostra o erro.",
+          "impacto": "Falha silenciosa — a pior categoria: ninguém investiga o que parece ter dado certo.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F7.5",
+          "data": "2026-09-29",
+          "tipo": "decisao",
+          "titulo": "Dados de negócio do e-mail saem do arquivo de segredos",
+          "resumo": "Servidor, remetente e lista de destinatários foram para um arquivo de parâmetros, lido a cada requisição. Trocar um destinatário deixou de exigir uma nova publicação.",
+          "fonte": "commit 0639c0c"
+        }
+      ]
+    },
+    {
+      "id": "F8",
+      "nome": "O login canônico entra, e a segurança é endurecida",
+      "periodo": {
+        "inicio": "2026-10-01",
+        "fim": "2026-10-01"
+      },
+      "estado": "concluida",
+      "resumo": "Um único dia, com os pré-requisitos do post-mortem cumpridos um a um, terminando no merge bem-sucedido: a produção passou a ter login por e-mail corporativo com perfis, sobre o MySQL.",
+      "subfases": [
+        {
+          "id": "F8.1",
+          "data": "2026-10-01",
+          "tipo": "decisao",
+          "titulo": "Dados do banco saem do arquivo de segredos",
+          "resumo": "No arquivo de segredos ficou só a senha; o resto foi para um arquivo de parâmetros, como fonte única. A variável antiga deixou de ser lida.",
+          "fonte": "commit c7a811a"
+        },
+        {
+          "id": "F8.2",
+          "data": "2026-10-01",
+          "tipo": "seguranca",
+          "titulo": "Auditoria de segurança das três linhas de código",
+          "resumo": "Conclusão: as falhas típicas de desenvolvimento apressado não são o problema deste projeto. Os furos reais são os segredos versionados no repositório.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F8.3",
+          "data": "2026-10-01",
+          "tipo": "seguranca",
+          "titulo": "O sistema deixa de criar tabela sozinho",
+          "resumo": "Antes, a primeira pessoa a usar o login criava as tabelas do banco. Agora o sistema apenas confere e reclama se faltar; criar virou comando rodado por uma pessoa, de propósito.",
+          "impacto": "Tirou comandos de estrutura de banco do caminho do tráfego do site.",
+          "fonte": "commit 2766378"
+        },
+        {
+          "id": "F8.4",
+          "data": "2026-10-01",
+          "tipo": "seguranca",
+          "titulo": "Diagnóstico pelo navegador, sem expor dado nenhum",
+          "resumo": "A página pública de saúde ficou mínima; o diagnóstico detalhado e o estado do banco passaram a exigir credencial. Sem terminal na máquina, é a única janela disponível.",
+          "fonte": "commits 7dac0d1, c5869a3"
+        },
+        {
+          "id": "F8.5",
+          "data": "2026-10-01",
+          "tipo": "seguranca",
+          "titulo": "Sem chave de assinatura, o sistema não sobe",
+          "resumo": "Havia uma chave de exemplo embutida no código: sem configuração, o sistema assinava as sessões com um valor que qualquer pessoa com acesso ao repositório conhece. Agora ele falha na partida.",
+          "fonte": "commit 8f229b0"
+        },
+        {
+          "id": "F8.6",
+          "data": "2026-10-01",
+          "tipo": "seguranca",
+          "titulo": "Segredos deixam de aparecer em mensagem de erro",
+          "resumo": "Os três segredos passaram a ser objetos que se imprimem mascarados. Fechou um vazamento real, não hipotético: um erro de teste chegou a imprimir a chave inteira na tela.",
+          "fonte": "commit 4eb73e9"
+        },
+        {
+          "id": "F8.7",
+          "data": "2026-10-01",
+          "tipo": "decisao",
+          "titulo": "O “esqueci minha senha” antigo NÃO será consertado",
+          "resumo": "Ele reinicia a senha de qualquer operador para um valor público, sem autenticação. Decisão consciente: o login por operador será descontinuado, e existe uma chave que o desliga por inteiro.",
+          "impacto": "Risco aceito e registrado, para ninguém “consertar” sem pedido.",
+          "fonte": "planning/PLAN.md"
+        },
+        {
+          "id": "F8.8",
+          "data": "2026-10-01",
+          "tipo": "entrega",
+          "titulo": "Merge concluído: login por e-mail e perfis em produção",
+          "resumo": "Na segunda tentativa, com o banco conferido e a configuração no lugar certo, o login canônico entrou na linha principal e foi publicado.",
+          "impacto": "A produção passou a autenticar por e-mail corporativo, com perfis e auditoria.",
+          "fonte": "merge 2a382d0"
+        },
+        {
+          "id": "F8.9",
+          "data": "2026-10-01",
+          "tipo": "infra",
+          "titulo": "Banco de produção inspecionado, e o firewall liberado",
+          "resumo": "Leitura pura do MySQL: as três tabelas existem, nenhuma de outro sistema, a conexão sai cifrada e o primeiro gerente já existe. O firewall foi liberado para a máquina de produção e para a estação de trabalho.",
+          "fonte": "planning/PLAN.md (inspeção)"
+        },
+        {
+          "id": "F8.10",
+          "data": "2026-10-01",
+          "tipo": "decisao",
+          "titulo": "O servidor de homologação é encerrado",
+          "resumo": "A VPS de teste sai do ar com o merge bem-sucedido e será reformatada, voltando em fases futuras, quando houver função nova para homologar.",
+          "fonte": "planning/PLAN.md"
+        }
+      ]
+    },
+    {
+      "id": "F9",
+      "nome": "Depois do merge: o e-mail de acesso e o controle de versão",
+      "periodo": {
+        "inicio": "2026-10-01",
+        "fim": null
+      },
+      "estado": "em_andamento",
+      "resumo": "Com o login novo no ar, apareceu o primeiro defeito de uso real — e começou o registro formal da história do projeto.",
+      "subfases": [
+        {
+          "id": "F9.1",
+          "data": "2026-10-01",
+          "tipo": "correcao",
+          "titulo": "O e-mail de criação de senha não saía",
+          "resumo": "O convite era gravado no banco e o e-mail nunca chegava, enquanto o e-mail da planilha funcionava. O remetente do convite vinha do arquivo de segredos, que havia perdido essa chave em 29/09 — valia então um endereço de domínio inexistente, que o servidor de e-mail não autoriza.",
+          "impacto": "Cadastro e recuperação de senha estavam inutilizáveis desde o merge.",
+          "fonte": "commit 80e2634"
+        },
+        {
+          "id": "F9.2",
+          "data": "2026-10-02",
+          "tipo": "entrega",
+          "titulo": "Pasta `controle_versao/` criada",
+          "resumo": "A história do projeto passa a ter registro próprio, em fases e sub-fases, com um arquivo legível por máquina para o rodapé do site mostrar a última atualização.",
+          "fonte": "controle_versao/"
+        },
+        {
+          "id": "F9.3",
+          "data": "2026-10-02",
+          "tipo": "entrega",
+          "titulo": "O rodapé passa a ler a versão do backend",
+          "resumo": "A versão exibida deixou de ser uma constante escrita no código do front e passa a vir de `GET /api/versao`, que lê este arquivo do disco a cada pedido. O rodapé agora mostra a versão e a data da última atualização.",
+          "impacto": "Fecha o que a F5.4 abriu em 04/08: o rodapé volta a ser marcador confiável de deploy — estava parado em V0.0.0804 havia dois meses.",
+          "fonte": "backend/versao.py; modelo/src/App.jsx"
+        }
+      ]
+    }
+  ]
+}
