@@ -11,13 +11,13 @@
   "ultima_atualizacao": {
     "data": "2026-10-02",
     "fase": "F9",
-    "subfase": "F9.3",
-    "titulo": "O rodapé passa a ler a versão do backend",
-    "resumo": "A versão exibida deixou de ser uma constante escrita no código do front e passa a vir de `GET /api/versao`, que lê este arquivo do disco a cada pedido. O rodapé agora mostra a versão e a data da última atualização."
+    "subfase": "F9.5",
+    "titulo": "Regra nova: equipamento público exige um e só um tipo",
+    "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das três colunas do grupo V — escola, unidade de saúde ou poço de água — deve estar marcada. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade."
   },
   "contadores": {
     "fases": 9,
-    "subfases": 45,
+    "subfases": 47,
     "primeira_data": "2026-06-23",
     "ultima_data": "2026-10-02"
   },
@@ -509,6 +509,24 @@
           "resumo": "A versão exibida deixou de ser uma constante escrita no código do front e passa a vir de `GET /api/versao`, que lê este arquivo do disco a cada pedido. O rodapé agora mostra a versão e a data da última atualização.",
           "impacto": "Fecha o que a F5.4 abriu em 04/08: o rodapé volta a ser marcador confiável de deploy — estava parado em V0.0.0804 havia dois meses.",
           "fonte": "backend/versao.py; modelo/src/App.jsx"
+        },
+        {
+          "id": "F9.4",
+          "data": "2026-10-02",
+          "tipo": "entrega",
+          "titulo": "Área do gerente e trilha de auditoria em produção",
+          "resumo": "Mergeada a branch da fase 2: perfil gerente, tela de administração de contas, trilha de auditoria com filtros e exportação em CSV/PDF, e a rota protegida que lê a trilha. Homologada à mão em setembro, antes de o servidor de teste ser encerrado.",
+          "impacto": "O gerente passa a administrar contas e consultar quem fez o quê, sem depender de ninguém com acesso ao banco.",
+          "fonte": "merge 99a0b44"
+        },
+        {
+          "id": "F9.5",
+          "data": "2026-10-02",
+          "tipo": "decisao",
+          "titulo": "Regra nova: equipamento público exige um e só um tipo",
+          "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das três colunas do grupo V — escola, unidade de saúde ou poço de água — deve estar marcada. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade.",
+          "impacto": "A segunda parte não é detalhe: sem ela a linha ficaria impossível de preencher, com dois erros se contradizendo.",
+          "fonte": "backend/validacao.py"
         }
       ]
     }

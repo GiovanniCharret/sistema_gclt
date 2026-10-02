@@ -8,9 +8,9 @@ Anexo V — Painel de Monitoramento · Programa Luz para Todos / MME / ENBPar
 | | |
 |---|---|
 | Versão exibida no rodapé | **V0.0.1002** |
-| Última atualização | **2026-10-02** — O rodapé passa a ler a versão do backend (F9.3) |
+| Última atualização | **2026-10-02** — Regra nova: equipamento público exige um e só um tipo (F9.5) |
 | Período coberto | 2026-06-23 a 2026-10-02 |
-| Tamanho | 9 fases, 45 sub-fases |
+| Tamanho | 9 fases, 47 sub-fases |
 | Produção | https://monitoramentolpt.enbpar.gov.br |
 
 ## Como ler
@@ -151,3 +151,5 @@ Com o login novo no ar, apareceu o primeiro defeito de uso real — e começou o
 | 2026-10-01 | Correção | **O e-mail de criação de senha não saía** — O convite era gravado no banco e o e-mail nunca chegava, enquanto o e-mail da planilha funcionava. O remetente do convite vinha do arquivo de segredos, que havia perdido essa chave em 29/09 — valia então um endereço de domínio inexistente, que o servidor de e-mail não autoriza. *Cadastro e recuperação de senha estavam inutilizáveis desde o merge.* |
 | 2026-10-02 | Entrega | **Pasta `controle_versao/` criada** — A história do projeto passa a ter registro próprio, em fases e sub-fases, com um arquivo legível por máquina para o rodapé do site mostrar a última atualização. |
 | 2026-10-02 | Entrega | **O rodapé passa a ler a versão do backend** — A versão exibida deixou de ser uma constante escrita no código do front e passa a vir de `GET /api/versao`, que lê este arquivo do disco a cada pedido. O rodapé agora mostra a versão e a data da última atualização. *Fecha o que a F5.4 abriu em 04/08: o rodapé volta a ser marcador confiável de deploy — estava parado em V0.0.0804 havia dois meses.* |
+| 2026-10-02 | Entrega | **Área do gerente e trilha de auditoria em produção** — Mergeada a branch da fase 2: perfil gerente, tela de administração de contas, trilha de auditoria com filtros e exportação em CSV/PDF, e a rota protegida que lê a trilha. Homologada à mão em setembro, antes de o servidor de teste ser encerrado. *O gerente passa a administrar contas e consultar quem fez o quê, sem depender de ninguém com acesso ao banco.* |
+| 2026-10-02 | Decisão | **Regra nova: equipamento público exige um e só um tipo** — Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das três colunas do grupo V — escola, unidade de saúde ou poço de água — deve estar marcada. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade. *A segunda parte não é detalhe: sem ela a linha ficaria impossível de preencher, com dois erros se contradizendo.* |

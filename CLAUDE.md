@@ -183,6 +183,19 @@ the tipologias are free (all "Não" is valid), which required exempting those ro
 **unsatisfiable** (N=0 → O="Sim" → clause 1 forces every tipologia to "Não", but M forces
 the family column to "Sim") — the operator must change M or N.
 
+**Enquadramento de EQUIPAMENTO × grupo V (err, since 2026-10-02)** — when N is `8 - Instalações
+de serviços públicos ou infraestruturas públicas`, `9 - Infraestruturas comunitárias`,
+`10 - Espaços coletivos` or `11 - Instalações de apoio e desenvolvimento socioeconômico local`,
+**exactly one** of `V.1 - Escolas` (AF), `V.2 - Unidades de Saúde` (AG) and `V.3 - Poços de água
+comunitários` (AH) must be "Sim" and the other two "Não" — **which one is free**. It is a *count*,
+not a correspondence: unlike M→família, these four enquadramentos do not point at a specific
+column ("9" can be a school, a clinic or a well). Blank counts as unmarked. **One-directional**,
+like M→família: marking `V.1` under another enquadramento triggers nothing (a test pins that
+choice). ⚠️ These four were added to `_ENQUAD_EXIGE_ZERO` **in the same change**, forcing
+O = "Não" — without that, O = "Sim" would make the row **unsatisfiable** (clause 1 demands every
+tipologia "Não" while this rule demands one "Sim"), and the operator would get two contradictory
+errors with no way out. The column names were read from the model file, not typed from memory.
+
 **Tipo de Comunidade × família (err, since 2026-07-29)** — direction M→U:X only, no reverse
 check: when column M is `1 - indígena` / `2 - quilombola` / `3 - ribeirinha` /
 `4 - extrativista`, the **matching** family column must be "Sim" — 1→IV.1 (U), 2→IV.2 (V),

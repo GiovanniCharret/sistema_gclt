@@ -51,6 +51,31 @@ _COMUNIDADE_FAMILIA = {
 # Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
 _COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
 
+# Colunas do grupo V (equipamentos públicos/comunitários), nas posições AF, AG e AH da aba
+# Preenchimento. Os nomes foram CONFERIDOS no modelo oficial, não digitados de memória: um
+# espaço a mais faz a coluna não ser encontrada, e aí o sistema a dá como vazia enquanto a
+# trata como tipologia Sim/Não — foi exatamente isso que aconteceu com "CPF / CNPJ" num
+# Anexo II em 2026-10-02.
+COL_ESCOLA = "V.1 - Escolas"
+COL_SAUDE = "V.2 - Unidades de Saúde"
+COL_POCO = "V.3 - Poços de água comunitários"
+
+# Os três, na ordem da planilha — a regra conta quantos estão "Sim".
+_EQUIPAMENTOS_V = (COL_ESCOLA, COL_SAUDE, COL_POCO)
+
+# Enquadramentos (coluna N) que descrevem um EQUIPAMENTO, e não uma família: quando a UC é
+# um desses, ela é necessariamente um — e só um — tipo de equipamento do grupo V.
+# Pedido do usuário em 2026-10-02.
+_ENQUAD_EQUIPAMENTO = {
+    "8 - Instalações de serviços públicos ou infraestruturas públicas",
+    "9 - Infraestruturas comunitárias",
+    "10 - Espaços coletivos",
+    "11 - Instalações de apoio e desenvolvimento socioeconômico local",
+}
+
+# Versão casefold, porque toda comparação de vocabulário do módulo ignora a caixa.
+_ENQUAD_EQUIPAMENTO_CF = {v.casefold() for v in _ENQUAD_EQUIPAMENTO}
+
 # Enquadramentos (coluna N) que amarram a coluna "0 - Não é prioridade" (O) — pedido dos
 # clientes da planilha em 2026-07-29. Os demais enquadramentos não restringem a coluna O.
 _ENQUAD_CADUNICO = "2 - Famílias inscritas no CadÚnico"
@@ -61,6 +86,14 @@ _ENQUAD_EXIGE_ZERO = {
     _ENQUAD_CADUNICO: "Não",
     # Enquadrado como "não é prioridade" → a coluna "0" tem que ser "Sim" (coerência).
     _ENQUAD_NAO_PRIORIDADE: "Sim",
+    # Equipamento público (8, 9, 10 e 11) é prioridade por definição → "0" = "Não".
+    #
+    # ⚠️ Esta amarração não é preferência de estilo: sem ela a linha ficaria
+    # INSATISFAZÍVEL. Com "0" = "Sim", a cláusula 1 exige TODA tipologia em "Não";
+    # a regra "Enquadramento × equipamento" exige UMA em "Sim". O operador receberia
+    # dois erros que se contradizem e nenhum caminho para sair. Decisão do usuário em
+    # 2026-10-02, ao ver a contradição apontada.
+    **{valor: "Não" for valor in _ENQUAD_EQUIPAMENTO},
 }
 
 # Faixa geográfica aceita para as coordenadas (aviso). Desde 2026-07-30 é a do território
@@ -328,9 +361,10 @@ def regras_formato_dominio(linhas, dominios):
                                     'preencher “Sim” ou “Não” em todas as colunas de tipologia'))
 
         # (erro) Enquadramento (coluna N) × coluna "0 - Não é prioridade" (O) — pedido
-        # dos clientes da planilha em 2026-07-29. Só os enquadramentos "2 - Famílias
-        # inscritas no CadÚnico" e "0 - Não é prioridade" restringem a coluna O; os
-        # demais ficam livres. Comparações ignoram a caixa (via `_eh`).
+        # dos clientes da planilha em 2026-07-29, ampliado em 2026-10-02. Restringem a
+        # coluna O: "2 - CadÚnico" e os quatro de equipamento (8, 9, 10 e 11) exigem
+        # "Não"; "0 - Não é prioridade" exige "Sim". Os demais ficam livres.
+        # Comparações ignoram a caixa (via `_eh`).
         # A antiga "Regra 2" (CadÚnico exigia ao menos um "Sim" em P:AZ) CAIU em
         # 2026-08-04 (fallback, modelo v260804): com CadÚnico as tipologias são livres
         # — ver também a isenção da cláusula 2 do "0", logo acima.
@@ -361,6 +395,31 @@ def regras_formato_dominio(linhas, dominios):
                 achados.append(_achado("err", "Tipologia de família ≠ Tipo de Comunidade", loc, esperada,
                                         f'“{tipo_com}” exige “{esperada}” = “Sim”',
                                         f'preencher “{esperada}” com “Sim”'))
+
+        # (erro) Enquadramento de EQUIPAMENTO (8, 9, 10 ou 11) × o grupo V (AF/AG/AH):
+        # exatamente UMA das três colunas — V.1 Escolas, V.2 Unidades de Saúde, V.3 Poços de
+        # água comunitários — deve estar "Sim", e as outras duas "Não". QUAL delas é livre;
+        # o que a regra exige é a contagem. Pedido do usuário em 2026-10-02.
+        #
+        # Por que contagem, e não correspondência: ao contrário de Tipo de Comunidade → família
+        # (1→IV.1, 2→IV.2…), estes quatro enquadramentos NÃO apontam para uma coluna específica
+        # — "9 - Infraestruturas comunitárias" pode ser escola, posto de saúde ou poço. O que
+        # não pode é a linha ficar sem nenhum equipamento marcado, nem acumular dois na mesma UC.
+        enquad_linha = _txt(linha, COL_ENQUAD)
+        # Só os quatro enquadramentos de equipamento disparam a regra (sem direção reversa:
+        # marcar "V.1 - Escolas" com outro enquadramento não gera achado).
+        if enquad_linha.casefold() in _ENQUAD_EQUIPAMENTO_CF:
+            # Branco conta como não marcado — célula vazia já é cobrada por "Tipologia em branco".
+            marcados = [c for c in _EQUIPAMENTOS_V if _eh(linha, c, "Sim")]
+            if len(marcados) != 1:
+                # Dizer o que está marcado hoje evita que a correção vire adivinhação.
+                atual = ", ".join(f'“{c}”' for c in marcados) if marcados else "nenhuma"
+                achados.append(_achado(
+                    "err", "Enquadramento × equipamento (V.1/V.2/V.3)", loc, COL_ENQUAD,
+                    f'“{enquad_linha}” exige exatamente uma das três colunas do grupo V em '
+                    f'“Sim” (marcadas agora: {atual})',
+                    'assinalar “Sim” em uma só entre “%s”, “%s” e “%s”, e “Não” nas outras duas'
+                    % _EQUIPAMENTOS_V))
 
     # Fase 2: chave ODI+UC duplicada (entre linhas).
     vistos = {}
@@ -519,7 +578,8 @@ _DESCRICOES = {
     "Valor de tipologia ≠ Sim/Não": "Colunas de tipologia aceitam apenas “Sim” ou “Não”",
     "Tipologia em branco": "Toda coluna de tipologia deve conter “Sim” ou “Não” — nenhuma pode ficar vazia",
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
-    "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” exige “Não” e “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
+    "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” e os de equipamento (8, 9, 10 e 11) exigem “Não”; “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
+    "Enquadramento × equipamento (V.1/V.2/V.3)": "Enquadramento 8, 9, 10 ou 11 exige exatamente um “Sim” entre “V.1 - Escolas”, “V.2 - Unidades de Saúde” e “V.3 - Poços de água comunitários” (as outras duas em “Não”)",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 

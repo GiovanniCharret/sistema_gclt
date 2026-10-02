@@ -21,6 +21,13 @@ DOM = {
     "ENQUADRAMENTO_BENEFICIARIO": [
         "0 - Não é prioridade", "1 - Famílias de baixa renda",
         "2 - Famílias inscritas no CadÚnico", "4 - Povos tradicionais",
+        # Os quatro de EQUIPAMENTO (2026-10-02): sem eles no domínio, todo caso da regra
+        # "Enquadramento × equipamento" dispararia junto um "Valor fora do domínio", e o
+        # teste passaria a medir duas regras ao mesmo tempo.
+        "8 - Instalações de serviços públicos ou infraestruturas públicas",
+        "9 - Infraestruturas comunitárias",
+        "10 - Espaços coletivos",
+        "11 - Instalações de apoio e desenvolvimento socioeconômico local",
     ],
 }
 
@@ -891,3 +898,140 @@ def test_validar_zero_linhas_e_erro_sem_dados():
     assert r["ok"] is False
     assert r["linhasLidas"] == 0
     assert any(g["title"] == "Planilha sem dados" for g in r["grupos"])
+
+
+# ── Enquadramento de equipamento (8/9/10/11) × grupo V — AF/AG/AH (2026-10-02) ──────────
+#
+# A regra: nesses quatro enquadramentos a UC É um equipamento, e é UM só — exatamente uma
+# das três colunas do grupo V em "Sim", as outras duas em "Não". Qual delas é livre.
+#
+# ⚠️ A linha-base do `linha_valida` NÃO tem as colunas do grupo V; cada caso abaixo as
+# declara explicitamente, para o que se mede ser a contagem e não a ausência da coluna.
+
+# Os quatro enquadramentos que disparam a regra, usados nos casos parametrizados.
+EQUIP = [
+    "8 - Instalações de serviços públicos ou infraestruturas públicas",
+    "9 - Infraestruturas comunitárias",
+    "10 - Espaços coletivos",
+    "11 - Instalações de apoio e desenvolvimento socioeconômico local",
+]
+
+# Nome curto → as três colunas do grupo V, para montar as combinações.
+V1, V2, V3 = "V.1 - Escolas", "V.2 - Unidades de Saúde", "V.3 - Poços de água comunitários"
+
+
+def _com_grupo_v(enquadramento, v1, v2, v3):
+    """Linha válida com o enquadramento dado e as três colunas do grupo V preenchidas."""
+    # A coluna "0 - Não é prioridade" fica "Não" (herdada da base): com um "Sim" no grupo V,
+    # a cláusula 2 do "0" já está satisfeita, então o caso mede só a regra nova.
+    return linha_valida(**{
+        "Enquadramento do beneficiário": enquadramento,
+        V1: v1, V2: v2, V3: v3,
+    })
+
+
+def test_equipamento_com_exatamente_um_sim_e_valido():
+    """Um "Sim" e dois "Não" passa — nos quatro enquadramentos, e em qualquer posição."""
+    for enquadramento in EQUIP:
+        for v1, v2, v3 in (("Sim", "Não", "Não"), ("Não", "Sim", "Não"), ("Não", "Não", "Sim")):
+            achados = regras_formato_dominio([_com_grupo_v(enquadramento, v1, v2, v3)], DOM)
+            # A mensagem nomeia o caso: sem ela, a falha diria só "assert False".
+            assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(achados),                 "%s com (%s, %s, %s) deveria passar" % (enquadramento, v1, v2, v3)
+
+
+def test_equipamento_sem_nenhum_sim_e_erro():
+    """Nenhuma das três marcada → erro: um equipamento tem de ser algum tipo de equipamento."""
+    for enquadramento in EQUIP:
+        achados = regras_formato_dominio([_com_grupo_v(enquadramento, "Não", "Não", "Não")], DOM)
+        assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados),             "%s sem nenhuma marcada deveria dar erro" % enquadramento
+
+
+def test_equipamento_com_dois_sim_e_erro():
+    """Duas marcadas → erro: a mesma UC não é escola e posto de saúde ao mesmo tempo."""
+    for enquadramento in EQUIP:
+        achados = regras_formato_dominio([_com_grupo_v(enquadramento, "Sim", "Sim", "Não")], DOM)
+        assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados),             "%s com duas marcadas deveria dar erro" % enquadramento
+
+
+def test_equipamento_com_as_tres_marcadas_e_erro():
+    """As três em "Sim" também é erro — o limite é exatamente uma."""
+    achados = regras_formato_dominio([_com_grupo_v(EQUIP[2], "Sim", "Sim", "Sim")], DOM)
+    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados)
+
+
+def test_equipamento_em_branco_conta_como_nao_marcada():
+    """Célula vazia não vale como "Sim": continua erro de contagem.
+
+    A ausência de preenchimento já é cobrada por "Tipologia em branco"; o que este caso
+    guarda é que o branco não seja interpretado como marcação.
+    """
+    achados = regras_formato_dominio([_com_grupo_v(EQUIP[0], "", "", "")], DOM)
+    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") in _regras(achados)
+
+
+def test_equipamento_ignora_a_caixa_do_enquadramento_e_do_sim():
+    """"SIM" vale como "Sim", e o enquadramento casa sem depender da caixa.
+
+    É a convenção do módulo inteiro desde 2026-07-15 — a regra nova não pode ser exceção.
+    """
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "10 - ESPAÇOS COLETIVOS",
+        V1: "SIM", V2: "NÃO", V3: "Não",
+    })
+    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(
+        regras_formato_dominio([linha], DOM))
+
+
+def test_outros_enquadramentos_nao_disparam_a_regra():
+    """Fora dos quatro, o grupo V é livre — inclusive com duas marcadas.
+
+    ⚠️ A regra é de MÃO ÚNICA, como a de comunidade × família: ela olha do enquadramento
+    para as colunas, nunca o contrário. Marcar "V.1 - Escolas" com enquadramento de família
+    não gera achado — se isso passar a ser indesejado, é regra nova, não ajuste desta.
+    """
+    linha = linha_valida(**{
+        "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
+        V1: "Sim", V2: "Sim", V3: "Não",
+    })
+    assert ("err", "Enquadramento × equipamento (V.1/V.2/V.3)") not in _regras(
+        regras_formato_dominio([linha], DOM))
+
+
+def test_equipamento_tem_descricao_no_painel():
+    """Regra sem texto em `_DESCRICOES` aparece sem explicação na tela do operador."""
+    from backend.validacao import _DESCRICOES
+    assert "Enquadramento × equipamento (V.1/V.2/V.3)" in _DESCRICOES
+
+
+# ── Enquadramento de equipamento (8/9/10/11) × coluna "0" (2026-10-02) ──────────────────
+#
+# ⚠️ Esta amarração existe para a linha não ficar INSATISFAZÍVEL. Com "0" = "Sim", a
+# cláusula 1 exige toda tipologia em "Não"; a regra do grupo V exige uma em "Sim". Sem
+# amarrar, o operador receberia dois erros que se contradizem e nenhuma saída.
+
+
+def test_equipamento_com_zero_sim_e_erro():
+    """Enquadramento 8–11 com “0 - Não é prioridade” = “Sim” → erro."""
+    for enquadramento in EQUIP:
+        linha = linha_valida(**{
+            "Enquadramento do beneficiário": enquadramento,
+            "0 - Não é prioridade": "Sim",
+            V1: "Sim", V2: "Não", V3: "Não",
+        })
+        achados = regras_formato_dominio([linha], DOM)
+        assert ("err", "Enquadramento × “0 - Não é prioridade”") in _regras(achados),             "%s com \"0\"=Sim deveria dar erro" % enquadramento
+
+
+def test_equipamento_com_zero_nao_e_valido():
+    """O caminho correto — “0” = “Não” e um equipamento marcado — não gera achado nenhum.
+
+    Este caso é a prova de que a combinação impossível acabou: existe UMA forma de
+    preencher a linha que satisfaz as duas regras ao mesmo tempo.
+    """
+    for enquadramento in EQUIP:
+        linha = linha_valida(**{
+            "Enquadramento do beneficiário": enquadramento,
+            "0 - Não é prioridade": "Não",
+            V1: "Não", V2: "Sim", V3: "Não",
+        })
+        assert regras_formato_dominio([linha], DOM) == [],             "%s no caminho correto não deveria gerar achado" % enquadramento
