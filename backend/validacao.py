@@ -121,6 +121,22 @@ _ENQUAD_EXIGE_ZERO = {
     **{valor: "Não" for valor in _ENQUAD_EQUIPAMENTO},
 }
 
+# Único valor de `vigente` (em `base_contratos.json`) que aceita "dado novo" como aviso.
+#
+# Decisão do usuário em 2026-10-06, e a razão é de negócio: contrato EM ANDAMENTO ainda
+# energiza UC nova, então um par que não está na base é atraso de cadastro — plausível, e é
+# para isso que a flag existe. Contrato que saiu do andamento não deveria receber UC nenhuma;
+# ali um ODI+UC desconhecido é erro de preenchimento, não defasagem da base.
+#
+# ⚠️ Comparação por `casefold`, como todo vocabulário do módulo. Status desconhecido ou
+# ausente (None, "") NÃO é "Andamento" e portanto NÃO aceita o aviso: falha fechada, que é o
+# comportamento seguro quando não se sabe em que estado o contrato está.
+#
+# ⚠️ Na prática isto atinge os contratos em "Encerramento": os "Encerrado" nem chegam aqui,
+# porque o filtro de acesso (`contratos_visiveis`) só lista `vigente != "Encerrado"` e a rota
+# responde 403 antes de ler o arquivo.
+_VIGENTE_ACEITA_NOVO = "Andamento"
+
 # Faixa geográfica aceita para as coordenadas (aviso). Desde 2026-07-30 é a do território
 # brasileiro, não mais a mundial (±90/±180): o Anexo V só recebe UC do Brasil, então a
 # faixa fechada pega sinal invertido e coordenada de outro país, que a mundial deixava
@@ -473,7 +489,7 @@ def regras_formato_dominio(linhas, dominios):
     return achados
 
 
-def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
+def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False, vigente=None):
     """Aplica as regras de cruzamento com `entrada/` (D4, §7) para UM contrato.
 
     Por que `novo_como_aviso` existe: workaround de 2026-09-16 (flag
@@ -482,9 +498,16 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
     parâmetro — e não lida da config aqui dentro — para a função continuar pura e
     testável; o default False preserva o comportamento original.
 
+    Por que `vigente` existe: desde 2026-10-06 o aviso vale **só para contrato em
+    "Andamento"**. O status é dado do contrato (vem de `base_contratos.json`), não
+    configuração — por isso entra como parâmetro, ao lado de `chaves_uc` e `odi_ref`, e a
+    regra fica testável sem subir servidor. `None` (status desconhecido) não aceita o aviso:
+    falha fechada.
+
     Entrada: `linhas` (parseadas), `chaves_uc` (set de `(odi, uc)` da referência do
-             contrato), `odi_ref` (dict `odi -> (uf, municipio)` do contrato) e
-             `novo_como_aviso` (bool da flag do workaround).
+             contrato), `odi_ref` (dict `odi -> (uf, municipio)` do contrato),
+             `novo_como_aviso` (bool da flag do workaround) e `vigente` (status do contrato;
+             só "Andamento" habilita o aviso).
     Fase 0: coleta os pares (ODI, UC) da planilha inteira e conta, POR ODI, quantas UCs já
             cadastradas na base sumiram dela. É esse número que decide a severidade do dado
             novo, linha a linha (regra de completude POR ODI, 2026-09-23): aviso se a flag
@@ -497,6 +520,13 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
     """
     # Acumulador de achados.
     achados = []
+    # O status do contrato decide, junto com a flag, se "dado novo" pode virar aviso.
+    # `or ""` cobre None; `strip` cobre espaço sobrando na base; `casefold` é a convenção de
+    # comparação de vocabulário do módulo inteiro.
+    em_andamento = (vigente or "").strip().casefold() == _VIGENTE_ACEITA_NOVO.casefold()
+    # Só com a flag ligada E o contrato em andamento o aviso fica disponível. As duas
+    # condições num nome só evitam repetir a conjunção em cada ramo abaixo.
+    aviso_disponivel = novo_como_aviso and em_andamento
 
     # Fase 0: pares (odi, uc) de TODA a planilha — a decisão depende do conjunto inteiro,
     # não de uma linha, por isso é calculada antes do laço por linha.
@@ -533,14 +563,15 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
                 # Quantas UCs já cadastradas DESTE ODI não vieram na planilha. ODI que não
                 # existe na base dá zero: é ODI novo, e não há com o que comparar.
                 ausentes_do_odi = faltando_por_odi.get(odi, 0)
-                # Workaround ativo, base não vazia e ODI completo → dado novo vira aviso.
-                if novo_como_aviso and chaves_uc and not ausentes_do_odi:
+                # Workaround ativo, contrato em andamento, base não vazia e ODI completo
+                # → dado novo vira aviso.
+                if aviso_disponivel and chaves_uc and not ausentes_do_odi:
                     achados.append(_achado("warn", "ODI + UC não consta na referência", loc,
                                             "ODI + UC", f'ODI "{odi}" + UC "{uc}" é dado novo — ainda não cadastrado na base do contrato',
                                             "aceito como aviso enquanto a base não é atualizada: nenhuma UC já cadastrada deste ODI está faltando"))
                 # Workaround ativo, mas o ODI tem UCs já cadastradas fora da planilha → erro
                 # explicado, citando o ODI e quantas faltam (é o que o operador precisa achar).
-                elif novo_como_aviso and chaves_uc:
+                elif aviso_disponivel and chaves_uc:
                     # Singular e plural escritos à mão: a frase aparece na tela do operador.
                     qtd_do_odi = (f"{ausentes_do_odi} UC já cadastrada ausente" if ausentes_do_odi == 1
                                   else f"{ausentes_do_odi} UCs já cadastradas ausentes")
@@ -548,6 +579,19 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False):
                                             "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
                                             f'o ODI "{odi}" tem {qtd_do_odi} na planilha; UCs novas de um ODI '
                                             f'só são aceitas como aviso quando todas as dele estiverem presentes'))
+                # Workaround ligado, mas o CONTRATO não está em andamento → erro, dizendo
+                # que o status é o motivo. Sem esta frase o operador receberia a mensagem
+                # genérica e concluiria que a flag está quebrada — ela está, de propósito,
+                # indisponível para este contrato (decisão de 2026-10-06).
+                elif novo_como_aviso and chaves_uc and not em_andamento:
+                    # O status entre aspas, como está na base; "(não informado)" quando vazio,
+                    # porque "o contrato está em" sem nada depois não diz nada a quem lê.
+                    status = f'"{vigente}"' if (vigente or "").strip() else "(não informado)"
+                    achados.append(_achado("err", "ODI + UC não consta na referência", loc,
+                                           "ODI + UC", f'ODI "{odi}" + UC "{uc}" não existe na base do contrato',
+                                           f'o contrato está em {status}: dado novo só é aceito como aviso '
+                                           f'em contrato "{_VIGENTE_ACEITA_NOVO}" — conferir ODI e UC '
+                                           f'contra a base de referência'))
                 # Workaround desligado (ou base vazia) → comportamento original.
                 else:
                     achados.append(_achado("err", "ODI + UC não consta na referência", loc,
@@ -692,7 +736,7 @@ def _preview(linhas, achados):
     return preview
 
 
-def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False):
+def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False, vigente=None):
     """Valida a planilha inteira e monta a resposta do painel (D5, §6/§7).
 
     Entrada: `linhas` (parseadas), `dominios` (aba Dominios), `chaves_uc`/`odi_ref` (da
@@ -717,7 +761,8 @@ def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False):
     # Fase 2: regras + agrupamento.
     achados = (regras_formato_dominio(linhas, dominios)
                # A flag do workaround só afeta o cruzamento com a base.
-               + regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=novo_como_aviso))
+               + regras_cruzamento(linhas, chaves_uc, odi_ref,
+                                   novo_como_aviso=novo_como_aviso, vigente=vigente))
     grupos = _agrupar(achados)
     # Fase 3: totais, preview e ok.
     total_erros = sum(g["count"] for g in grupos if g["sev"] == "err")

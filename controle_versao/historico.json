@@ -7,19 +7,19 @@
     "producao": "https://monitoramentolpt.enbpar.gov.br"
   },
   "gerado_em": "2026-10-02",
-  "versao_app": "V0.0.1002",
+  "versao_app": "V0.0.1006",
   "ultima_atualizacao": {
-    "data": "2026-10-02",
+    "data": "2026-10-06",
     "fase": "F9",
-    "subfase": "F9.5",
-    "titulo": "Regra nova: equipamento público exige um e só um tipo",
-    "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das 21 colunas de equipamento da planilha — escolas, unidades de saúde, poços, infraestrutura comunitária, associações, igrejas e projetos produtivos — deve estar marcada, e todas as demais não. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade."
+    "subfase": "F9.6",
+    "titulo": "Dado novo só é aceito em contrato em andamento",
+    "resumo": "A tolerância com unidades ainda não cadastradas na base passou a valer apenas para contratos em “Andamento”. Contrato fora do andamento não deveria receber unidade nova, então ali o dado desconhecido volta a bloquear o envio."
   },
   "contadores": {
     "fases": 9,
-    "subfases": 47,
+    "subfases": 48,
     "primeira_data": "2026-06-23",
-    "ultima_data": "2026-10-02"
+    "ultima_data": "2026-10-06"
   },
   "legenda_tipos": {
     "entrega": "Funcionalidade nova, disponível para quem usa o sistema",
@@ -526,6 +526,15 @@
           "titulo": "Regra nova: equipamento público exige um e só um tipo",
           "resumo": "Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das 21 colunas de equipamento da planilha — escolas, unidades de saúde, poços, infraestrutura comunitária, associações, igrejas e projetos produtivos — deve estar marcada, e todas as demais não. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade.",
           "impacto": "A segunda parte não é detalhe: sem ela a linha ficaria impossível de preencher, com dois erros se contradizendo.",
+          "fonte": "backend/validacao.py"
+        },
+        {
+          "id": "F9.6",
+          "data": "2026-10-06",
+          "tipo": "decisao",
+          "titulo": "Dado novo só é aceito em contrato em andamento",
+          "resumo": "A tolerância com unidades ainda não cadastradas na base passou a valer apenas para contratos em “Andamento”. Contrato fora do andamento não deveria receber unidade nova, então ali o dado desconhecido volta a bloquear o envio.",
+          "impacto": "Atinge os contratos em “Encerramento”; os encerrados já não podiam enviar planilha.",
           "fonte": "backend/validacao.py"
         }
       ]

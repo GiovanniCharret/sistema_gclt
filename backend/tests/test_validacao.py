@@ -734,7 +734,7 @@ def test_workaround_ligado_base_completa_dado_novo_vira_aviso():
     """Flag ligada + todas as UCs já cadastradas na planilha → dado novo vira AVISO."""
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")}, odi_ref={},
-                                novo_como_aviso=True)
+                                novo_como_aviso=True, vigente="Andamento")
     # O par novo sai como aviso, e não sobra nenhum erro de "não consta".
     assert ("warn", "ODI + UC não consta na referência") in _regras(achados)
     assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
@@ -750,7 +750,7 @@ def test_workaround_odi_incompleto_continua_erro_explicado():
     # A base tem O2/U8 (além de O1/U1); a planilha traz O1/U1 e o novo O2/U2, sem o U8.
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O2", "U8")}, odi_ref={},
-                                novo_como_aviso=True)
+                                novo_como_aviso=True, vigente="Andamento")
     # O ODI da linha está incompleto: erro, não aviso.
     assert ("err", "ODI + UC não consta na referência") in _regras(achados)
     assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
@@ -765,7 +765,7 @@ def test_workaround_mensagem_no_plural():
     # O ODI O2 tem duas UCs na base (U8 e U9) e nenhuma delas veio na planilha.
     linhas = [_linha_par("O2", "U2", "-3.2")]
     achados = regras_cruzamento(linhas, chaves_uc={("O2", "U8"), ("O2", "U9")}, odi_ref={},
-                                novo_como_aviso=True)
+                                novo_como_aviso=True, vigente="Andamento")
     erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
     assert erro["sug"].startswith('o ODI "O2" tem 2 UCs já cadastradas ausentes na planilha;')
 
@@ -780,7 +780,7 @@ def test_workaround_odi_novo_passa_mesmo_com_a_base_incompleta():
     # A base tem duas UCs de O1; a planilha traz só uma UC de O9, ODI que não está na base.
     linhas = [_linha_par("O9", "U9", "-3.9")]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O1", "U2")}, odi_ref={},
-                                novo_como_aviso=True)
+                                novo_como_aviso=True, vigente="Andamento")
     assert ("warn", "ODI + UC não consta na referência") in _regras(achados)
     assert ("err", "ODI + UC não consta na referência") not in _regras(achados)
 
@@ -796,7 +796,7 @@ def test_workaround_decide_por_odi_na_mesma_planilha():
     # Planilha: O1/U1 (já cadastrada), O1/U5 (nova, ODI completo) e O2/U6 (nova, ODI incompleto).
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O1", "U5", "-3.2"),
               _linha_par("O2", "U6", "-3.3")]
-    achados = regras_cruzamento(linhas, chaves_uc=chaves, odi_ref={}, novo_como_aviso=True)
+    achados = regras_cruzamento(linhas, chaves_uc=chaves, odi_ref={}, novo_como_aviso=True, vigente="Andamento")
     # As duas severidades convivem, cada uma na sua linha.
     novos = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
     assert {a["sev"] for a in novos} == {"warn", "err"}
@@ -814,7 +814,7 @@ def test_workaround_pega_digitacao_errada_de_uc_existente():
     # Base O1/U1 e O2/U2; o operador digitou U9 no lugar de U2.
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U9", "-3.2")]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O2", "U2")}, odi_ref={},
-                                novo_como_aviso=True)
+                                novo_como_aviso=True, vigente="Andamento")
     assert ("err", "ODI + UC não consta na referência") in _regras(achados)
     assert ("warn", "ODI + UC não consta na referência") not in _regras(achados)
 
@@ -822,7 +822,7 @@ def test_workaround_pega_digitacao_errada_de_uc_existente():
 def test_workaround_base_vazia_nao_aceita_dado_novo():
     """Contrato sem nenhuma UC na base: a flag não se aplica (só vale p/ quem já tem ODIs)."""
     linhas = [_linha_par("O2", "U2", "-3.2")]
-    achados = regras_cruzamento(linhas, chaves_uc=set(), odi_ref={}, novo_como_aviso=True)
+    achados = regras_cruzamento(linhas, chaves_uc=set(), odi_ref={}, novo_como_aviso=True, vigente="Andamento")
     erro = [a for a in achados if a["regra"] == "ODI + UC não consta na referência"]
     # Continua erro, com a sugestão original (não fala em "UCs ausentes").
     assert erro and erro[0]["sev"] == "err"
@@ -833,7 +833,7 @@ def test_workaround_ucs_faltando_fala_em_ja_cadastrada():
     """Flag ligada: o aviso 'UCs faltando' deixa explícito que é UC JÁ CADASTRADA."""
     linhas = [_linha_par("O1", "U1", "-3.1")]
     ligada = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={},
-                               novo_como_aviso=True)
+                               novo_como_aviso=True, vigente="Andamento")
     desligada = regras_cruzamento(linhas, chaves_uc={("O1", "U1"), ("O3", "U3")}, odi_ref={})
     # Mesma regra e severidade nos dois casos — só o texto muda.
     faltou_l = [a for a in ligada if a["regra"] == "UCs faltando"][0]
@@ -848,14 +848,14 @@ def test_workaround_nao_afeta_uf_municipio_divergente():
     linhas = [linha_valida(**{"Número ODI": "O1", "Número da Unidade Consumidora": "U1",
                               "UF": "PA", "Município": "BELEM"})]
     achados = regras_cruzamento(linhas, chaves_uc={("O1", "U1")},
-                                odi_ref={"O1": ("AM", "MANACAPURU")}, novo_como_aviso=True)
+                                odi_ref={"O1": ("AM", "MANACAPURU")}, novo_como_aviso=True, vigente="Andamento")
     assert ("err", "UF / município divergente") in _regras(achados)
 
 
 def test_validar_workaround_base_completa_fica_ok():
     """Ponta a ponta de `validar`: flag ligada + base completa → ok=True (envia)."""
     linhas = [_linha_par("O1", "U1", "-3.1"), _linha_par("O2", "U2", "-3.2")]
-    r = validar(linhas, DOM, chaves_uc={("O1", "U1")}, odi_ref={}, novo_como_aviso=True)
+    r = validar(linhas, DOM, chaves_uc={("O1", "U1")}, odi_ref={}, novo_como_aviso=True, vigente="Andamento")
     # Nenhum erro bloqueia; o dado novo aparece só como aviso.
     assert r["ok"] is True and r["totalErros"] == 0
     assert r["totalAvisos"] >= 1
@@ -1100,3 +1100,84 @@ def test_a_regra_cobre_as_21_colunas_de_af_ate_az():
     assert _COLS_EQUIPAMENTO[-1].startswith("VII.8 - Micro e pequenos empreendimentos")
     # Nenhuma coluna de família (grupo IV) pode ter entrado.
     assert not [c for c in _COLS_EQUIPAMENTO if c.startswith("IV.")]
+
+
+# ── O status do contrato restringe o aviso (2026-10-06) ────────────────────────────────
+#
+# Decisão do usuário: só contrato com `vigente` = "Andamento" aceita "dado novo" como aviso.
+# A razão é de negócio — contrato em andamento ainda energiza UC nova; contrato fora do
+# andamento não deveria receber UC nenhuma, então ali o par desconhecido é erro.
+#
+# ⚠️ Na prática isto atinge os contratos em "Encerramento": "Encerrado" não é selecionável,
+# então a rota responde 403 antes de chegar à validação.
+
+
+def _uma_linha_com_par_novo():
+    """Uma linha cujo (ODI, UC) não está na base — o caso que a flag governa."""
+    return [{"_linha": 3, "Número ODI": "O1", "Número da Unidade Consumidora": "U1"}]
+
+
+def _achado_do_par_novo(vigente, flag=True, chaves=None):
+    """Roda o cruzamento e devolve o achado de "ODI + UC não consta na referência"."""
+    # Base não vazia e com OUTRO ODI: o par da linha é novo, e o ODI dela não deve nada.
+    achados = regras_cruzamento(_uma_linha_com_par_novo(),
+                                chaves_uc=(chaves if chaves is not None else {("O9", "U9")}),
+                                odi_ref={}, novo_como_aviso=flag, vigente=vigente)
+    return [a for a in achados if a["regra"] == "ODI + UC não consta na referência"][0]
+
+
+def test_contrato_em_andamento_aceita_dado_novo_como_aviso():
+    """"Andamento" é o único status que destrava o aviso."""
+    assert _achado_do_par_novo("Andamento")["sev"] == "warn"
+
+
+def test_status_do_contrato_ignora_a_caixa_e_o_espaco():
+    """"ANDAMENTO" vale como "Andamento" — convenção do módulo desde 2026-07-15."""
+    assert _achado_do_par_novo("ANDAMENTO")["sev"] == "warn"
+    assert _achado_do_par_novo(" andamento ")["sev"] == "warn"
+
+
+def test_contrato_em_encerramento_volta_a_dar_erro():
+    """Fora do andamento, o par desconhecido é erro mesmo com a flag ligada."""
+    achado = _achado_do_par_novo("Encerramento")
+    assert achado["sev"] == "err"
+    # A mensagem precisa dizer que o MOTIVO é o status; senão o operador conclui que a flag
+    # quebrou, em vez de entender que ela não se aplica a este contrato.
+    assert "Encerramento" in achado["sug"]
+    assert "Andamento" in achado["sug"]
+
+
+def test_contrato_encerrado_volta_a_dar_erro():
+    """Mesmo tratamento para "Encerrado" (que, na prática, nem chega à validação)."""
+    assert _achado_do_par_novo("Encerrado")["sev"] == "err"
+
+
+def test_status_ausente_falha_fechada():
+    """Status desconhecido (None ou vazio) NÃO destrava o aviso.
+
+    ⚠️ Falha FECHADA de propósito: quando não se sabe em que estado o contrato está, o
+    comportamento seguro é o antigo (erro). O contrário abriria a exceção justamente no caso
+    em que não há informação para sustentá-la.
+    """
+    for ausente in (None, "", "   "):
+        achado = _achado_do_par_novo(ausente)
+        assert achado["sev"] == "err", "vigente=%r deveria dar erro" % ausente
+        assert "não informado" in achado["sug"]
+
+
+def test_flag_desligada_ignora_o_status():
+    """Com a flag desligada, "Andamento" não muda nada — e a mensagem é a original."""
+    achado = _achado_do_par_novo("Andamento", flag=False)
+    assert achado["sev"] == "err"
+    assert achado["sug"] == "conferir ODI e UC contra a base de referência"
+
+
+def test_status_nao_substitui_a_completude_por_odi():
+    """"Andamento" destrava o aviso, mas NÃO dispensa a completude por ODI (2026-09-23).
+
+    As duas condições são cumulativas: o ODI da linha continua precisando estar completo.
+    """
+    # Base com outra UC DO MESMO ODI, que não veio na planilha → ODI incompleto.
+    achado = _achado_do_par_novo("Andamento", chaves={("O1", "U0")})
+    assert achado["sev"] == "err"
+    assert "já cadastrada" in achado["sug"]

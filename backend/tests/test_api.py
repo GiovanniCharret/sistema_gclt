@@ -401,10 +401,15 @@ _LINHA_LIMPA = {
 
 
 def _referencia_fake():
-    """Referência fake: 'CTR TESTE' tem UC; 'CTR SEMREF' não tem (para o 409)."""
+    """Referência fake: 'CTR TESTE' e 'CTR ENCERRANDO' têm UC; 'CTR SEMREF' não (o 409).
+
+    ⚠️ Os dois primeiros têm a MESMA referência de propósito: assim a única diferença entre
+    eles é o `vigente`, e o caso do status mede o status, não a base.
+    """
     return types.SimpleNamespace(
-        chaves_uc={"CTR TESTE": {("O1", "U1")}},
-        odi_ref={"CTR TESTE": {"O1": ("AM", "MANACAPURU")}},
+        chaves_uc={"CTR TESTE": {("O1", "U1")}, "CTR ENCERRANDO": {("O1", "U1")}},
+        odi_ref={"CTR TESTE": {"O1": ("AM", "MANACAPURU")},
+                 "CTR ENCERRANDO": {"O1": ("AM", "MANACAPURU")}},
         recarregar_se_preciso=lambda: None,
     )
 
@@ -416,9 +421,14 @@ def _base_fake():
          "tipo_contrato": "LPT", "tranche": "1ª", "vigente": "Andamento"},
         {"numero": "CTR SEMREF", "sigla": "EQUATORIAL", "uf": "AM",
          "tipo_contrato": "LPT", "tranche": "1ª", "vigente": "Andamento"},
+        # Selecionável (não é "Encerrado"), mas FORA do andamento: desde 2026-10-06 não
+        # aceita "dado novo" como aviso. É o caso real dos 9 contratos em Encerramento.
+        {"numero": "CTR ENCERRANDO", "sigla": "EQUATORIAL", "uf": "AM",
+         "tipo_contrato": "LPT", "tranche": "1ª", "vigente": "Encerramento"},
     ]
-    return {"contratos": contratos, "selecionaveis": {"CTR TESTE", "CTR SEMREF"},
-            "todos": {"CTR TESTE", "CTR SEMREF"}}
+    return {"contratos": contratos,
+            "selecionaveis": {"CTR TESTE", "CTR SEMREF", "CTR ENCERRANDO"},
+            "todos": {"CTR TESTE", "CTR SEMREF", "CTR ENCERRANDO"}}
 
 
 @pytest.fixture
@@ -628,3 +638,25 @@ def test_health_publica_o_estado_do_envio_de_email(client):
     assert isinstance(email["dryrun"], bool)
     assert isinstance(email["smtpConfigurado"], bool)
     assert isinstance(email["destinatarios"], int)
+
+
+def test_validar_workaround_nao_vale_para_contrato_fora_do_andamento(client, validar_env, monkeypatch):
+    """Flag ligada, mas contrato em "Encerramento" → o dado novo volta a bloquear.
+
+    ⚠️ Caso de ponta a ponta: prova que a rota lê o `vigente` da autoridade e o repassa à
+    validação. Sem esse repasse, a regra existiria só na função pura e a produção não a
+    aplicaria — o tipo de furo que só aparece quando alguém envia a planilha.
+    """
+    from backend.config import obter_config
+    # A mesma flag ligada do caso que passa — o que muda é só o contrato.
+    monkeypatch.setattr(obter_config(), "odi_uc_novo_como_aviso", True)
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", _planilha_com_dado_novo())},
+                    data={"contrato": "CTR ENCERRANDO", "uf": "AM"})
+    assert r.status_code == 200
+    corpo = r.json()
+    # Bloqueia o envio, e o motivo aparece como erro (não como aviso).
+    assert corpo["ok"] is False
+    assert any(g["sev"] == "err" and g["title"] == "ODI + UC não consta na referência"
+               for g in corpo["grupos"])
+    assert validar_env["planilha"].called is False

@@ -239,6 +239,20 @@ ODI+UC, not just the count). Zero data rows → "Planilha sem dados" (**err**).
 > satisfy it, so the flag refused exactly the case it exists for. Per-ODI keeps the typo guard —
 > a mistyped UC of a **known** ODI leaves that ODI incomplete, so the typo keeps erroring — but a
 > mistyped UC under a **new** ODI has nothing to compare against and passes as a warning.
+> ⚠️ **Third condition, since 2026-10-06: the contract must be `vigente` = "Andamento".** The
+> warning is for a contract that is **still energizing** UCs, where a pair outside the base is a
+> cadastre lag. A contract that left andamento should not be receiving any UC, so an unknown
+> ODI+UC there is a filling error and stays **err**. `_VIGENTE_ACEITA_NOVO` in `validacao.py`;
+> the status arrives as the **parameter `vigente`** of `validar`/`regras_cruzamento` — it is
+> *data about the contract*, like `chaves_uc`, not configuration, which keeps the whole rule
+> testable without a server (`app.py` reads it from `base_contratos.json` and passes it down).
+> Comparison is `casefold`+`strip`; **unknown or missing status does NOT unlock the warning**
+> (fail closed). The error message names the status and the rule, instead of the generic one —
+> otherwise the operator concludes the flag is broken rather than inapplicable to that contract.
+> ⚠️ **In practice this only bites the 9 `Encerramento` contracts**: `Encerrado` never reaches
+> validation, because `contratos_visiveis` lists only `vigente != "Encerrado"` and the route
+> answers **403** before reading the file. ⚠️ The three conditions are **cumulative** —
+> "Andamento" does not waive the per-ODI completeness (a test pins that).
 > **Unchanged:** the **409** for a contract with no reference at all (only contracts that
 > already received ODIs qualify), "UF / município divergente" (err), and every other rule.
 > The severity reaches the pure `validar`/`regras_cruzamento` as a **parameter**

@@ -335,6 +335,12 @@ async def validar_rota(
         referencia.odi_ref.get(contrato_norm, {}),
         # Workaround 2026-09-16 (config.py): "dado novo" como aviso, sob a regra estrita.
         novo_como_aviso=obter_config().odi_uc_novo_como_aviso,
+        # Status do contrato na autoridade: desde 2026-10-06 só "Andamento" aceita o aviso.
+        # `None` quando o contrato não está na lista — a validação trata como não-andamento
+        # (falha fechada). Buscar aqui, e não dentro da validação, mantém a leitura da
+        # autoridade no orquestrador, como já acontece com a referência.
+        vigente=next((c.get("vigente") for c in base["contratos"]
+                      if c.get("numero") == contrato_norm), None),
     )
     # Fase 5: sem erros → envia o arquivo como veio (respeita dry-run/falha de SMTP).
     enviado = False
