@@ -252,9 +252,16 @@ how many areas the base in use has, read from the base, never hardcoded.
   `11 - Rural geral`; the route suite stays independent of the shapefiles, except for **one**
   deliberate end-to-end test (a quilombola UC at Av. Paulista) that is the only thing which would
   catch `app.py` forgetting to pass the bases.
-- Suite: **251** (was 230 before this change: 20 new in `test_geo_territorios.py`, 15 in
-  `test_validacao.py`, 1 in `test_api.py`). The 5 tests that assert the rule fires were verified red
-  against a neutered engine.
+- Suites after the change (all green): **252** in the dev repo (was 230), **610** on the production
+  repo's `main` (was 573) and **826** on its `feature/amostragem-emissao-os` (was 789) — 20 new in
+  `test_geo_territorios.py`, 15 in `test_validacao.py`, 1 in `test_api.py`, plus the always-on path
+  test. The 5 tests that assert the rule fires were verified red against a neutered engine.
+- **Committed on 2026-10-21 to the four branch tips** (dev `main` + `feature/amostragem-emissao-os`,
+  production `main` + `feature/amostragem-emissao-os`), **nothing pushed**. ⚠️ In the production repo
+  the code is **not a copy**: `app.py`, `test_api.py` and `requirements.txt` were patched by anchor,
+  and the `territorios` diagnostic sits in **`/api/health/detalhado`** there. `validacao.py`,
+  `geo_territorios.py`, `test_validacao.py`, `fixtures.py` and `test_geo_territorios.py` are
+  **byte-identical across all four tips** (checked by hash, normalized for CRLF).
 
 Cross-line: duplicate ODI+UC key (**err**),
 duplicate UC regardless of ODI (**err**), **duplicate (lat, lon) pair within the uploaded
