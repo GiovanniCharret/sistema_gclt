@@ -2,8 +2,9 @@
 
 **O que é:** o shapefile das **áreas de quilombolas** reconhecidas pelo INCRA, usado pela regra
 de validação *"Tipo de Comunidade divergente da localização"* (`backend/validacao.py`,
-`regras_tipo_comunidade_territorial`): se a coordenada da UC cai **dentro** de uma destas áreas, a
-coluna M tem de declarar `2 - Comunidade quilombola`.
+`regras_tipo_comunidade_territorial`): a relação é uma **equivalência** — se a coordenada da
+UC cai **dentro** de uma destas áreas, a coluna M tem de declarar `2 - Comunidade quilombola`; e se a coluna M
+declara `2 - Comunidade quilombola`, a coordenada tem de cair dentro de uma delas. Os dois sentidos são **erro**.
 
 **Quem lê:** `backend/geo_territorios.py::carregar_quilombolas()`. Mais ninguém.
 ⚠️ `backend/referencia.py` **não** vê esta pasta: ele faz `glob("**/*.csv")`, e aqui não há `.csv`.

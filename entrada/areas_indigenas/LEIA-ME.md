@@ -2,8 +2,9 @@
 
 **O que é:** o shapefile das **Terras Indígenas** (poligonais) da FUNAI, usado pela regra de
 validação *"Tipo de Comunidade divergente da localização"* (`backend/validacao.py`,
-`regras_tipo_comunidade_territorial`): se a coordenada da UC cai **dentro** de uma destas TIs, a
-coluna M tem de declarar `1 - Comunidade indígena`.
+`regras_tipo_comunidade_territorial`): a relação é uma **equivalência** — se a coordenada da
+UC cai **dentro** de uma destas TIs, a coluna M tem de declarar `1 - Comunidade indígena`; e se a coluna M
+declara `1 - Comunidade indígena`, a coordenada tem de cair dentro de uma delas. Os dois sentidos são **erro**.
 
 **Quem lê:** `backend/geo_territorios.py::carregar_indigenas()`. Mais ninguém.
 ⚠️ `backend/referencia.py` **não** vê esta pasta: ele faz `glob("**/*.csv")`, e aqui não há `.csv`.

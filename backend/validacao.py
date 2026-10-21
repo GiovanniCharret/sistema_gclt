@@ -679,30 +679,43 @@ def _nomear_territorio(area):
 
 
 def regras_tipo_comunidade_territorial(linhas, quilombolas=None, indigenas=None):
-    """A coordenada cai em território demarcado? Então a coluna M tem de declará-lo (erro).
+    """O Tipo de Comunidade declarado e a localização têm de concordar — nos dois sentidos (erro).
 
-    Por que esta regra existe, e por que nesta direção (decisão do gerente, 2026-10-21): a
-    versão anterior olhava só as linhas que JÁ declaravam `1 - Comunidade indígena` ou
-    `2 - Comunidade quilombola` e conferia se a coordenada batia. Medido na planilha de teste
-    `bug_fix/20261001_Anexo V preenchido - ECO 011-2018.xlsx` (2.191 linhas), essa direção
-    acusa **zero**: a planilha traz um único valor na coluna M em todas as linhas,
-    `11 - Rural geral / demais comunidades rurais`. Ou seja, a regra antiga só conferia quem
-    já havia acertado o preenchimento — e passava batido justamente no erro que existe.
+    Por que esta regra existe: o tipo de comunidade decide enquadramento e, portanto, prioridade
+    no Programa, e nada no sistema olhava para onde a UC fica — embora a coordenada estivesse na
+    mesma linha, já validada por faixa.
 
-    Esta direção acusa **235** linhas da mesma planilha, e a própria planilha se delata: 38
-    UCs do ODI AP2200112LPT110004 (CALÇOENE/AP) com “Nome da Comunidade” = RAMAL DO CUNANI
-    caem dentro do polígono CUNANI do INCRA, e 197 UCs do ODI AP2400112LPT110101
-    (OIAPOQUE/AP) chamadas MANGA caem dentro da TI Uaçá da FUNAI, que está Regularizada —
-    todas declaradas `11 - Rural geral`, com IV.1 e IV.2 em “Não”.
+    ⚠️ **A relação é uma EQUIVALÊNCIA, por definição do usuário em 2026-10-21**: *"Comunidade
+    quilombola só é true se tiver dentro das 390."* Ou seja, as 390 áreas demarcadas do INCRA (e,
+    por simetria, as 665 TIs da FUNAI) **são a definição** do tipo, não uma amostra dele. Daí as
+    duas metades desta regra, que não competem entre si:
+
+    | situação | veredito |
+    |---|---|
+    | ponto em território demarcado e M declara outro tipo | **erro** — M deveria declará-lo |
+    | M declara `1` ou `2` e o ponto não está em território | **erro** — não há território que o comprove |
+    | M declara `1` ou `2` e o ponto está no território correspondente | silêncio |
+    | M vazio | silêncio — já é "Campos obrigatórios vazios" |
+
+    ⚠️ **Histórico que evita um retrabalho:** a primeira versão (2026-10-20) tinha só a segunda
+    metade, e o gerente a reprovou **como resposta**, não como veredito: medida na planilha de
+    teste `bug_fix/20261001_Anexo V preenchido - ECO 011-2018.xlsx` (2.191 linhas), ela acusa
+    **zero** — a planilha traz um único valor na coluna M, `11 - Rural geral` —, porque só auditava
+    quem já havia acertado o preenchimento. A primeira metade, pedida por ele, acusa **235**: 38
+    UCs do ODI AP2200112LPT110004 (CALÇOENE/AP) com “Nome da Comunidade” = RAMAL DO CUNANI dentro
+    do polígono CUNANI do INCRA, e 197 do ODI AP2400112LPT110101 (OIAPOQUE/AP) chamadas MANGA
+    dentro da TI Uaçá da FUNAI, que está Regularizada. **As duas metades juntas** é o estado final
+    (usuário, 2026-10-21): uma sem a outra deixa um vazio em sentido oposto.
 
     Entrada: `linhas` do parser, `quilombolas` (base do INCRA) e `indigenas` (base da FUNAI);
              `None` em qualquer das duas desliga aquela metade da regra.
     Fase 1: as duas bases ausentes -> regra desligada, nenhum achado.
-    Fase 2: por linha, exige coordenada legível e dentro da faixa do Brasil — as duas
-            condições já têm aviso próprio, e repeti-las aqui multiplicaria achados sobre a
-            mesma causa.
-    Fase 3: pergunta às duas bases quem contém o ponto; fora das duas, a regra se cala.
-    Fase 4: monta os valores de M que aquela localização aceita e compara com o declarado.
+    Fase 2: monta, por tipo declarável, qual base pode comprová-lo — base desligada fica fora.
+    Fase 3: por linha, exige coordenada legível e dentro da faixa do Brasil, e coluna M
+            preenchida — as três condições já têm achado próprio, e repeti-las aqui
+            multiplicaria achados sobre a mesma causa.
+    Fase 4: pergunta às duas bases quem contém o ponto e monta o conjunto permitido.
+    Fase 5: declarado no permitido -> silêncio; senão, erro numa das duas formas.
     Saída: lista de achados (erro), um por linha divergente.
     """
     # Fase 1: sem nenhuma base carregada a regra não roda. É falha ABERTA e deliberada — o
@@ -713,10 +726,22 @@ def regras_tipo_comunidade_territorial(linhas, quilombolas=None, indigenas=None)
     if quilombolas is None and indigenas is None:
         return []
 
+    # Fase 2: por tipo declarável, a base que pode comprová-lo, o rótulo na frase e a palavra do
+    # plural. ⚠️ Base desligada fica FORA deste mapa, e isso é a parte que importa: sem o arquivo
+    # não se pode afirmar que a UC está fora de território — só que não se sabe. É o que mantém o
+    # deploy separado honesto (pedido do usuário em 2026-10-21).
+    comprova = {}
+    if indigenas is not None:
+        comprova[_TIPO_COM_INDIGENA.casefold()] = (
+            indigenas, "Terra Indígena da FUNAI", "Terras Indígenas")
+    if quilombolas is not None:
+        comprova[_TIPO_COM_QUILOMBOLA.casefold()] = (
+            quilombolas, "área de quilombolas do INCRA", "áreas de quilombolas")
+
     # Acumulador de achados.
     achados = []
     for linha in linhas:
-        # Fase 2: coordenadas pelo mesmo normalizador das demais regras (aceita vírgula).
+        # Fase 3: coordenadas pelo mesmo normalizador das demais regras (aceita vírgula).
         lat = normalizar_coordenada(linha.get(COL_LAT))
         lon = normalizar_coordenada(linha.get(COL_LON))
         # Coordenada ilegível já é "Coordenadas inválidas" (aviso); não vira dois achados.
@@ -726,48 +751,70 @@ def regras_tipo_comunidade_territorial(linhas, quilombolas=None, indigenas=None)
         # brasileiro conteria um ponto que está fora do país.
         if not (_FAIXA_LAT[0] <= lat <= _FAIXA_LAT[1] and _FAIXA_LON[0] <= lon <= _FAIXA_LON[1]):
             continue
-        # Fase 3: o que cada base diz sobre este ponto. Base desligada responde None.
-        area_indigena = _territorio_que_contem(indigenas, lat, lon)
-        area_quilombola = _territorio_que_contem(quilombolas, lat, lon)
-        # Ponto fora das duas: a regra não tem o que dizer. É o caso da esmagadora maioria
-        # das linhas (2.149 das 2.191 da planilha de teste), e por isso ele vem antes de
-        # qualquer leitura da coluna M.
-        if area_indigena is None and area_quilombola is None:
-            continue
-        # Fase 4: os valores de M que esta localização aceita. Vêm DOIS quando as bases se
-        # sobrepõem — 2 das 390 áreas do INCRA têm ponto interno dentro de TI (MOCAMBO/SE
-        # dentro da TI Caiçara/Ilha de São Pedro e CONCEIÇÃO DAS CRIOULAS/PE dentro da TI
-        # Atikum). Decisão do usuário em 2026-10-21: a sobreposição é um **OU**, e qualquer
-        # um dos dois valores silencia a regra, sem aviso nenhum de que há sobreposição.
-        aceitos = []
-        if area_indigena is not None:
-            aceitos.append((_TIPO_COM_INDIGENA, area_indigena))
-        if area_quilombola is not None:
-            aceitos.append((_TIPO_COM_QUILOMBOLA, area_quilombola))
         declarado = _txt(linha, COL_TIPO_COM)
         # Coluna M vazia NÃO cai aqui: ela já é "Campos obrigatórios vazios" (erro), e
         # apontar o mesmo preenchimento faltante em dois achados não informa mais nada.
         if not declarado:
             continue
-        # O OU: basta que o declarado seja UM dos aceitos. Comparação por `casefold`, como
-        # todo vocabulário desde 2026-07-15.
-        if declarado.casefold() in {t.casefold() for t, _ in aceitos}:
+        # Fase 4: o que cada base diz sobre este ponto. Base desligada responde None.
+        area_indigena = _territorio_que_contem(indigenas, lat, lon)
+        area_quilombola = _territorio_que_contem(quilombolas, lat, lon)
+        # O conjunto permitido: os valores de M que ESTA localização comprova. Vêm os DOIS quando
+        # as bases se sobrepõem — 2 das 390 áreas do INCRA têm ponto interno dentro de TI
+        # (MOCAMBO/SE na TI Caiçara/Ilha de São Pedro, CONCEIÇÃO DAS CRIOULAS/PE na TI Atikum).
+        permitido = []
+        if area_indigena is not None:
+            permitido.append((_TIPO_COM_INDIGENA, area_indigena))
+        if area_quilombola is not None:
+            permitido.append((_TIPO_COM_QUILOMBOLA, area_quilombola))
+        # Fase 5a: declarou um dos permitidos — a localização confirma o tipo. É aqui que o OU da
+        # sobreposição age: decisão do usuário em 2026-10-21, "nem null, nem E", qualquer um dos
+        # dois silencia e **sem aviso nenhum** de que há sobreposição.
+        if declarado.casefold() in {t.casefold() for t, _ in permitido}:
             continue
         # A mensagem mostra o texto ORIGINAL das células de coordenada, não o float
         # normalizado: `-47,36` digitado volta como `-47.36473497028796`, e devolver 15 casas
         # a quem escreveu 5 é falsa precisão — além de dificultar achar a célula na planilha.
         bruto = f"{_txt(linha, COL_LAT)}; {_txt(linha, COL_LON)}"
-        # Nomeia o território: sem isso a analista não sabe se errou a coordenada ou o tipo.
-        onde = " e de ".join(_nomear_territorio(a) for _, a in aceitos)
-        esperado = " ou ".join(f'“{t}”' for t, _ in aceitos)
-        # O campo apontado é a coluna M, não a coordenada: o erro que o gerente pediu para
-        # pegar é de PREENCHIMENTO do tipo de comunidade, e é nela que a analista vai digitar.
+        regra = "Tipo de Comunidade divergente da localização"
+        if permitido:
+            # Fase 5b: o ponto está em território demarcado e a coluna M diz outra coisa. É a
+            # metade pedida pelo gerente, e a que acha os 235 casos reais.
+            onde = " e de ".join(_nomear_territorio(a) for _, a in permitido)
+            esperado = " ou ".join(f'“{t}”' for t, _ in permitido)
+            # ⚠️ O campo apontado é a coluna M, não a coordenada: aqui a suspeita é de
+            # PREENCHIMENTO do tipo, e é nela que a analista vai digitar.
+            achados.append(_achado(
+                "err", regra, _loc(linha), COL_TIPO_COM,
+                f'“{declarado}” mas o ponto ({bruto}) está dentro de {onde}',
+                f"preencher “{COL_TIPO_COM}” com {esperado} — "
+                f"ou conferir Latitude/Longitude"))
+            continue
+        # Fase 5c: o ponto não está em território nenhum. Só é erro se a coluna M declarar um
+        # tipo que PRECISA de território para existir — `3 - ribeirinha` e `4 - extrativista`
+        # não têm base que os comprove, então nada a dizer sobre eles.
+        dados = comprova.get(declarado.casefold())
+        if dados is None:
+            continue
+        base, rotulo, unidade = dados
+        # Aqui a suspeita é da COORDENADA tanto quanto do tipo, então a mensagem precisa dizer
+        # qual área é a mais próxima e a que distância: sem isso o operador não distingue "errei
+        # o sinal da longitude" (centenas de km) de "a comunidade não tem processo" (poucos km).
+        proxima, km = base.mais_proxima(lat, lon)
+        if proxima is not None:
+            # Distância em pt-BR (vírgula decimal), com uma casa: mais que isso é falsa precisão.
+            distancia = f"{km:.1f}".replace(".", ",")
+            problema = (f'“{declarado}” mas o ponto ({bruto}) não está em {rotulo}; '
+                        f"mais próxima: {_nomear_territorio(proxima)} a {distancia} km")
+        else:
+            # Base vazia não deveria chegar aqui (a carga falha alto nesse caso), mas se
+            # chegar, o achado não pode mentir uma distância.
+            problema = f'“{declarado}” mas o ponto ({bruto}) não está em {rotulo}'
         achados.append(_achado(
-            "err", "Tipo de Comunidade divergente da localização", _loc(linha), COL_TIPO_COM,
-            f'“{declarado}” mas o ponto ({bruto}) está dentro de {onde}',
-            f"preencher “{COL_TIPO_COM}” com {esperado} — "
-            f"ou conferir Latitude/Longitude"))
-    # Saída: um achado por linha cuja localização desmente a coluna M.
+            "err", regra, _loc(linha), COL_LAT, problema,
+            f"conferir Latitude/Longitude e o Tipo de Comunidade — a base em uso tem "
+            f"{len(base)} {unidade}"))
+    # Saída: um achado por linha em que o tipo declarado e a localização se desmentem.
     return achados
 
 
@@ -780,7 +827,7 @@ _DESCRICOES = {
     "ODI + UC não consta na referência": "A combinação não existe em entrada/ para o contrato",
     "UF / município divergente": "Não bate com a referência de entrada/ para aquele ODI",
     "Coordenadas inválidas": "Latitude/Longitude fora da faixa do território brasileiro ou não numéricas",
-    "Tipo de Comunidade divergente da localização": "A coordenada está dentro de território quilombola do INCRA ou de Terra Indígena da FUNAI e a coluna declara outro tipo",
+    "Tipo de Comunidade divergente da localização": "O tipo declarado e a coordenada se desmentem: ou o ponto está em território demarcado (INCRA/FUNAI) e a coluna declara outro tipo, ou a coluna declara comunidade indígena/quilombola e o ponto não está em território nenhum",
     "Coordenada duplicada": "Mesmo par de Latitude/Longitude em mais de uma linha da planilha",
     "UCs faltando": "UCs da referência do contrato ausentes da planilha",
     "“0 - Não é prioridade” em branco": "A coluna “0 - Não é prioridade” é obrigatória: preencher com “Sim” ou “Não”",

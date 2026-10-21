@@ -210,31 +210,53 @@ trigger nothing. This replaced the 2026-07-14 pair of warnings: the mutual-exclu
 ("the other families must be Não") and the whole **Enquadramento = `4 - Povos tradicionais`
 rule (column N) were dropped**, and the severity went warn → **err**.
 
-**Regra TERRITORIAL — a localização confere o Tipo de Comunidade (err, since 2026-10-21; the
-direction was INVERTED the same day).** One rule, `regras_tipo_comunidade_territorial` in
-`backend/validacao.py`, consulting both bases. The loop runs over every row's
-**Latitude/Longitude** (J:K); when the point falls inside a demarcated territory and column M says
-something else, it is **err**:
+**Regra TERRITORIAL — o Tipo de Comunidade e a localização concordam, nos DOIS sentidos (err,
+since 2026-10-21).** One rule, `regras_tipo_comunidade_territorial` in `backend/validacao.py`,
+consulting both bases:
 
-| base | feições | se a coordenada cai dentro, a coluna M tem de ser |
+| base | feições | o tipo que ela comprova |
 |---|---|---|
 | `entrada/areas_quilombolas/` (INCRA) | **390** | `2 - Comunidade quilombola` |
 | `entrada/areas_indigenas/` (FUNAI) | **665** | `1 - Comunidade indígena` |
 
-Single finding title: **"Tipo de Comunidade divergente da localização"**. The message names the
-territory with UF and phase and states the value to fill (*“11 - Rural geral …” mas o ponto
-(2.828…; -51.113…) está dentro de “CUNANI” (AP, RTID)* → *preencher “Tipo de Comunidade” com
-“2 - Comunidade quilombola” — ou conferir Latitude/Longitude*). ⚠️ The finding points at
-**column M**, not at the coordinate: that is the cell the analyst will edit, and the whole point of
-the inversion is to be instructive.
+⚠️ **It is an EQUIVALENCE, by the user's definition (2026-10-21):** *"Comunidade quilombola só é
+true se tiver dentro das 390."* The demarcated areas **are the definition** of the type, not a
+sample of it — so the rule has two halves, and they do not compete:
 
-- ⚠️ **The first direction (2026-10-20) was REJECTED by the gerente and no longer exists.** It
-  checked the coordinate of rows that **already declared** 1 or 2. Measured on the gerente's test
-  sheet (`bug_fix/20261001_Anexo V preenchido - ECO 011-2018.xlsx`, 2.191 rows): that direction
-  finds **0** — the sheet carries a single value in column M, `11 - Rural geral` — while this one
-  finds **235**. The old direction only audited whoever had already filled M correctly, which is
-  exactly the case that needs no auditing. `regras_quilombola`, `regras_indigena` and
-  `_regras_territorio` are gone; don't look for them.
+| situação | veredito | campo apontado |
+|---|---|---|
+| ponto em território e M declara outro tipo | **err** — M deveria declará-lo | **coluna M** |
+| M declara `1`/`2` e o ponto não está em território | **err** — nada o comprova | **`Latitude`** |
+| M declara `1`/`2` e o ponto está no território certo | silêncio | — |
+| M vazio | silêncio (já é "Campos obrigatórios vazios") | — |
+
+Single finding title for both: **"Tipo de Comunidade divergente da localização"**. ⚠️ **The two
+halves point at different cells on purpose**: in the first the suspicion is the *filling* of M
+(*“11 - Rural geral …” mas o ponto (2.828…; -51.113…) está dentro de “CUNANI” (AP, RTID)* →
+*preencher “Tipo de Comunidade” com “2 - Comunidade quilombola”*), in the second it is the
+*coordinate* (*“2 - Comunidade quilombola” mas o ponto não está em área de quilombolas do INCRA;
+mais próxima: “QUILOMBO X” (MA, TITULADO) a 79,0 km*). Tests pin both.
+
+- ⚠️ **Only types 1 and 2 have a base**, so `3 - ribeirinha` and `4 - extrativista` never trigger
+  the second half — there is nothing to check them against, and a rule that asserts what it cannot
+  know is worse than no rule. A test pins it.
+- ⚠️ **A disabled base never asserts "outside".** With `quilombolas=None`, `M = 2` outside
+  everything stays **silent**: without the shapefile one does not know the UC is outside, only that
+  one does not know. That is what keeps the separate deploy honest, and a test pins it.
+- **When a row violates both halves** (declares quilombola while sitting inside a TI), it emits
+  **one** finding, the first half's — *"the point is inside TI Teste, declare 1"* instructs, while
+  *"it is not in an INCRA area, the nearest is N km away"* would send the analyst to check a
+  coordinate that is correct.
+
+- ⚠️ **The history, because it prevents a rework.** The first version (2026-10-20) had **only the
+  second half**, and the gerente rejected it **as the answer, not as a verdict**: measured on his
+  test sheet (`bug_fix/20261001_Anexo V preenchido - ECO 011-2018.xlsx`, 2.191 rows) it finds
+  **zero** — the sheet carries a single value in column M, `11 - Rural geral` — because it only
+  audited whoever had already filled M correctly. The first half, which he asked for, finds **235**.
+  I then **deleted** the second half, treating the two as alternatives; the user's definition above
+  shows they are two ends of one equivalence, and I restored it the same day. Verified in between:
+  with the second half gone, `M = 2` at Av. Paulista passed **silently**. `regras_quilombola`,
+  `regras_indigena` and `_regras_territorio` are gone; don't look for them.
 - **The proof is in the sheet's own words:** 38 UCs of ODI `AP2200112LPT110004` (CALÇOENE/AP) whose
   "Nome da Comunidade" reads **RAMAL DO CUNANI** sit inside the INCRA polygon **CUNANI** (AP, RTID),
   and 197 UCs of ODI `AP2400112LPT110101` (OIAPOQUE/AP) named **MANGA** sit inside the FUNAI TI
@@ -276,19 +298,25 @@ the inversion is to be instructive.
   lottery. ⚠️ I tested the obvious fix and it buys **nothing**: the heavy TIs have **one ring** with
   100% of their vertices (Xikrin 110.270, Yanomami 61.562), so a per-ring bbox does not help. Only a
   latitude-band vertex index would, and that is a separate job (~80 lines + tests).
-- **Dead code left behind, on purpose:** `mais_proxima`, `distancia_km` and `_dist_km_ate_caixa` in
-  `geo_territorios.py` (100 lines, 5 tests) **lost their only production caller** — the nearest area
-  was what the old direction needed. They were **not** deleted in the same change: removing tested
-  code is a separate, reversible cleanup, and bundling it into a production validation change adds
-  risk for no gain. **Decide before building anything new on them.**
+- **`mais_proxima`, `distancia_km` and `_dist_km_ate_caixa` are ALIVE again.** They lost their only
+  caller when the rule was briefly one-directional, and the restored half brought them back — it is
+  what names the nearest area and the distance. ⚠️ So the "100 lines of dead code" noted earlier on
+  2026-10-21 **no longer exist as a pendência**; don't go cleaning them up.
 - ⚠️ **Fixture fallout, measured BEFORE patching this time:** the three coordinates used by the route
   suite (`_LINHA_LIMPA` at -3,30/-60,0, its second row at -3,40/-60,1, and the old Av. Paulista
   point) are all **outside both real bases**, so the inversion broke no fixture — unlike 2026-10-21
   morning, when wiring the bases broke four route tests. The route e2e was **re-pointed at the real
   Cunani coordinate** (2.82843/-51.11374), so it is now the regression test of the production finding
   instead of an invented case; it skips when the shapefile is absent.
-- Suites (all green): **259** in the dev repo (was 252) and **617** on the production repo's `main`
-  (was 610) — 22 territorial tests in `test_validacao.py` (were 16), plus the re-pointed route e2e.
+- Suites (all green): **265** in the dev repo (was 252) and **623** on the production repo's `main`
+  (was 610) — **28** territorial tests in `test_validacao.py` (were 16), plus the route e2e
+  re-pointed at the real Cunani coordinate.
+  ⚠️ **Two tests were passing for free and were repaired**: `test_coordenada_ilegivel_nao_dispara`
+  and `test_coordenada_fora_do_brasil_nao_dispara` used `linha_valida()`, which declares
+  `11 - Rural geral` — and a "11" row outside any territory is silent **either way**, so neither
+  measured its guard. They now declare `2 - Comunidade quilombola`, and both were **verified red**
+  against an engine with the guards neutered. Same defect shape as the `None is None` cache test of
+  2026-10-20.
   ⚠️ `feature/amostragem-emissao-os` **has not received this change** in either repo.
 
 Cross-line: duplicate ODI+UC key (**err**),

@@ -1198,7 +1198,7 @@ def test_status_nao_substitui_a_completude_por_odi():
 # desapareceu, e de propósito, é qualquer teste de "declarou 2 e está fora".
 
 # A regra sob teste, a coluna que ela aponta e as constantes do vocabulário da coluna M.
-from backend.validacao import (regras_tipo_comunidade_territorial, COL_TIPO_COM,
+from backend.validacao import (regras_tipo_comunidade_territorial, COL_TIPO_COM, COL_LAT,
                                _TIPO_COM_QUILOMBOLA, _TIPO_COM_INDIGENA, _COMUNIDADE_FAMILIA)
 # Fábrica de geometria conhecida, compartilhada com a suíte do leitor.
 from backend.tests.fixtures import area_retangular, base_sintetica
@@ -1420,15 +1420,31 @@ def test_uma_base_so_nao_liga_a_outra():
 
 
 def test_coordenada_ilegivel_nao_dispara():
-    """Coordenada não numérica já tem o seu aviso: a regra territorial fica calada."""
-    linha = linha_valida(**{"Latitude": "norte", "Longitude": "oeste"})
+    """Coordenada não numérica já tem o seu aviso: a regra territorial fica calada.
+
+    ⚠️ A linha declara `2 - Comunidade quilombola` **de propósito**. Com `11 - Rural geral` este
+    teste passaria de graça: uma linha "11" sem território é silenciosa de qualquer modo, então
+    ele não mediria o guarda de coordenada ilegível — passaria igual se o guarda fosse removido.
+    Declarando quilombola, a ausência do guarda faria a linha cair na segunda metade da regra
+    (`mais_proxima` sobre `None`), e o teste acusa.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": "norte", "Longitude": "oeste"})
     assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
 
 
 def test_coordenada_fora_do_brasil_nao_dispara():
-    """Ponto fora da faixa do Brasil também já tem aviso — e nenhum território o conteria."""
+    """Ponto fora da faixa do Brasil também já tem aviso — e nenhum território o conteria.
+
+    ⚠️ Declara quilombola pela mesma razão do teste acima: sem o guarda de faixa, a linha cairia
+    na segunda metade da regra e viraria erro nomeando uma área a milhares de km. Com
+    `11 - Rural geral` o teste passaria sem medir nada.
+    """
     # Coordenada europeia: fora de `_FAIXA_LAT`/`_FAIXA_LON`.
-    linha = linha_valida(**{"Latitude": "48.85", "Longitude": "2.35"})
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": "48.85", "Longitude": "2.35"})
     assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
 
 
@@ -1467,6 +1483,114 @@ def test_validar_sem_as_bases_nao_muda_nada():
     """
     titulos = {g["title"] for g in validar([linha_valida()], DOM, set(), {})["grupos"]}
     assert "Tipo de Comunidade divergente da localização" not in titulos
+
+
+def test_declarado_quilombola_fora_de_todo_territorio_e_erro():
+    """`2 - Comunidade quilombola` sem território que o comprove é ERRO.
+
+    ⚠️ Esta é a metade RESTAURADA em 2026-10-21, e ela existe por uma definição do usuário:
+    *"Comunidade quilombola só é true se tiver dentro das 390."* As 390 áreas demarcadas do INCRA
+    **são a definição** do tipo, não uma amostra dele — então declarar quilombola fora de todas
+    elas não é um falso positivo do sistema, é um preenchimento sem lastro.
+
+    Eu havia apagado esta metade ao inverter a regra, tratando as duas como alternativas; elas
+    são as duas pontas de uma equivalência. Sem este teste, `M=2` na Av. Paulista passa calado.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    achados = regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola())
+    assert len(achados) == 1
+    assert achados[0]["sev"] == "err"
+    assert achados[0]["regra"] == "Tipo de Comunidade divergente da localização"
+    # ⚠️ Aqui o campo é a COORDENADA, não a coluna M: nesta metade a suspeita é de que a
+    # latitude/longitude está errada, e não de que o tipo foi mal preenchido. As duas metades
+    # apontam células diferentes de propósito.
+    assert achados[0]["campo"] == COL_LAT
+
+
+def test_declarado_indigena_fora_de_toda_ti_e_erro():
+    """A mesma metade, pela base da FUNAI."""
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
+                            "IV.1 - Família indígena": "Sim",
+                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    achados = regras_tipo_comunidade_territorial([linha], indigenas=_base_indigena())
+    assert len(achados) == 1
+    assert achados[0]["sev"] == "err"
+    assert "TI Teste" in achados[0]["problema"]
+
+
+def test_mensagem_da_metade_restaurada_nomeia_a_mais_proxima_e_a_distancia():
+    """A mensagem traz a área mais próxima e a distância — e é por isso que `mais_proxima` existe.
+
+    Por que a distância é parte da regra e não enfeite: sem ela o operador não distingue "errei o
+    sinal da longitude" (centenas de km) de "a comunidade não tem processo no INCRA" (poucos km,
+    ou dezenas). A conferência que ele precisa fazer é diferente em cada caso.
+
+    ⚠️ Este teste é também o que devolve `mais_proxima`, `distancia_km` e `_dist_km_ate_caixa` ao
+    conjunto de código VIVO: com a regra só invertida elas tinham perdido o único chamador de
+    produção.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    achado = regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola())[0]
+    assert "QUILOMBO PAREDÃO" in achado["problema"]
+    assert "AM" in achado["problema"] and "TITULADO" in achado["problema"]
+    # 1° de latitude ao sul da borda ≈ 111,3 km, escrito com vírgula decimal (pt-BR).
+    assert "111,3 km" in achado["problema"]
+    # A sugestão informa o tamanho da base, lido da base e nunca fixo no código: a frase explica
+    # ao operador por que uma comunidade real pode não ter território demarcado.
+    assert "1 áreas de quilombolas" in achado["sug"]
+
+
+def test_tipo_tradicional_sem_base_territorial_nao_dispara():
+    """`3 - Comunidade ribeirinha` fora de território não gera achado: não há base que a comprove.
+
+    Por que fixar isso: a equivalência vale só para os dois tipos que têm cadastro oficial de
+    território (INCRA e FUNAI). Estender a exigência a ribeirinha ou extrativista reprovaria
+    planilha inteira sem nenhuma base contra a qual conferir — a regra afirmaria o que não sabe.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": "3 - Comunidade ribeirinha",
+                            "IV.3 - Família ribeirinha": "Sim",
+                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    assert regras_tipo_comunidade_territorial(
+        [linha], quilombolas=_base_quilombola(), indigenas=_base_indigena()) == []
+
+
+def test_base_desligada_nao_afirma_que_a_uc_esta_fora():
+    """Com a base do INCRA desligada, `2 - Comunidade quilombola` fora de tudo NÃO vira erro.
+
+    ⚠️ É a parte honesta do deploy separado: sem o shapefile não se sabe que a UC está fora de
+    território — sabe-se apenas que não se sabe. Afirmar "fora" com a base ausente seria reprovar
+    planilha por causa de um arquivo que não chegou na imagem, exatamente o que a falha aberta
+    existe para evitar.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    # A base indígena está ligada; a quilombola, não. A linha fala de quilombola.
+    assert regras_tipo_comunidade_territorial([linha], indigenas=_base_indigena()) == []
+
+
+def test_declarar_quilombola_dentro_de_ti_aponta_a_coluna_m():
+    """Dentro de TI declarando quilombola: erro da PRIMEIRA metade, apontando a coluna M.
+
+    Por que importa a escolha de metade: a linha viola as duas ao mesmo tempo (está em território
+    que ela não declara, e declara um tipo que o território não comprova). Um achado só, e o da
+    primeira metade — porque "o ponto está dentro da TI Teste, declare 1" é instrução, enquanto
+    "não está em área do INCRA, a mais próxima fica a N km" mandaria a analista conferir uma
+    coordenada que está certa.
+    """
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim",
+                            "Latitude": _LAT_DENTRO, "Longitude": _LON_DENTRO})
+    achados = regras_tipo_comunidade_territorial([linha], quilombolas=None,
+                                                 indigenas=_base_indigena())
+    assert len(achados) == 1
+    assert achados[0]["campo"] == COL_TIPO_COM
+    assert "TI Teste" in achados[0]["problema"]
+    assert _TIPO_COM_INDIGENA in achados[0]["sug"]
 
 
 def test_constantes_do_tipo_de_comunidade_batem_com_o_mapa_de_familia():
