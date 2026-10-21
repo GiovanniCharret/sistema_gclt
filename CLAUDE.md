@@ -210,58 +210,86 @@ trigger nothing. This replaced the 2026-07-14 pair of warnings: the mutual-exclu
 ("the other families must be Não") and the whole **Enquadramento = `4 - Povos tradicionais`
 rule (column N) were dropped**, and the severity went warn → **err**.
 
-**Regras TERRITORIAIS — a coordenada confere com o tipo de comunidade declarado (err, since
-2026-10-21).** Two independent rules, one per base, both in `backend/validacao.py`
-(`regras_quilombola` / `regras_indigena`) over a shared private engine:
+**Regra TERRITORIAL — a localização confere o Tipo de Comunidade (err, since 2026-10-21; the
+direction was INVERTED the same day).** One rule, `regras_tipo_comunidade_territorial` in
+`backend/validacao.py`, consulting both bases. The loop runs over every row's
+**Latitude/Longitude** (J:K); when the point falls inside a demarcated territory and column M says
+something else, it is **err**:
 
-| coluna M | base conferida | feições | título do achado |
-|---|---|---|---|
-| `2 - Comunidade quilombola` | `entrada/areas_quilombolas/` (INCRA) | **390** | "Comunidade quilombola fora de território do INCRA" |
-| `1 - Comunidade indígena` | `entrada/areas_indigenas/` (FUNAI) | **665** | "Comunidade indígena fora de Terra Indígena da FUNAI" |
+| base | feições | se a coordenada cai dentro, a coluna M tem de ser |
+|---|---|---|
+| `entrada/areas_quilombolas/` (INCRA) | **390** | `2 - Comunidade quilombola` |
+| `entrada/areas_indigenas/` (FUNAI) | **665** | `1 - Comunidade indígena` |
 
-The point-in-polygon test runs only when the row **declares that type** and the coordinate is
-**readable and inside Brazil's range** — both of those already have their own warning, and firing
-here too would multiply findings over one cause. Outside every polygon → **err**, naming the
-**nearest area and the distance** (`“QUILOMBO X” (MA, TITULADO) a 79,0 km`); the suggestion states
-how many areas the base in use has, read from the base, never hardcoded.
+Single finding title: **"Tipo de Comunidade divergente da localização"**. The message names the
+territory with UF and phase and states the value to fill (*“11 - Rural geral …” mas o ponto
+(2.828…; -51.113…) está dentro de “CUNANI” (AP, RTID)* → *preencher “Tipo de Comunidade” com
+“2 - Comunidade quilombola” — ou conferir Latitude/Longitude*). ⚠️ The finding points at
+**column M**, not at the coordinate: that is the cell the analyst will edit, and the whole point of
+the inversion is to be instructive.
 
-- ⚠️ **Severity is `err` by the user's decision (2026-10-21), against the recommendation written in
-  `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md` §3.** The INCRA base maps
-  **territories with a land-tenure process** (390; only 104 titled), not communities — IBGE's 2022
-  census mapped **8.441** quilombola localities. So a legitimate community with no INCRA process
-  **blocks the whole sheet**. The user holds that risk knowingly and will calibrate with real test
-  sheets. The indigenous side is better covered (665 TIs, all phases), but an urban village or a
-  retomada outside a demarcated TI hits the same wall.
-- **One-directional**, like M→família: a UC **inside** a quilombola/indigenous polygon declaring
-  another type triggers **nothing**. Two reasons, and the second is the stronger: a titled territory
-  has non-quilombola residents (Alcântara/MA, 78.725 ha), and — if the rule did fire — the shortest
-  way to silence it would be to mark `2 - Comunidade quilombola`, which **forces** `IV.2` = "Sim"
-  and changes the enquadramento. The rule would manufacture the false data it exists to catch. A
-  test pins the choice.
-- **The two rules are independent on purpose** (user: "deploy separado para facilitar os testes"):
-  each receives its own base as a **parameter**, and `None` turns that rule off. `app.py` is the only
-  place that reads the files (`obter_quilombolas()` / `obter_indigenas()`). A test pins that one base
-  being present does not enable the other.
-- ⚠️ **Fails OPEN, never silently.** A missing/unreadable shapefile turns the rule off instead of
+- ⚠️ **The first direction (2026-10-20) was REJECTED by the gerente and no longer exists.** It
+  checked the coordinate of rows that **already declared** 1 or 2. Measured on the gerente's test
+  sheet (`bug_fix/20261001_Anexo V preenchido - ECO 011-2018.xlsx`, 2.191 rows): that direction
+  finds **0** — the sheet carries a single value in column M, `11 - Rural geral` — while this one
+  finds **235**. The old direction only audited whoever had already filled M correctly, which is
+  exactly the case that needs no auditing. `regras_quilombola`, `regras_indigena` and
+  `_regras_territorio` are gone; don't look for them.
+- **The proof is in the sheet's own words:** 38 UCs of ODI `AP2200112LPT110004` (CALÇOENE/AP) whose
+  "Nome da Comunidade" reads **RAMAL DO CUNANI** sit inside the INCRA polygon **CUNANI** (AP, RTID),
+  and 197 UCs of ODI `AP2400112LPT110101` (OIAPOQUE/AP) named **MANGA** sit inside the FUNAI TI
+  **Uaçá** (AP, **Regularizada**) — all declared `11 - Rural geral`, `IV.1`/`IV.2` at "Não",
+  enquadramento `1 - Famílias de baixa renda`. The sheet names the very territory it stands in and
+  then classifies the row as generic rural. ⚠️ Of the 63 rows in the Cunani ODI, **38 are inside and
+  25 are outside** — those 25 are also named RAMAL DO CUNANI, 3,2 to 31,5 km away (median 20 km),
+  because the ramal runs well past the titled territory. The rule flags 38 and stays silent on 25 of
+  the same declared community: geographically right, and a question the analyst will ask.
+- ⚠️ **Overlap is an OR, silently** (user, 2026-10-21: *"nem null, nem E"* — "se eles se sobrepuserem,
+  aceita a 1 ou a 2 silenciosamente. Sem alerta de que se sobrepõem, nem mais nada"). A point inside
+  both bases accepts **either** value and emits **nothing**. It is real geography: 2 of the 390 INCRA
+  areas have an interior point inside a TI (MOCAMBO/SE in TI Caiçara/Ilha de São Pedro, CONCEIÇÃO DAS
+  CRIOULAS/PE in TI Atikum). Without the OR those rows would get two mutually exclusive errors and no
+  way out. ⚠️ **This is why the two public functions became one**: the OR needs both bases evaluated
+  together. The separate deploy survives because each base is still an **independent parameter** and
+  `None` disables its half — a test pins that one base being present does not enable the other.
+- **Blank column M does NOT fire it** — that is already "Campos obrigatórios vazios" (err), and two
+  findings for one cause flood the panel (same reasoning as "Tipologia em branco").
+- **Declaring the other traditional type still errors**: inside a quilombola area, `1 - Comunidade
+  indígena` is wrong. What silences the rule is declaring the type **of that territory**, not any
+  traditional type. A test pins it.
+- ⚠️ **The coverage objection is CLOSED — do not reopen it** (user, 2026-10-21): *"vamos trabalhar
+  somente com as áreas quilombolas já demarcadas, que são 390. Essas são registros oficiais. As mais
+  de 8000 unidades registradas do IBGE podem ser totalmente descartadas. Não farão parte das
+  regras."* The inversion makes it moot anyway: the rule only fires **inside** a mapped polygon, so a
+  community with no INCRA process is never touched. The old `err`-vs-`warn` argument died with the
+  old direction.
+- ⚠️ **Fails OPEN, never silently.** Both bases missing/unreadable turns the rule off instead of
   blocking every upload over a reference file — but the unavailability goes to the container log
   (once per process) and to **`GET /api/health`** as `territorios: {quilombolas: …, indigenas: …}`
   (`null` when off). Two tests pin the log line and the one-warning-per-process behavior.
-- ⚠️ **Fixture fallout worth knowing:** `_LINHA_LIMPA` in `test_api.py` declared
-  `1 - Comunidade indígena` at an invented coordinate near Manacapuru. It was "clean" only because
-  no rule looked at geography — wiring the bases broke **four** route tests. The fixture moved to
-  `11 - Rural geral`; the route suite stays independent of the shapefiles, except for **one**
-  deliberate end-to-end test (a quilombola UC at Av. Paulista) that is the only thing which would
-  catch `app.py` forgetting to pass the bases.
-- Suites after the change (all green): **252** in the dev repo (was 230), **610** on the production
-  repo's `main` (was 573) and **826** on its `feature/amostragem-emissao-os` (was 789) — 20 new in
-  `test_geo_territorios.py`, 15 in `test_validacao.py`, 1 in `test_api.py`, plus the always-on path
-  test. The 5 tests that assert the rule fires were verified red against a neutered engine.
-- **Committed on 2026-10-21 to the four branch tips** (dev `main` + `feature/amostragem-emissao-os`,
-  production `main` + `feature/amostragem-emissao-os`), **nothing pushed**. ⚠️ In the production repo
-  the code is **not a copy**: `app.py`, `test_api.py` and `requirements.txt` were patched by anchor,
-  and the `territorios` diagnostic sits in **`/api/health/detalhado`** there. `validacao.py`,
-  `geo_territorios.py`, `test_validacao.py`, `fixtures.py` and `test_geo_territorios.py` are
-  **byte-identical across all four tips** (checked by hash, normalized for CRLF).
+- ⚠️ **Cost is bimodal, and the tail has NO cheap fix.** The old rule queried the base only for rows
+  declaring 1 or 2 — zero queries on a normal sheet. This one queries **both bases on every row**.
+  Measured: 0,069 ms/row on the real 2.191-row sheet (0,157 s total), median 0,086 ms over 3.000
+  random points in Brazil — but **17,8 ms/row inside the bbox of TI Xikrin do Rio Catete (PA)**,
+  which means **8,7 s** for a 490-row sheet there, against 1,63 s today (of which 1,61 s is
+  openpyxl). A sheet belongs to one contract, hence one region, so it is all-or-nothing, not a
+  lottery. ⚠️ I tested the obvious fix and it buys **nothing**: the heavy TIs have **one ring** with
+  100% of their vertices (Xikrin 110.270, Yanomami 61.562), so a per-ring bbox does not help. Only a
+  latitude-band vertex index would, and that is a separate job (~80 lines + tests).
+- **Dead code left behind, on purpose:** `mais_proxima`, `distancia_km` and `_dist_km_ate_caixa` in
+  `geo_territorios.py` (100 lines, 5 tests) **lost their only production caller** — the nearest area
+  was what the old direction needed. They were **not** deleted in the same change: removing tested
+  code is a separate, reversible cleanup, and bundling it into a production validation change adds
+  risk for no gain. **Decide before building anything new on them.**
+- ⚠️ **Fixture fallout, measured BEFORE patching this time:** the three coordinates used by the route
+  suite (`_LINHA_LIMPA` at -3,30/-60,0, its second row at -3,40/-60,1, and the old Av. Paulista
+  point) are all **outside both real bases**, so the inversion broke no fixture — unlike 2026-10-21
+  morning, when wiring the bases broke four route tests. The route e2e was **re-pointed at the real
+  Cunani coordinate** (2.82843/-51.11374), so it is now the regression test of the production finding
+  instead of an invented case; it skips when the shapefile is absent.
+- Suites (all green): **259** in the dev repo (was 252) and **617** on the production repo's `main`
+  (was 610) — 22 territorial tests in `test_validacao.py` (were 16), plus the re-pointed route e2e.
+  ⚠️ `feature/amostragem-emissao-os` **has not received this change** in either repo.
 
 Cross-line: duplicate ODI+UC key (**err**),
 duplicate UC regardless of ODI (**err**), **duplicate (lat, lon) pair within the uploaded
@@ -664,6 +692,10 @@ carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pul
   responde "está dentro?" sem raio arbitrário; o preço é **cobertura** — por `fase`: RTID 118,
   TITULADO 104, PORTARIA 65, DECRETO 48, TÍTULO PARCIAL 25, vazio 15 (**só 104 titulados**).
   Uma comunidade quilombola real sem processo no INCRA cai **fora** de qualquer polígono.
+  ⚠️ **Isso deixou de ser um problema em 2026-10-21, por duas razões**: a regra foi invertida (só
+  dispara DENTRO de polígono, então comunidade sem processo nunca é tocada) e o usuário decidiu
+  que *"as mais de 8000 unidades registradas do IBGE podem ser totalmente descartadas. Não farão
+  parte das regras"*. As 390 áreas demarcadas são o registro oficial, e são as únicas.
 - **Biblioteca: `pyshp`** (puro Python, aceita file-like e lê de dentro do zip). `geopandas`/
   `fiona` arrastam GDAL e não se justificam aqui: ponto-em-polígono com *ray casting* e prefiltro
   de caixa envolvente custou **0,020 ms por linha** (as 490 linhas de uma planilha real em
@@ -698,9 +730,9 @@ carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pul
   ⚠️ **Pior caso real: 10,1 ms por linha** quando o ponto cai na caixa da TI Yanomami (61.562
   vértices num anel só) — uma planilha de 490 UCs ali custaria ~5 s. Cabe, mas é o limite; se
   aparecer na prática, a saída é indexar vértices por faixa de latitude, não trocar de biblioteca.
-- **As duas regras de validação que consomem isso**: ver "Regras TERRITORIAIS" na seção de regras.
-  Desenho e decisões: `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md`
-  (revisão 2).
+- **A regra de validação que consome isso**: ver "Regra TERRITORIAL" na seção de regras — uma só
+  regra, que lê as duas bases. Desenho e decisões:
+  `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md` (**revisão 3**).
 
 ### Deploy — two live targets
 

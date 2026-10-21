@@ -1,7 +1,9 @@
 # `entrada/areas_indigenas/` — Terras Indígenas da FUNAI
 
 **O que é:** o shapefile das **Terras Indígenas** (poligonais) da FUNAI, usado pela regra de
-validação *"Comunidade indígena fora de Terra Indígena da FUNAI"* (`backend/validacao.py`).
+validação *"Tipo de Comunidade divergente da localização"* (`backend/validacao.py`,
+`regras_tipo_comunidade_territorial`): se a coordenada da UC cai **dentro** de uma destas TIs, a
+coluna M tem de declarar `1 - Comunidade indígena`.
 
 **Quem lê:** `backend/geo_territorios.py::carregar_indigenas()`. Mais ninguém.
 ⚠️ `backend/referencia.py` **não** vê esta pasta: ele faz `glob("**/*.csv")`, e aqui não há `.csv`.
@@ -47,8 +49,11 @@ ocupada 580, Reserva Indígena 66, Dominial Indígena 11, Interditada 8.
 curso, não ausência de terra indígena.
 
 ⚠️ **Existe comunidade indígena fora de TI**: aldeia urbana, retomada sem processo aberto, grupo em
-área ainda não identificada. A regra, sendo **erro** (decisão do usuário, 2026-10-21), bloqueia o
-envio nesses casos. A cobertura aqui é melhor que a da base quilombola, mas não é total.
+área ainda não identificada. Isso **não** é mais um risco desde que a regra foi invertida em
+2026-10-21: ela só dispara quando a coordenada está **dentro** de uma TI e a coluna M diz outra
+coisa, então uma aldeia fora de TI não é olhada. Medido na planilha de teste do contrato
+ECO 011/2018: **197 UCs** chamadas "MANGA", em OIAPOQUE/AP, caem dentro da TI **Uaçá**
+(Regularizada) declaradas como `11 - Rural geral`.
 
 ## Custo medido (2026-10-21)
 

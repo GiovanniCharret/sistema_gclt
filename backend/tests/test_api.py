@@ -675,38 +675,42 @@ def test_validar_workaround_nao_vale_para_contrato_fora_do_andamento(client, val
 
 
 # ── Regra territorial pela rota: a fiação de `app.py` (21/10/2026) ────────────
-# Por que um teste da ROTA, se a regra já tem 15 testes próprios: aqueles chamam
-# `regras_quilombola`/`regras_indigena` direto, com base sintética. Nenhum deles
+# Por que um teste da ROTA, se a regra já tem 22 testes próprios: aqueles chamam
+# `regras_tipo_comunidade_territorial` direto, com base sintética. Nenhum deles
 # percebe se `app.py` esquecer de passar as bases para `validar` — e esse esquecimento
 # não dá sintoma nenhum: a planilha errada simplesmente passa, calada.
 # ⚠️ Este é o único teste da suíte da rota que depende dos shapefiles REAIS de
-# `entrada/`. O ponto escolhido é o centro de São Paulo, e isso é deliberado: é dentro
-# da faixa do Brasil (então a regra roda) e não vai virar território quilombola nem
-# Terra Indígena numa atualização do INCRA ou da FUNAI.
+# `entrada/`, e o ponto é a coordenada REAL da primeira das 38 linhas do ODI
+# AP2200112LPT110004 (RAMAL DO CUNANI, CALÇOENE/AP) da planilha de teste do contrato
+# ECO 011/2018 — dentro do polígono CUNANI do INCRA. Ou seja: este teste é a regressão
+# do achado que motivou a inversão da regra, e não um caso inventado.
+# ⚠️ Se uma atualização do INCRA retirar CUNANI da base, este teste falha. Isso é
+# intencional: trocar a base muda quais UCs passam a ser reprovadas, e isso é decisão,
+# não detalhe.
 
 
 @pytest.mark.skipif(
     not (Path(__file__).resolve().parent.parent.parent / "entrada" / "areas_quilombolas"
          / "areas_quilombolas.shp").exists(),
     reason="base do INCRA ausente (entrada/areas_quilombolas/) — a regra fica desligada")
-def test_validar_bloqueia_quilombola_fora_de_territorio(client, validar_env):
-    """UC declarada quilombola na Av. Paulista → erro, `ok=false`, e-mail NÃO disparado."""
-    # Mesma linha limpa, com o tipo quilombola e uma coordenada urbana de São Paulo.
-    linha = {**_LINHA_LIMPA,
-             "Tipo de Comunidade": "2 - Comunidade quilombola",
-             "Latitude": "-23.5614", "Longitude": "-46.6554"}
-    # O domínio do teste precisa aceitar o valor, senão o achado seria de domínio.
-    dominios = {**_DOM_VAL, "TIPO_COMUNIDADE": _DOM_VAL["TIPO_COMUNIDADE"] + ["2 - Comunidade quilombola"]}
-    with patch("backend.app.obter_dominios", return_value=dominios):
-        r = client.post("/api/validar", headers=_headers(),
-                        files={"arquivo": ("Anexo.xlsx", gerar_xlsx([linha]))},
-                        data={"contrato": "CTR TESTE", "uf": "AM"})
+def test_validar_acusa_tipo_de_comunidade_divergente_da_localizacao(client, validar_env):
+    """UC dentro de CUNANI declarada "11 - Rural geral" → erro, `ok=false`, e-mail NÃO disparado."""
+    # Mesma linha limpa (que já declara "11 - Rural geral"), na coordenada real do Cunani.
+    linha = {**_LINHA_LIMPA, "Latitude": "2.82843", "Longitude": "-51.11374"}
+    r = client.post("/api/validar", headers=_headers(),
+                    files={"arquivo": ("Anexo.xlsx", gerar_xlsx([linha]))},
+                    data={"contrato": "CTR TESTE", "uf": "AM"})
     # A requisição é válida: o 200 traz o painel; o que muda é o `ok`.
     assert r.status_code == 200
     corpo = r.json()
     assert corpo["ok"] is False
-    titulos = {g["title"] for g in corpo["grupos"]}
-    assert "Comunidade quilombola fora de território do INCRA" in titulos
+    grupo = next(g for g in corpo["grupos"]
+                 if g["title"] == "Tipo de Comunidade divergente da localização")
+    assert grupo["sev"] == "err"
+    # A mensagem tem de nomear o território, senão o painel não instrui ninguém.
+    assert "CUNANI" in grupo["rows"][0]["problem"]
+    # E o painel tem de apontar a coluna M, que é onde a analista vai digitar.
+    assert grupo["rows"][0]["field"] == "Tipo de Comunidade"
     # E o essencial: com erro, nada foi enviado.
     assert corpo["enviado"] is False
     assert validar_env["planilha"].called is False

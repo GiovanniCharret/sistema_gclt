@@ -1,7 +1,9 @@
 # `entrada/areas_quilombolas/` — áreas de quilombolas do INCRA
 
 **O que é:** o shapefile das **áreas de quilombolas** reconhecidas pelo INCRA, usado pela regra
-de validação *"Comunidade quilombola fora de território do INCRA"* (`backend/validacao.py`).
+de validação *"Tipo de Comunidade divergente da localização"* (`backend/validacao.py`,
+`regras_tipo_comunidade_territorial`): se a coordenada da UC cai **dentro** de uma destas áreas, a
+coluna M tem de declarar `2 - Comunidade quilombola`.
 
 **Quem lê:** `backend/geo_territorios.py::carregar_quilombolas()`. Mais ninguém.
 ⚠️ `backend/referencia.py` **não** vê esta pasta: ele faz `glob("**/*.csv")`, e aqui não há `.csv`.
@@ -49,6 +51,12 @@ São **390 territórios com processo de regularização fundiária**, por fase: 
 BA 39, RS 26, RJ 20, SE 17, MG 16, SP 16, CE 15, PI 13, PR 9, PB 9 e outras.
 
 ⚠️ **Não é o mapa das comunidades quilombolas.** O Censo 2022 do IBGE mapeou **8.441 localidades**;
-estas 390 são as que têm processo no INCRA. **Uma comunidade real sem processo cai fora de todos
-os polígonos** — e a regra, sendo **erro** (decisão do usuário), bloqueia o envio dessa planilha.
-Todas as fases contam como território reconhecido: filtrar por "TITULADO" deixaria 104 áreas.
+estas 390 são as que têm processo no INCRA. **Decisão do usuário em 2026-10-21: as 8.441 do IBGE
+estão descartadas e não farão parte de nenhuma regra** — valem só estas 390, que são registro
+oficial. Todas as fases contam como território reconhecido: filtrar por "TITULADO" deixaria 104.
+
+Isso deixou de ser um risco no mesmo dia, porque a regra foi **invertida**: ela só dispara quando a
+coordenada está **dentro** de um destes polígonos e a coluna M diz outra coisa. Uma comunidade real
+sem processo no INCRA simplesmente não é olhada pela regra. Medido na planilha de teste do contrato
+ECO 011/2018: **38 UCs** chamadas "RAMAL DO CUNANI" caem dentro do polígono **CUNANI** declaradas
+como `11 - Rural geral` — o erro que a regra existe para pegar.

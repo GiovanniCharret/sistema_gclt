@@ -1183,21 +1183,30 @@ def test_status_nao_substitui_a_completude_por_odi():
     assert "já cadastrada" in achado["sug"]
 
 
-# ══════════════════ Regras territoriais — quilombola e indígena (2026-10-21) ══════════════════
-# Por que em bloco separado: são duas regras novas, de severidade ERRO, que recebem a base por
+# ════════ Regra territorial — a localização confere o Tipo de Comunidade (2026-10-21) ════════
+# Por que em bloco separado: é uma regra de severidade ERRO que recebe as duas bases por
 # parâmetro. Nenhum teste aqui lê shapefile — a geometria é um retângulo de limites conhecidos,
 # montado pela fábrica de `fixtures.py`. O acoplamento com os arquivos reais de `entrada/` fica
 # confinado em `test_geo_territorios.py`, para que uma atualização do INCRA ou da FUNAI não
-# derrube a suíte de regras dizendo "regra quebrada", que seria mentira.
+# derrube a suíte de regras dizendo "regra quebrada", o que seria mentira.
+#
+# ⚠️ A DIREÇÃO desta regra é o oposto da primeira versão (2026-10-20), reprovada pelo gerente:
+# antes se conferia a coordenada de quem JÁ declarava 1 ou 2; agora se confere a coluna M de
+# quem cai dentro de território demarcado. Medido na planilha de teste do contrato ECO 011/2018
+# (2.191 linhas): a direção antiga acusava **0** linhas — a planilha traz um único valor em M —
+# e esta acusa **235**, dois ODIs inteiros. Os testes abaixo fixam a direção nova; o que
+# desapareceu, e de propósito, é qualquer teste de "declarou 2 e está fora".
 
-# As duas regras sob teste, mais as constantes do vocabulário da coluna M.
-from backend.validacao import (regras_quilombola, regras_indigena,
+# A regra sob teste, a coluna que ela aponta e as constantes do vocabulário da coluna M.
+from backend.validacao import (regras_tipo_comunidade_territorial, COL_TIPO_COM,
                                _TIPO_COM_QUILOMBOLA, _TIPO_COM_INDIGENA, _COMUNIDADE_FAMILIA)
 # Fábrica de geometria conhecida, compartilhada com a suíte do leitor.
 from backend.tests.fixtures import area_retangular, base_sintetica
 
 # Retângulo no Amazonas: o MESMO usado em `test_geo_territorios.py`, para que um ponto "dentro"
-# signifique a mesma coisa nas duas suítes.
+# signifique a mesma coisa nas duas suítes. ⚠️ A coordenada default de `linha_valida`
+# (-3.30/-60.0) cai DENTRO desse retângulo — é o que permite testar o caso central sem
+# sobrescrever nada além da coluna M.
 _LAT_DENTRO, _LON_DENTRO = -3.5, -60.0
 _LAT_FORA, _LON_FORA = -5.0, -60.0
 
@@ -1216,189 +1225,252 @@ def _base_indigena():
         rotulo="Terra Indígena da FUNAI")
 
 
-def test_quilombola_dentro_da_area_nao_gera_achado():
-    """UC quilombola com coordenada DENTRO de área do INCRA: nada a reclamar."""
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_DENTRO, "Longitude": _LON_DENTRO})
-    assert regras_quilombola([linha], _base_quilombola()) == []
+def test_ponto_fora_das_duas_bases_nao_gera_achado():
+    """Fora de todo território demarcado a regra se cala — é o caso da maioria das linhas.
 
-
-def test_quilombola_fora_da_area_e_erro():
-    """UC quilombola fora de toda área do INCRA é ERRO — decisão do usuário em 2026-10-21.
-
-    ⚠️ A severidade foi escolhida contra a recomendação registrada na spec (§3: aviso, porque a
-    base cobre 390 territórios com processo e não as 8.441 comunidades do Censo). Como erro, ela
-    BLOQUEIA o envio. Este teste fixa a decisão; se um dia ela mudar, é aqui que a mudança
-    aparece.
+    Por que é o primeiro teste: 2.149 das 2.191 linhas da planilha de teste caem aqui. Se este
+    caso falhasse, a regra reprovaria planilha inteira do Brasil rural.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    achados = regras_quilombola([linha], _base_quilombola())
+    linha = linha_valida(**{"Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+    assert regras_tipo_comunidade_territorial(
+        [linha], quilombolas=_base_quilombola(), indigenas=_base_indigena()) == []
+
+
+def test_dentro_de_area_quilombola_sem_declarar_e_erro():
+    """O caso que o gerente pediu: ponto dentro de território do INCRA com M = "11 - Rural geral".
+
+    É a forma exata dos 38 achados reais do ODI AP2200112LPT110004 (RAMAL DO CUNANI), que a
+    direção anterior da regra não via.
+    """
+    # `linha_valida` já vem com M = "11 - Rural geral" e coordenada dentro do retângulo.
+    achados = regras_tipo_comunidade_territorial([linha_valida()], quilombolas=_base_quilombola())
     assert len(achados) == 1
     assert achados[0]["sev"] == "err"
-    assert achados[0]["regra"] == "Comunidade quilombola fora de território do INCRA"
+    assert achados[0]["regra"] == "Tipo de Comunidade divergente da localização"
 
 
-def test_mensagem_nomeia_a_area_mais_proxima_e_a_distancia():
-    """A mensagem traz nome, UF, fase e a distância — pedido explícito do usuário.
+def test_dentro_de_ti_sem_declarar_e_erro():
+    """Mesma forma, pela base da FUNAI — os 197 achados reais do ODI AP2400112LPT110101 (MANGA)."""
+    achados = regras_tipo_comunidade_territorial([linha_valida()], indigenas=_base_indigena())
+    assert len(achados) == 1
+    assert achados[0]["sev"] == "err"
+    assert _TIPO_COM_INDIGENA in achados[0]["sug"]
 
-    Por que a distância é parte da regra, e não enfeite: sem ela o operador não distingue "errei
-    o sinal da longitude" (centenas de km) de "a comunidade não tem processo no INCRA" (poucos
-    km, ou dezenas). A conferência que ele precisa fazer é diferente em cada caso.
+
+def test_dentro_declarando_o_tipo_certo_silencia():
+    """Declarou o tipo que a localização pede: nenhum achado, nas duas bases."""
+    quilombola = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                                 "IV.2 - Família quilombola": "Sim"})
+    assert regras_tipo_comunidade_territorial([quilombola],
+                                              quilombolas=_base_quilombola()) == []
+    indigena = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
+                               "IV.1 - Família indígena": "Sim"})
+    assert regras_tipo_comunidade_territorial([indigena], indigenas=_base_indigena()) == []
+
+
+def test_declarar_o_outro_tipo_tradicional_dentro_do_territorio_e_erro():
+    """Dentro de área quilombola declarando `1 - Comunidade indígena` continua sendo erro.
+
+    Por que merece teste próprio: "declarou um tipo tradicional" não é o que silencia a regra —
+    o que silencia é declarar o tipo DAQUELE território. Sem isso, marcar 1 no lugar de 2
+    passaria batido.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    problema = regras_quilombola([linha], _base_quilombola())[0]["problema"]
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
+                            "IV.1 - Família indígena": "Sim"})
+    achados = regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola())
+    assert len(achados) == 1
+    assert _TIPO_COM_QUILOMBOLA in achados[0]["sug"]
+
+
+def test_o_achado_aponta_a_coluna_m_e_nao_a_coordenada():
+    """O campo do achado é o Tipo de Comunidade — é a célula que a analista vai digitar.
+
+    ⚠️ Fixa a inversão no lugar onde ela aparece para quem usa o sistema. A versão anterior
+    apontava `Latitude`, porque a suspeita era da coordenada; aqui a suspeita é do
+    preenchimento, e o painel precisa levar a pessoa à coluna certa.
+    """
+    achado = regras_tipo_comunidade_territorial([linha_valida()],
+                                                quilombolas=_base_quilombola())[0]
+    assert achado["campo"] == COL_TIPO_COM
+    assert achado["campo"] == "Tipo de Comunidade"
+
+
+def test_mensagem_nomeia_o_territorio_com_uf_e_fase():
+    """A mensagem traz nome, UF e fase do território que contém o ponto.
+
+    Por que a fase é parte da frase: "RTID" e "Em Estudo" são território reconhecido mas em
+    processo, e isso muda o peso do achado para quem confere. CUNANI, o caso real, está em RTID.
+    """
+    problema = regras_tipo_comunidade_territorial([linha_valida()],
+                                                  quilombolas=_base_quilombola())[0]["problema"]
     assert "QUILOMBO PAREDÃO" in problema
     assert "AM" in problema and "TITULADO" in problema
-    # 1° de latitude ao sul da borda ≈ 111,3 km, escrito com vírgula decimal (pt-BR).
-    assert "111,3 km" in problema
+    # E diz o que estava declarado, senão a frase não explica o conflito.
+    assert "11 - Rural geral" in problema
 
 
-def test_sugestao_diz_quantas_areas_a_base_em_uso_tem():
-    """A sugestão informa o tamanho da base — e o número vem da base, não de uma constante.
+def test_mensagem_ecoa_o_texto_original_da_celula():
+    """A coordenada aparece como foi digitada, não como float normalizado.
 
-    Por que: a frase "a base em uso tem 390 áreas" explica ao operador por que uma comunidade
-    real pode cair fora. Escrever "390" no código faria a frase mentir no dia em que o INCRA
-    publicasse uma atualização.
+    Por que: `-47,36` digitado volta de `normalizar_coordenada` como `-47.36473497028796`.
+    Devolver 15 casas a quem escreveu 5 é falsa precisão e dificulta achar a célula.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    sugestao = regras_quilombola([linha], _base_quilombola())[0]["sug"]
-    assert "1 áreas de quilombolas" in sugestao
+    linha = linha_valida(**{"Latitude": "-3,40", "Longitude": "-60,10"})
+    problema = regras_tipo_comunidade_territorial([linha],
+                                                  quilombolas=_base_quilombola())[0]["problema"]
+    assert "-3,40" in problema and "-60,10" in problema
+    assert "-3.4000000" not in problema
 
 
-def test_sem_base_a_regra_nao_roda():
-    """`None` desliga a regra: nenhum achado e nenhuma exceção.
+def test_sugestao_diz_o_valor_a_preencher():
+    """A sugestão nomeia o valor exato do modelo oficial, não "o tipo correto".
 
-    Por que é o comportamento certo: a base é arquivo externo (`entrada/areas_*`). Se ela não
-    chegou na imagem, a regra fica desligada e o recebimento de planilha continua — a falha é
-    ABERTA de propósito, com o rastro no log e em `/api/health`.
+    Por que: é o que torna a regra instrutiva em vez de acusatória — a analista copia a frase
+    para a célula. Pedido do gerente em 2026-10-21.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    assert regras_quilombola([linha], None) == []
-    assert regras_indigena([linha], None) == []
+    sugestao = regras_tipo_comunidade_territorial([linha_valida()],
+                                                  quilombolas=_base_quilombola())[0]["sug"]
+    assert _TIPO_COM_QUILOMBOLA in sugestao
+    assert "Tipo de Comunidade" in sugestao
 
 
-def test_coordenada_ilegivel_nao_dispara_a_regra_territorial():
-    """Coordenada não numérica já tem o seu aviso: a regra territorial fica calada.
+def test_coluna_m_vazia_nao_dispara():
+    """M em branco já é "Campos obrigatórios vazios" (erro): a regra territorial fica calada.
 
-    Por que: dois achados para a mesma causa afogam o painel. É a mesma razão pela qual
-    "Tipologia em branco" emite UM achado por linha, e não um por célula.
+    Por que: dois achados para a mesma causa afogam o painel. Mesma razão pela qual "Tipologia
+    em branco" emite um achado por linha, e não um por célula. Decisão registrada em 2026-10-21.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": "norte", "Longitude": "oeste"})
-    assert regras_quilombola([linha], _base_quilombola()) == []
+    linha = linha_valida(**{"Tipo de Comunidade": ""})
+    assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
 
 
-def test_coordenada_fora_do_brasil_nao_dispara_a_regra_territorial():
-    """Ponto fora da faixa do Brasil também já tem aviso próprio — e a pergunta não faria sentido."""
-    # Coordenada europeia: fora de `_FAIXA_LAT`/`_FAIXA_LON`.
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": "48.85", "Longitude": "2.35"})
-    assert regras_quilombola([linha], _base_quilombola()) == []
+def test_comparacao_do_tipo_ignora_a_caixa():
+    """"2 - COMUNIDADE QUILOMBOLA" silencia a regra, como todo vocabulário desde 2026-07-15."""
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA.upper(),
+                            "IV.2 - Família quilombola": "Sim"})
+    assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
 
 
-def test_a_regra_tem_direcao_unica():
-    """UC DENTRO de área quilombola com outro Tipo de Comunidade não gera achado.
+def test_sobreposicao_aceita_indigena():
+    """Ponto dentro das DUAS bases declarando indígena: silêncio.
 
-    ⚠️ Fixa uma escolha de desenho, não uma limitação: território titulado tem morador não
-    quilombola (Alcântara/MA é o caso extremo), então o polígono não prova quem vive ali. E, se
-    a regra reclamasse, o caminho mais curto para silenciá-la seria marcar "2 - Comunidade
-    quilombola" — que obriga "IV.2 - Família quilombola" = "Sim" e muda o enquadramento. A
-    regra fabricaria o dado falso que deveria flagrar. Mesma forma da regra M → família.
+    ⚠️ Decisão do usuário em 2026-10-21: a sobreposição é um **OU** — "nem null, nem E".
+    Qualquer um dos dois valores serve, e **sem aviso nenhum** de que há sobreposição. É
+    geografia real: 2 das 390 áreas do INCRA têm ponto interno dentro de TI (MOCAMBO/SE na TI
+    Caiçara/Ilha de São Pedro, CONCEIÇÃO DAS CRIOULAS/PE na TI Atikum).
     """
-    linha = linha_valida(**{"Latitude": _LAT_DENTRO, "Longitude": _LON_DENTRO})
-    # A linha-base é "11 - Rural geral", e está dentro do retângulo quilombola.
-    assert regras_quilombola([linha], _base_quilombola()) == []
-
-
-def test_indigena_fora_de_ti_e_erro():
-    """UC indígena fora de toda TI da FUNAI é ERRO, com a sua própria regra e mensagem."""
     linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
-                            "IV.1 - Família indígena": "Sim",
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    achados = regras_indigena([linha], _base_indigena())
+                            "IV.1 - Família indígena": "Sim"})
+    assert regras_tipo_comunidade_territorial(
+        [linha], quilombolas=_base_quilombola(), indigenas=_base_indigena()) == []
+
+
+def test_sobreposicao_aceita_quilombola():
+    """O outro lado do OU, no mesmo ponto sobreposto: também silêncio, também sem aviso."""
+    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+                            "IV.2 - Família quilombola": "Sim"})
+    assert regras_tipo_comunidade_territorial(
+        [linha], quilombolas=_base_quilombola(), indigenas=_base_indigena()) == []
+
+
+def test_sobreposicao_sem_declarar_gera_um_achado_nomeando_os_dois():
+    """Dentro das duas e declarando nenhuma: UM achado, citando os dois territórios e os dois valores.
+
+    Por que um só: dois achados que se excluem ("deveria ser 1" e "deveria ser 2") deixariam a
+    analista sem caminho de saída — era o buraco que a avaliação conjunta foi feita para fechar.
+    """
+    achados = regras_tipo_comunidade_territorial(
+        [linha_valida()], quilombolas=_base_quilombola(), indigenas=_base_indigena())
     assert len(achados) == 1
-    assert achados[0]["sev"] == "err"
-    assert achados[0]["regra"] == "Comunidade indígena fora de Terra Indígena da FUNAI"
+    assert "QUILOMBO PAREDÃO" in achados[0]["problema"]
     assert "TI Teste" in achados[0]["problema"]
+    assert _TIPO_COM_INDIGENA in achados[0]["sug"]
+    assert _TIPO_COM_QUILOMBOLA in achados[0]["sug"]
 
 
-def test_indigena_dentro_de_ti_nao_gera_achado():
-    """UC indígena dentro de TI: nada a reclamar."""
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
-                            "IV.1 - Família indígena": "Sim",
-                            "Latitude": _LAT_DENTRO, "Longitude": _LON_DENTRO})
-    assert regras_indigena([linha], _base_indigena()) == []
+def test_sem_nenhuma_base_a_regra_nao_roda():
+    """As duas bases `None` desligam a regra: nenhum achado e nenhuma exceção.
+
+    Por que é o comportamento certo: as bases são arquivos externos (`entrada/areas_*`). Se não
+    chegaram na imagem, a regra fica desligada e o recebimento de planilha continua — a falha é
+    ABERTA de propósito, com rastro no log e na rota de diagnóstico de saúde.
+    """
+    assert regras_tipo_comunidade_territorial([linha_valida()]) == []
+    assert regras_tipo_comunidade_territorial([linha_valida()], None, None) == []
 
 
-def test_as_duas_regras_sao_independentes():
-    """Ligar uma base não liga a outra — é o que permite implantar em separado.
+def test_uma_base_so_nao_liga_a_outra():
+    """Com só a base quilombola, o território indígena não é conferido — e vice-versa.
 
     Pedido do usuário em 2026-10-21: "deploy separado para facilitar os testes". Este teste é a
-    garantia mecânica disso: com só a base quilombola em mãos, uma linha indígena errada passa.
+    garantia mecânica disso, e é o que continua valendo depois de as duas funções públicas
+    virarem uma: o que separa as bases são os parâmetros, não funções distintas.
     """
-    indigena_errada = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
-                                      "IV.1 - Família indígena": "Sim",
-                                      "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    quilombola_errada = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                                        "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    linhas = [indigena_errada, quilombola_errada]
-    # Só a base quilombola: a linha indígena não é olhada por ninguém.
-    so_quilombola = regras_quilombola(linhas, _base_quilombola()) + regras_indigena(linhas, None)
-    assert len(so_quilombola) == 1
-    assert so_quilombola[0]["regra"] == "Comunidade quilombola fora de território do INCRA"
-    # E o inverso.
-    so_indigena = regras_quilombola(linhas, None) + regras_indigena(linhas, _base_indigena())
+    linha = linha_valida()
+    # Só a base indígena ligada: o achado cita a TI, e não a área quilombola.
+    so_indigena = regras_tipo_comunidade_territorial([linha], indigenas=_base_indigena())
     assert len(so_indigena) == 1
-    assert so_indigena[0]["regra"] == "Comunidade indígena fora de Terra Indígena da FUNAI"
+    assert "TI Teste" in so_indigena[0]["problema"]
+    assert "QUILOMBO PAREDÃO" not in so_indigena[0]["problema"]
+    # E o inverso.
+    so_quilombola = regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola())
+    assert len(so_quilombola) == 1
+    assert "QUILOMBO PAREDÃO" in so_quilombola[0]["problema"]
+    assert "TI Teste" not in so_quilombola[0]["problema"]
 
 
-def test_uma_linha_por_achado_mesmo_com_varias_fora():
-    """Três UCs fora da área geram três achados, um por linha, com a localização certa."""
-    linhas = [linha_valida(**{"_linha": n, "Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
+def test_coordenada_ilegivel_nao_dispara():
+    """Coordenada não numérica já tem o seu aviso: a regra territorial fica calada."""
+    linha = linha_valida(**{"Latitude": "norte", "Longitude": "oeste"})
+    assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
+
+
+def test_coordenada_fora_do_brasil_nao_dispara():
+    """Ponto fora da faixa do Brasil também já tem aviso — e nenhum território o conteria."""
+    # Coordenada europeia: fora de `_FAIXA_LAT`/`_FAIXA_LON`.
+    linha = linha_valida(**{"Latitude": "48.85", "Longitude": "2.35"})
+    assert regras_tipo_comunidade_territorial([linha], quilombolas=_base_quilombola()) == []
+
+
+def test_um_achado_por_linha():
+    """Três UCs dentro do território geram três achados, com a localização certa em cada."""
+    linhas = [linha_valida(**{"_linha": n,
                               "Número da Unidade Consumidora": f"7001234{n}",
-                              "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
+                              "Latitude": _LAT_DENTRO, "Longitude": _LON_DENTRO + n / 1000})
               for n in (3, 4, 5)]
-    achados = regras_quilombola(linhas, _base_quilombola())
+    achados = regras_tipo_comunidade_territorial(linhas, quilombolas=_base_quilombola())
     assert [a["loc"] for a in achados] == ["L3", "L4", "L5"]
 
 
-def test_regra_territorial_bloqueia_o_envio():
+def test_regra_bloqueia_o_envio():
     """Pela montagem do painel: o achado entra como erro e `ok` fica False.
 
     Por que passar por `validar` e não só pela regra: é `validar` que decide o envio, e é lá que
-    os parâmetros novos (`quilombolas`/`indigenas`) podem ser esquecidos numa refatoração.
+    os parâmetros `quilombolas`/`indigenas` podem ser esquecidos numa refatoração.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_INDIGENA,
-                            "IV.1 - Família indígena": "Sim",
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    resultado = validar([linha], DOM, set(), {}, indigenas=_base_indigena())
+    resultado = validar([linha_valida()], DOM, set(), {}, indigenas=_base_indigena())
     assert resultado["ok"] is False
-    titulos = {g["title"] for g in resultado["grupos"]}
-    assert "Comunidade indígena fora de Terra Indígena da FUNAI" in titulos
-    # E o grupo traz a descrição autoritativa, não uma frase montada na hora.
     grupo = next(g for g in resultado["grupos"]
-                 if g["title"] == "Comunidade indígena fora de Terra Indígena da FUNAI")
-    assert "areas_indigenas" in grupo["desc"]
+                 if g["title"] == "Tipo de Comunidade divergente da localização")
+    assert grupo["sev"] == "err"
+    # E o grupo traz a descrição autoritativa de `_DESCRICOES`, não uma frase montada na hora.
+    assert "INCRA" in grupo["desc"] and "FUNAI" in grupo["desc"]
 
 
 def test_validar_sem_as_bases_nao_muda_nada():
     """Sem as bases, `validar` se comporta exatamente como antes de 2026-10-21.
 
-    Por que importa: são 100 testes anteriores que chamam `validar` sem esses parâmetros. Se o
-    default deixasse de ser "desligado", todos eles passariam a medir outra coisa.
+    Por que importa: são mais de 100 testes anteriores que chamam `validar` sem esses
+    parâmetros. Se o default deixasse de ser "desligado", todos passariam a medir outra coisa —
+    e a coordenada default de `linha_valida` cai dentro do retângulo sintético, então o risco é
+    concreto, não teórico.
     """
-    linha = linha_valida(**{"Tipo de Comunidade": _TIPO_COM_QUILOMBOLA,
-                            "Latitude": _LAT_FORA, "Longitude": _LON_FORA})
-    titulos = {g["title"] for g in validar([linha], DOM, set(), {})["grupos"]}
-    assert "Comunidade quilombola fora de território do INCRA" not in titulos
+    titulos = {g["title"] for g in validar([linha_valida()], DOM, set(), {})["grupos"]}
+    assert "Tipo de Comunidade divergente da localização" not in titulos
 
 
 def test_constantes_do_tipo_de_comunidade_batem_com_o_mapa_de_familia():
-    """Os dois valores da coluna M usados pelas regras territoriais são os MESMOS do mapa M→família.
+    """Os dois valores da coluna M usados pela regra territorial são os MESMOS do mapa M→família.
 
     Por que: são dois lugares no mesmo arquivo citando o mesmo texto do modelo oficial
     ("1 - Comunidade indígena", "2 - Comunidade quilombola"). Se o MME mudar a redação, as duas
