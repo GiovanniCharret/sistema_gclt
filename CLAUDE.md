@@ -210,6 +210,52 @@ trigger nothing. This replaced the 2026-07-14 pair of warnings: the mutual-exclu
 ("the other families must be Não") and the whole **Enquadramento = `4 - Povos tradicionais`
 rule (column N) were dropped**, and the severity went warn → **err**.
 
+**Regras TERRITORIAIS — a coordenada confere com o tipo de comunidade declarado (err, since
+2026-10-21).** Two independent rules, one per base, both in `backend/validacao.py`
+(`regras_quilombola` / `regras_indigena`) over a shared private engine:
+
+| coluna M | base conferida | feições | título do achado |
+|---|---|---|---|
+| `2 - Comunidade quilombola` | `entrada/areas_quilombolas/` (INCRA) | **390** | "Comunidade quilombola fora de território do INCRA" |
+| `1 - Comunidade indígena` | `entrada/areas_indigenas/` (FUNAI) | **665** | "Comunidade indígena fora de Terra Indígena da FUNAI" |
+
+The point-in-polygon test runs only when the row **declares that type** and the coordinate is
+**readable and inside Brazil's range** — both of those already have their own warning, and firing
+here too would multiply findings over one cause. Outside every polygon → **err**, naming the
+**nearest area and the distance** (`“QUILOMBO X” (MA, TITULADO) a 79,0 km`); the suggestion states
+how many areas the base in use has, read from the base, never hardcoded.
+
+- ⚠️ **Severity is `err` by the user's decision (2026-10-21), against the recommendation written in
+  `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md` §3.** The INCRA base maps
+  **territories with a land-tenure process** (390; only 104 titled), not communities — IBGE's 2022
+  census mapped **8.441** quilombola localities. So a legitimate community with no INCRA process
+  **blocks the whole sheet**. The user holds that risk knowingly and will calibrate with real test
+  sheets. The indigenous side is better covered (665 TIs, all phases), but an urban village or a
+  retomada outside a demarcated TI hits the same wall.
+- **One-directional**, like M→família: a UC **inside** a quilombola/indigenous polygon declaring
+  another type triggers **nothing**. Two reasons, and the second is the stronger: a titled territory
+  has non-quilombola residents (Alcântara/MA, 78.725 ha), and — if the rule did fire — the shortest
+  way to silence it would be to mark `2 - Comunidade quilombola`, which **forces** `IV.2` = "Sim"
+  and changes the enquadramento. The rule would manufacture the false data it exists to catch. A
+  test pins the choice.
+- **The two rules are independent on purpose** (user: "deploy separado para facilitar os testes"):
+  each receives its own base as a **parameter**, and `None` turns that rule off. `app.py` is the only
+  place that reads the files (`obter_quilombolas()` / `obter_indigenas()`). A test pins that one base
+  being present does not enable the other.
+- ⚠️ **Fails OPEN, never silently.** A missing/unreadable shapefile turns the rule off instead of
+  blocking every upload over a reference file — but the unavailability goes to the container log
+  (once per process) and to **`GET /api/health`** as `territorios: {quilombolas: …, indigenas: …}`
+  (`null` when off). Two tests pin the log line and the one-warning-per-process behavior.
+- ⚠️ **Fixture fallout worth knowing:** `_LINHA_LIMPA` in `test_api.py` declared
+  `1 - Comunidade indígena` at an invented coordinate near Manacapuru. It was "clean" only because
+  no rule looked at geography — wiring the bases broke **four** route tests. The fixture moved to
+  `11 - Rural geral`; the route suite stays independent of the shapefiles, except for **one**
+  deliberate end-to-end test (a quilombola UC at Av. Paulista) that is the only thing which would
+  catch `app.py` forgetting to pass the bases.
+- Suite: **251** (was 230 before this change: 20 new in `test_geo_territorios.py`, 15 in
+  `test_validacao.py`, 1 in `test_api.py`). The 5 tests that assert the rule fires were verified red
+  against a neutered engine.
+
 Cross-line: duplicate ODI+UC key (**err**),
 duplicate UC regardless of ODI (**err**), **duplicate (lat, lon) pair within the uploaded
 sheet** (**err**, since 2026-07-30 — `_coordenadas_duplicadas`; rows with an unreadable
@@ -389,7 +435,8 @@ all (nothing like Supabase/`anon` keys), so RLS is not applicable; **zero** `loc
 sensitive routes gate on `matriz_perfis.pode_fazer` and **fail closed**; `/api/validar` enforces
 contract ownership (`acesso.py`); ids are UUIDv4 and the invite token is `secrets.token_urlsafe(32)`
 stored as **sha256**; no raw SQL anywhere (SQLAlchemy Core, bound params); React escapes by default
-with **zero** `dangerouslySetInnerHTML`; and the exported CSV **neutralizes formulas** (`=+-@	`).
+with **zero** `dangerouslySetInnerHTML`; and the exported CSV **neutralizes formulas** (`=+-@	
+`).
 
 **Open findings, worst first** (full write-up in PLAN.md, 2026-10-01):
 1. **`POST /api/esqueci-senha` resets any operador to the public `Senha123` with no
@@ -578,6 +625,76 @@ asserts the version string). Then **commit the `.xlsx`** — `manuais/` is track
 carries the new model (Azure: the workflow's `git pull`; Hostinger: the `git pull` in its clone)
 — **no separate scp needed**. See the latest model-swap decision in PLAN.md.
 
+### Bases georreferenciadas em `entrada/` — quilombolas (INCRA) e TIs (FUNAI), medidas em 2026-10-20/21
+
+> ⚠️ **Onde os arquivos moram, desde 2026-10-21 (decisão do usuário):** os shapefiles ficam
+> **extraídos** em **`entrada/areas_quilombolas/`** e **`entrada/areas_indigenas/`** — quatro
+> arquivos cada (`.shp`/`.shx`/`.dbf`/`.prj`), com nome canônico em ASCII e um `LEIA-ME.md` por
+> pasta. **O `.zip` não entra**: os downloads originais seguem em `manuais/`, agora **gitignorados**
+> (`manuais/*.zip`). Tamanho versionado: **2,6 MB** (quilombolas) + **31,4 MB** (indígenas); entram
+> na imagem por `COPY . .`, como o resto de `entrada/`. ⚠️ `referencia.py` **não** vê essas pastas —
+> ele faz `glob("**/*.csv")`. Quem lê é **`backend/geo_territorios.py`** (`pyshp`, duas funções de
+> carga separadas, cache por mtime, `array('d')` achatado). O `.cst` vazio da FUNAI foi
+> **descartado**: arquivo de codificação vazio é pior que nenhum, porque o leitor acredita nele.
+
+- **`entrada/areas_quilombolas/`** (2,6 MB) — shapefile do **INCRA**, camada *Áreas de
+  Quilombolas*: **390 polígonos**, 147.305 vértices, 24 UFs, SIRGAS 2000, 23 colunas
+  (`nm_comunid`, `nm_municip`, `cd_uf`, `fase`, `esfera`, `nr_area_ha`, `dt_titulac`, …).
+  O `.dbf` é **latin-1** e os arquivos `.cpg`/`.cst` vêm **vazios** — a codificação tem de ser
+  passada à mão, ou os nomes saem corrompidos. Lido **direto do zip, sem descompactar, em
+  0,027 s**. Distribuição por UF: PA 80, MA 61, BA 39, RS 26, RJ 20, SE 17, MG 16, SP 16, CE 15.
+- **`entrada/areas_indigenas/`** (31,4 MB extraídos) — vem do download completo do
+  GeoServer da FUNAI (camada `tis_poligonais`): **665 Terras Indígenas**, 25 UFs, 1.819.506
+  vértices, latin-1, leitura em 0,17 s; `fase_ti` = Regularizada 494, Declarada 73, Delimitada
+  45, Encaminhada RI 28, Homologada 17, Em Estudo 8. O arquivo anterior tinha **5 polígonos**
+  (AP/PA) — era um recorte, não a base. ⚠️ O GeoServer da FUNAI responde **403 a `curl` sem
+  User-Agent de navegador**; qualquer rotina de atualização precisa mandá-lo. ⚠️ **São 31,4 MB
+  versionados** (o `.zip` tinha 21,1 MB, mas o backend precisa dos arquivos abertos) — a maior coisa
+  do repositório, e uma escolha consciente do usuário em 2026-10-21, não um descuido.
+- ⚠️ **A troca do arquivo quilombola foi de UNIVERSO, não de formato.** O antigo era do **IBGE**
+  (Censo 2022, `BR_LQs_CD2022`): **8.441 pontos**, onde as comunidades **vivem**. O novo é do
+  **INCRA**: **390 áreas**, territórios **com processo de regularização fundiária**. O polígono
+  responde "está dentro?" sem raio arbitrário; o preço é **cobertura** — por `fase`: RTID 118,
+  TITULADO 104, PORTARIA 65, DECRETO 48, TÍTULO PARCIAL 25, vazio 15 (**só 104 titulados**).
+  Uma comunidade quilombola real sem processo no INCRA cai **fora** de qualquer polígono.
+- **Biblioteca: `pyshp`** (puro Python, aceita file-like e lê de dentro do zip). `geopandas`/
+  `fiona` arrastam GDAL e não se justificam aqui: ponto-em-polígono com *ray casting* e prefiltro
+  de caixa envolvente custou **0,020 ms por linha** (as 490 linhas de uma planilha real em
+  0,010 s). A busca da área **mais próxima**, essa sim, é cara: **9,9–12 ms por ponto** em varredura
+  exaustiva dos 147.305 vértices — com prefiltro pelas caixas mais próximas cai a **0,32 ms**
+  (mesma resposta em 30 de 30 pontos sorteados). Base carregada ocupa **16,2 MB** como tuplas do
+  pyshp e **2,5 MB** em `array('d')` achatado.
+- ⚠️ **O campo `nr_area_ha` NÃO é confiável; a geometria é.** `MONGE BELO` (MA) declara
+  **72.466.129 ha** e a geometria dá **5.693 ha** — razão **12.729×**, um erro de digitação que
+  sozinho responde por 96% da soma do campo. Soma geométrica das 390 áreas: **3.014.363 ha**;
+  mediana **1.229 ha**; maior de verdade: TAMBOR (AM) com 724.644 ha, seguida de ALTO TROMBETAS II
+  (PA, 295.781 ha de geometria contra 103.871 ha declarados) e KALUNGA (GO, 263.561 ha).
+  **Prova de que a geometria está sã** (sem isso, um "0 de 490" não valeria nada): 60 pontos
+  internos sorteados em 60 áreas foram reencontrados **nas próprias áreas**, zero caiu em área
+  vizinha, e Av. Paulista / Praça dos Três Poderes / oceano devolvem `None`.
+- ⚠️ Outros campos sujos: `esfera` = FEDERAL 283, ESTADUAL 76, **`Federal` 21**, **`FEDEERAL` 1**,
+  vazio 9 — comparação só normalizada (`casefold`), como já se faz com UF/município.
+- **Medido contra planilha real** (`manuais/modelo revisado_…ECM-0202025_MA.xlsx`, 490 linhas):
+  **nenhuma** das 490 UCs cai dentro de área quilombola, e **nenhuma** linha está marcada
+  `2 - Comunidade quilombola` (452 são `11 - Rural geral`, 35 `8 - unidade de conservação`,
+  3 `3 - ribeirinha`). A área mais próxima fica a **51–184 km**. Ou seja: a regra proposta abaixo
+  seria **silenciosa** nessa planilha — o que é o comportamento certo, e também o motivo de não
+  haver ainda nenhum caso real para calibrá-la.
+- ⚠️ **A área em hectares sai SEMPRE do cálculo do polígono, nunca da célula** — decisão do
+  usuário em 2026-10-21, registrada aqui porque é o tipo de coisa que alguém "otimiza" depois lendo
+  o campo pronto. `Area.hectares()` usa a fórmula do sapateiro; um teste fixa MONGE BELO entre 5.000
+  e 6.500 ha. O próprio INCRA tem um segundo campo, **`area_calc_` = 5.655 ha** para esse registro,
+  que confirma a geometria — ou seja, o erro está em `nr_area_ha`, não na nossa conta.
+- **Custo medido com o módulo pronto (2026-10-21):** carga **0,05 s** / **0,43 s**; memória
+  **2,8 MB** / **29,2 MB** (como tuplas do pyshp seriam ~16 MB / ~160 MB); consulta "está dentro?"
+  **0,02 ms** / **0,071 ms** por linha em planilha real de 490 linhas; `mais_proxima` **0,3 ms**.
+  ⚠️ **Pior caso real: 10,1 ms por linha** quando o ponto cai na caixa da TI Yanomami (61.562
+  vértices num anel só) — uma planilha de 490 UCs ali custaria ~5 s. Cabe, mas é o limite; se
+  aparecer na prática, a saída é indexar vértices por faixa de latitude, não trocar de biblioteca.
+- **As duas regras de validação que consomem isso**: ver "Regras TERRITORIAIS" na seção de regras.
+  Desenho e decisões: `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md`
+  (revisão 2).
+
 ### Deploy — two live targets
 
 1. **Hostinger VPS (`gerenciador-gclt.com`) — TEST BED, not production.** It is where the
@@ -686,6 +803,41 @@ Deploy target 2 lives in a **separate local repo and separate GitHub remote**:
 this codebase, and **backend/front changes must be applied to both by hand** — there is no
 automation. Push to its `main` **triggers the production deploy**, so commit/push there
 only when explicitly asked.
+
+> ### ⚠️ Qual trabalho vai para qual branch (usuário, 2026-10-21) — leia antes de commitar
+>
+> | tipo de trabalho | branch | o que é |
+> |---|---|---|
+> | **Validação do Anexo V, login, dados de `entrada/`, correção de bug** | **`main`** | é a atividade de **monitoramento dos beneficiários do LPT**, **em produção agora**, que a analista usa no dia a dia |
+> | **Amostragem e Emissão da OS** (geração de amostras com custos) | **`feature/amostragem-emissao-os`** | atividade **futura**, com as contas do motor ainda sendo testadas e confirmadas |
+>
+> Nas palavras do usuário: a validação *"é da atividade de monitoramento de beneficiários do lpt,
+> em produção agora e que segue as atividades da analista, **sem poder errar nem quebrar**"*; a
+> amostragem *"é uma atividade futura de gerar amostras com custos para analistas"*.
+>
+> ⚠️ **Consequência prática:** uma regra de validação nova vai para a `main` — e, no repositório de
+> produção, **um push na `main` é um deploy em `monitoramentolpt.enbpar.gov.br`**, no sistema que
+> está sendo usado. A instrução *"commite numa branch nova, não na main"* de 2026-10-07 valia **só
+> para a amostragem**; aplicá-la à validação é o erro oposto, e eu o cometi em 2026-10-21 (o
+> trabalho das regras territoriais nasceu na branch de amostragem e foi movido para a `main` —
+> neste repositório as duas apontavam para o mesmo commit, então a mudança foi sem risco; não
+> conte com essa sorte).
+
+> ### ⚠️ Os dois merges de identidade JÁ ENTRARAM na `main` de produção (2026-10-02)
+>
+> Medido em 2026-10-21 no clone de produção (`main`, árvore limpa, igual a `origin/main`, último
+> commit `base 10-20`): existe `backend/identidade/`, o `app.py` importa `asynccontextmanager` e
+> `run_in_threadpool`, o `requirements.txt` tem SQLAlchemy e pymysql, e a rota de saúde está
+> **dividida** (`/api/health` + `/api/health/detalhado`, linha 616).
+> ⚠️ **Vários blocos abaixo descrevem o mundo de ANTES desse merge** — "lives only on the feature
+> branches", "`main` has no `backend/identidade/`", "`main` today locks everyone out". Leia-os como
+> histórico, não como estado atual. (É a segunda vez que uma afirmação sobre esse merge aparece
+> errada: ver PLAN.md, 2026-10-02.)
+> ⚠️ **Consequência para quem aplicar uma mudança de backend nos dois repositórios:**
+> `validacao.py`, `test_validacao.py` e `fixtures.py` continuam **idênticos** (dá para copiar), mas
+> `app.py`, `test_api.py` e `requirements.txt` **divergem de verdade** — ali é patch cirúrgico, e
+> todo diagnóstico de saúde vai para **`/api/health/detalhado`** (com token), não para o
+> `/api/health` público.
 
 **Branches — check `git branch --show-current` before touching that clone.**
 - **`main`** — what production (Azure) runs; a push deploys. **Everything this project changes

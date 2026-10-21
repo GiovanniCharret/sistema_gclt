@@ -9,6 +9,8 @@ o store de usuários apontado para um `tmp_path` via override de dependência.
 import json
 # `types` monta uma referência fake (SimpleNamespace) nos testes de validar.
 import types
+# Caminho da base territorial, para o teste da regra pular quando ela nao esta instalada.
+from pathlib import Path
 # `patch` espiona o envio de e-mail / injeta fakes.
 from unittest.mock import patch
 
@@ -374,14 +376,23 @@ _DOM_VAL = {
     "TIPO_ATENDIMENTO": ["Extensão de Rede"],
     "UF": ["AM"],
     "SIM_NAO": ["Sim", "Não"],
-    "TIPO_COMUNIDADE": ["1 - Comunidade indígena"],
+    # ⚠️ Dois valores desde 2026-10-21: a linha limpa passou a usar "11 - Rural geral"
+    # (ver `_LINHA_LIMPA`), e "1 - Comunidade indígena" ficou para o teste da regra territorial.
+    "TIPO_COMUNIDADE": ["1 - Comunidade indígena", "11 - Rural geral / demais comunidades rurais"],
     "ENQUADRAMENTO_BENEFICIARIO": ["0 - Não é prioridade", "1 - Famílias de baixa renda"],
 }
 
-# Uma linha 100% válida (para o caminho limpo). Duas amarras vindas das regras de
-# 2026-07-29: (a) Tipo de Comunidade "1 - Comunidade indígena" exige
+# Uma linha 100% válida (para o caminho limpo). Amarras vindas das regras:
+# (a) 2026-07-29 — Tipo de Comunidade "1 - Comunidade indígena" exigiria
 # "IV.1 - Família indígena" = "Sim"; (b) o Enquadramento tem de ser um que NÃO amarre a
 # coluna "0 - Não é prioridade" — "0" exigiria "Sim" ali e "2 - CadÚnico" exigiria "Não".
+# ⚠️ (c) 2026-10-21 — o Tipo de Comunidade saiu de "1 - Comunidade indígena" para
+# "11 - Rural geral". Motivo: as regras territoriais passaram a conferir se a coordenada de uma
+# UC indígena/quilombola está dentro de Terra Indígena ou de área do INCRA, e a coordenada desta
+# linha (-3.30; -60.0) é inventada — não está em TI nenhuma. Com o tipo antigo, esta "linha
+# limpa" virou erro e levou consigo quatro testes da rota que nada têm a ver com geografia.
+# A marcação "IV.1 - Família indígena" = "Sim" fica: com o tipo 11 ela é inofensiva (a regra
+# M→família é de direção única) e continua servindo de tipologia assinalada para a coluna "0".
 _LINHA_LIMPA = {
     # Distribuidora e os dois campos de Nome entraram em OBRIGATORIOS em 2026-07-30
     # ("nenhuma célula em branco"), então a linha limpa precisa preenchê-los.
@@ -391,7 +402,8 @@ _LINHA_LIMPA = {
     "Número ODI": "O1", "Número da Unidade Consumidora": "U1",
     "Código IBGE do Município": "1302603", "Município": "MANACAPURU", "UF": "AM",
     "Latitude": "-3.30", "Longitude": "-60.0", "Data de Energização da UC": "14/02/2026",
-    "Tipo de Atendimento": "Extensão de Rede", "Tipo de Comunidade": "1 - Comunidade indígena",
+    "Tipo de Atendimento": "Extensão de Rede",
+    "Tipo de Comunidade": "11 - Rural geral / demais comunidades rurais",
     "Enquadramento do beneficiário": "1 - Famílias de baixa renda",
     # Última coluna do modelo, obrigatória desde 2026-08-28 (só não pode vir vazia).
     "CPF/CNPJ": "12345678901",
@@ -659,4 +671,42 @@ def test_validar_workaround_nao_vale_para_contrato_fora_do_andamento(client, val
     assert corpo["ok"] is False
     assert any(g["sev"] == "err" and g["title"] == "ODI + UC não consta na referência"
                for g in corpo["grupos"])
+    assert validar_env["planilha"].called is False
+
+
+# ── Regra territorial pela rota: a fiação de `app.py` (21/10/2026) ────────────
+# Por que um teste da ROTA, se a regra já tem 15 testes próprios: aqueles chamam
+# `regras_quilombola`/`regras_indigena` direto, com base sintética. Nenhum deles
+# percebe se `app.py` esquecer de passar as bases para `validar` — e esse esquecimento
+# não dá sintoma nenhum: a planilha errada simplesmente passa, calada.
+# ⚠️ Este é o único teste da suíte da rota que depende dos shapefiles REAIS de
+# `entrada/`. O ponto escolhido é o centro de São Paulo, e isso é deliberado: é dentro
+# da faixa do Brasil (então a regra roda) e não vai virar território quilombola nem
+# Terra Indígena numa atualização do INCRA ou da FUNAI.
+
+
+@pytest.mark.skipif(
+    not (Path(__file__).resolve().parent.parent.parent / "entrada" / "areas_quilombolas"
+         / "areas_quilombolas.shp").exists(),
+    reason="base do INCRA ausente (entrada/areas_quilombolas/) — a regra fica desligada")
+def test_validar_bloqueia_quilombola_fora_de_territorio(client, validar_env):
+    """UC declarada quilombola na Av. Paulista → erro, `ok=false`, e-mail NÃO disparado."""
+    # Mesma linha limpa, com o tipo quilombola e uma coordenada urbana de São Paulo.
+    linha = {**_LINHA_LIMPA,
+             "Tipo de Comunidade": "2 - Comunidade quilombola",
+             "Latitude": "-23.5614", "Longitude": "-46.6554"}
+    # O domínio do teste precisa aceitar o valor, senão o achado seria de domínio.
+    dominios = {**_DOM_VAL, "TIPO_COMUNIDADE": _DOM_VAL["TIPO_COMUNIDADE"] + ["2 - Comunidade quilombola"]}
+    with patch("backend.app.obter_dominios", return_value=dominios):
+        r = client.post("/api/validar", headers=_headers(),
+                        files={"arquivo": ("Anexo.xlsx", gerar_xlsx([linha]))},
+                        data={"contrato": "CTR TESTE", "uf": "AM"})
+    # A requisição é válida: o 200 traz o painel; o que muda é o `ok`.
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["ok"] is False
+    titulos = {g["title"] for g in corpo["grupos"]}
+    assert "Comunidade quilombola fora de território do INCRA" in titulos
+    # E o essencial: com erro, nada foi enviado.
+    assert corpo["enviado"] is False
     assert validar_env["planilha"].called is False

@@ -43,6 +43,10 @@ from backend.versao import ler_historico, resumo_publico, HistoricoIndisponivel
 # Parsing (D1), domínios (D2) e validação (D3–D5) da planilha.
 from backend.planilha import ler_preenchimento, obter_dominios, PlanilhaInvalida, _MODELO_PADRAO
 from backend.validacao import validar
+# Bases territoriais de `entrada/` (2026-10-21): quilombolas do INCRA e TIs da FUNAI.
+# Cada `obter_*` devolve None quando a base nao esta disponivel — e a regra correspondente
+# simplesmente nao roda, sem derrubar o recebimento de planilha.
+from backend.geo_territorios import obter_quilombolas, obter_indigenas
 
 # Fase 1: instancia o app com título/versão (aparecem na doc OpenAPI em /docs).
 app = FastAPI(
@@ -116,6 +120,15 @@ def health():
         "status": "ok",
         "referencia": referencia.resumo(),
         "integridade": integridade,
+        # Bases territoriais: quantas áreas cada uma carregou, ou `null` se não carregou.
+        # ⚠️ É o único sinal de que uma regra territorial está desligada — sem terminal na VM,
+        # a ausência do shapefile na imagem seria invisível de outra forma (e falha aberta em
+        # silêncio é exatamente o que já custou caro aqui, no e-mail de identidade).
+        "territorios": {
+            # Resumo traz rótulo, contagem e nome do arquivo — nenhuma coordenada.
+            "quilombolas": (lambda b: b.resumo() if b else None)(obter_quilombolas()),
+            "indigenas": (lambda b: b.resumo() if b else None)(obter_indigenas()),
+        },
         # ⚠️ Só booleanos e uma contagem: nenhum endereço, nenhuma credencial.
         "email": {
             # True = nada sai de verdade (dev/teste); em produção é defeito.
@@ -341,6 +354,11 @@ async def validar_rota(
         # autoridade no orquestrador, como já acontece com a referência.
         vigente=next((c.get("vigente") for c in base["contratos"]
                       if c.get("numero") == contrato_norm), None),
+        # Bases territoriais (2026-10-21). Lidas aqui, no orquestrador, como a referência e a
+        # autoridade de contratos — a validação as recebe como dado. `None` desliga a regra
+        # daquela base, o que é o que permite implantar quilombola antes de indígena.
+        quilombolas=obter_quilombolas(),
+        indigenas=obter_indigenas(),
     )
     # Fase 5: sem erros → envia o arquivo como veio (respeita dry-run/falha de SMTP).
     enviado = False

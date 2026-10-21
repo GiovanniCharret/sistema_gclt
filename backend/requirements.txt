@@ -9,6 +9,9 @@ python-multipart        # parsing de multipart/form-data (upload do arquivo) —
 pydantic-settings       # leitura tipada do .env (config.py) — Blocos A+
 python-dotenv           # carrega o .env em desenvolvimento
 PyJWT                   # token de sessão assinado (auth) — Bloco B
+pyshp                   # leitura de shapefile em Python puro (bases territoriais de entrada/areas_*) — 2026-10-21
+                        # ⚠️ Puro Python de propósito: geopandas/fiona arrastariam GDAL (centenas de MB na
+                        # imagem) para fazer o que custa 0,02 ms por linha sem eles.
 
 # --- Testes (pytest + cliente HTTP do FastAPI TestClient) ---
 pytest                  # framework de testes

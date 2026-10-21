@@ -80,3 +80,54 @@ def gerar_xlsx_dominios(colunas, aba="Dominios"):
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+# ───────────────────────── Bases territoriais sintéticas (2026-10-21) ─────────────────────────
+# Por que sintéticas: as regras territoriais são testadas contra uma geometria CONHECIDA, não
+# contra os shapefiles reais de `entrada/`. Um teste que depende da base real falharia no dia em
+# que o INCRA publicasse uma atualização — e falharia dizendo "regra quebrada", que é mentira.
+# Os arquivos reais têm dois testes próprios, em `test_geo_territorios.py`, e é lá que o
+# acoplamento com o dado externo fica confinado.
+
+# `array` é o formato em que `geo_territorios.Area` guarda os vértices (achatado, float64).
+import array as _array
+
+# As classes sob teste: importadas aqui para as duas suítes montarem a base do mesmo jeito.
+from backend.geo_territorios import Area, BaseTerritorial
+
+
+def area_retangular(nome, lat_min, lat_max, lon_min, lon_max, uf="AM", municipio="MANACAPURU",
+                    fase="TITULADO"):
+    """Monta uma `Area` retangular — a geometria mais simples cujo "dentro" é óbvio.
+
+    Por que retângulo: o teste precisa afirmar com certeza que um ponto está dentro ou fora. Com
+    um polígono irregular, uma falha deixaria a dúvida entre "a regra errou" e "eu errei a conta".
+
+    Entrada: nome, os limites em graus e os atributos de identificação.
+    Fase 1: monta os quatro vértices em sentido anti-horário, fechando no primeiro.
+    Fase 2: achata em `array('d')` na ordem (lon, lat) — a mesma do shapefile.
+    Saída: `Area` pronta para `contem`/`distancia_km`/`hectares`.
+    """
+    # Fase 1: anel fechado (o shapefile repete o primeiro vértice no fim).
+    vertices = [(lon_min, lat_min), (lon_max, lat_min), (lon_max, lat_max),
+                (lon_min, lat_max), (lon_min, lat_min)]
+    # Fase 2: ⚠️ a ordem é (longitude, latitude), como no `.shp` — trocar os dois é o erro
+    # silencioso clássico desse formato, e é por isso que esta função existe.
+    xy = _array.array("d")
+    for lon, lat in vertices:
+        xy.append(lon)
+        xy.append(lat)
+    # `partes` guarda índices de VÉRTICE: um anel só, com a sentinela do total ao final.
+    return Area(nome=nome, uf=uf, municipio=municipio, fase=fase, xy=xy,
+                partes=(0, len(vertices)), bbox=(lon_min, lat_min, lon_max, lat_max))
+
+
+def base_sintetica(*areas, rotulo="base de teste"):
+    """Monta uma `BaseTerritorial` com as áreas dadas (sem arquivo e sem mtime).
+
+    Entrada: `Area`s e um rótulo.
+    Saída: `BaseTerritorial` consultável, com `caminho=None` (nada em disco).
+    """
+    # `caminho=None` é o que distingue base de teste de base carregada: `resumo()` devolve
+    # `arquivo: None`, e nenhuma recarga por mtime é possível.
+    return BaseTerritorial(rotulo, list(areas), None)

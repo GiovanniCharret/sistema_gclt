@@ -51,6 +51,13 @@ _COMUNIDADE_FAMILIA = {
 # Versão casefold do mapa acima, para casar o Tipo de Comunidade ignorando a caixa.
 _COMUNIDADE_FAMILIA_CF = {k.casefold(): v for k, v in _COMUNIDADE_FAMILIA.items()}
 
+# Os dois valores da coluna M que disparam as regras TERRITORIAIS (2026-10-21): a coordenada
+# da UC tem de cair dentro de um território reconhecido. São os mesmos textos usados como
+# chave em `_COMUNIDADE_FAMILIA` acima, e um teste fixa essa igualdade — se o vocabulário do
+# modelo mudar, as duas regras têm de mudar juntas, nunca uma só.
+_TIPO_COM_INDIGENA = "1 - Comunidade indígena"
+_TIPO_COM_QUILOMBOLA = "2 - Comunidade quilombola"
+
 # Colunas de EQUIPAMENTO/INFRAESTRUTURA/ESPAÇO COLETIVO — AF até AZ da aba Preenchimento,
 # ou seja os grupos V (escolas, saúde, poços), VI (serviços públicos e infraestrutura
 # comunitária) e VII (associações, igrejas, projetos produtivos). São as 21 colunas entre
@@ -634,6 +641,132 @@ def regras_cruzamento(linhas, chaves_uc, odi_ref, novo_como_aviso=False, vigente
 
 
 # Descrição curta por regra (aparece no cabeçalho de cada grupo do painel).
+def _regras_territorio(linhas, base, tipo_comunidade, regra, rotulo, unidade):
+    """Motor das duas regras territoriais: a coordenada da UC está no território declarado?
+
+    Por que existe um motor privado, se o usuário pediu funções separadas (2026-10-21): o que
+    difere entre quilombola e indígena são **dados** — o valor da coluna M, o título da regra e
+    o nome da base —, e eles ficam escritos nas duas funções públicas abaixo, à vista. A
+    mecânica é idêntica, e duplicá-la criaria o risco clássico de corrigir uma e esquecer a
+    outra. As duas regras continuam **independentes**: cada uma recebe (ou não) a sua base, o
+    que permite ligar, testar e implantar uma de cada vez.
+
+    Entrada: `linhas` do parser, `base` (`BaseTerritorial` ou None), o valor esperado da coluna
+             M, o título da regra, o rótulo da base na frase e a palavra usada no plural.
+    Fase 1: base ausente → regra desligada, nenhum achado (ver `geo_territorios._obter`).
+    Fase 2: por linha, filtra pelo Tipo de Comunidade declarado.
+    Fase 3: exige coordenada legível e dentro da faixa do Brasil — as duas condições já têm
+            aviso próprio, e repeti-las aqui multiplicaria achados sobre a mesma causa.
+    Fase 4: ponto dentro de alguma área → nada; fora → **erro**, nomeando a área mais próxima
+            e a distância (decisão do usuário em 2026-10-21: erro, não aviso, e com distância).
+    Saída: lista de achados.
+    """
+    # Fase 1: sem base carregada a regra não roda. É falha ABERTA e deliberada — o arquivo de
+    # referência não pode derrubar o recebimento de planilha —, mas nunca silenciosa: a
+    # ausência sai no log do processo e em `GET /api/health`.
+    if base is None:
+        return []
+
+    achados = []
+    # Comparação de vocabulário ignora a caixa, como todo o resto desde 2026-07-15.
+    alvo = tipo_comunidade.casefold()
+    for linha in linhas:
+        # Fase 2: só as linhas que se declaram daquele tipo de comunidade.
+        if _txt(linha, COL_TIPO_COM).casefold() != alvo:
+            continue
+        # Fase 3: coordenadas pelo mesmo normalizador das demais regras (aceita vírgula).
+        lat = normalizar_coordenada(linha.get(COL_LAT))
+        lon = normalizar_coordenada(linha.get(COL_LON))
+        # ⚠️ A mensagem mostra o texto ORIGINAL da célula, não o float normalizado: `-47,36`
+        # digitado volta como `-47.36473497028796` depois da conversão, e devolver 15 casas a
+        # quem escreveu 5 é falsa precisão — além de dificultar achar a célula na planilha.
+        # É o mesmo critério das demais regras, que ecoam `valor "{v}"` como veio.
+        bruto = f"{_txt(linha, COL_LAT)}; {_txt(linha, COL_LON)}"
+        # Coordenada ilegível já é "Coordenadas inválidas" (aviso); não vira dois achados.
+        if lat is None or lon is None:
+            continue
+        # Coordenada fora do Brasil também já tem o seu aviso — e perguntar "está dentro de
+        # um território brasileiro?" para um ponto fora do país não informa nada.
+        if not (_FAIXA_LAT[0] <= lat <= _FAIXA_LAT[1] and _FAIXA_LON[0] <= lon <= _FAIXA_LON[1]):
+            continue
+        # Fase 4: a pergunta da regra.
+        if base.localizar(lat, lon) is not None:
+            continue
+        # Fora de tudo: a mensagem precisa dizer QUAL área é a mais próxima e a QUE distância,
+        # senão o operador não tem como saber se errou a coordenada em 200 m ou em 800 km.
+        proxima, km = base.mais_proxima(lat, lon)
+        if proxima is not None:
+            # Distância em pt-BR (vírgula decimal), com uma casa: mais que isso é falsa precisão.
+            distancia = f"{km:.1f}".replace(".", ",")
+            # A fase entra entre parênteses porque muda o peso do achado: "Em Estudo" e "RTID"
+            # são território reconhecido mas em processo, e quem confere precisa saber disso.
+            onde = f'“{proxima.nome}” ({proxima.uf}'
+            onde += f", {proxima.fase})" if proxima.fase else ")"
+            problema = (f'“{tipo_comunidade}” mas o ponto ({bruto}) não está em {rotulo}; '
+                        f"mais próxima: {onde} a {distancia} km")
+        else:
+            # Base vazia não deveria chegar aqui (a carga falha alto nesse caso), mas se
+            # chegar, o achado não pode mentir uma distância.
+            problema = (f'“{tipo_comunidade}” mas o ponto ({bruto}) não está em {rotulo}')
+        achados.append(_achado(
+            "err", regra, _loc(linha), COL_LAT, problema,
+            f"conferir Latitude/Longitude e o Tipo de Comunidade — a base em uso tem "
+            f"{len(base)} {unidade}"))
+    # Saída: um achado por linha fora do território.
+    return achados
+
+
+def regras_quilombola(linhas, quilombolas=None):
+    """Regra territorial do **quilombola**: coluna M = “2 - Comunidade quilombola” (erro).
+
+    Por que esta regra existe: o Anexo V aceitava `2 - Comunidade quilombola` em qualquer
+    coordenada do Brasil. O tipo de comunidade decide enquadramento e, portanto, prioridade no
+    Programa, e nada no sistema olhava para onde a UC fica — embora a coordenada já estivesse
+    na mesma linha, validada por faixa.
+
+    ⚠️ **Severidade erro, por decisão do usuário em 2026-10-21**, contra a recomendação
+    registrada em `planning/specs/2026-10-20-regra-quilombola-georreferenciada-design.md` §3: a
+    base do INCRA cobre **territórios com processo de regularização** (390 áreas, 104 tituladas),
+    não as comunidades (o Censo 2022 do IBGE mapeou 8.441 localidades quilombolas). Como erro, a
+    regra **bloqueia o envio** de planilha cuja UC esteja em comunidade sem processo no INCRA. O
+    usuário está de posse desse risco e vai calibrar com planilhas de teste reais.
+
+    Entrada: `linhas` do parser e `quilombolas` (`BaseTerritorial` do INCRA, None = desligada).
+    Fase 1: delega ao motor comum com os textos desta base.
+    Saída: lista de achados (erro).
+    """
+    return _regras_territorio(
+        linhas, quilombolas, _TIPO_COM_QUILOMBOLA,
+        regra="Comunidade quilombola fora de território do INCRA",
+        rotulo="área de quilombolas do INCRA",
+        unidade="áreas de quilombolas")
+
+
+def regras_indigena(linhas, indigenas=None):
+    """Regra territorial do **indígena**: coluna M = “1 - Comunidade indígena” (erro).
+
+    Mesma mecânica da regra quilombola, com a base da FUNAI (665 Terras Indígenas) — e
+    implantável em separado, a pedido do usuário, para que cada uma seja testada com a sua
+    planilha.
+
+    ⚠️ O recorte de cobertura aqui é **diferente, e melhor**: as 665 TIs incluem todas as fases
+    do processo demarcatório (Regularizada 494, Declarada 73, Delimitada 45, Encaminhada RI 28,
+    Homologada 17, Em Estudo 8), e a terra indígena brasileira está majoritariamente dentro
+    delas. Ainda assim existe comunidade indígena **fora** de TI — aldeia urbana, retomada sem
+    processo aberto, grupo em área ainda não identificada —, e para essas a regra, sendo erro,
+    bloqueia o envio.
+
+    Entrada: `linhas` do parser e `indigenas` (`BaseTerritorial` da FUNAI, None = desligada).
+    Fase 1: delega ao motor comum com os textos desta base.
+    Saída: lista de achados (erro).
+    """
+    return _regras_territorio(
+        linhas, indigenas, _TIPO_COM_INDIGENA,
+        regra="Comunidade indígena fora de Terra Indígena da FUNAI",
+        rotulo="Terra Indígena da FUNAI",
+        unidade="Terras Indígenas")
+
+
 _DESCRICOES = {
     "Campos obrigatórios vazios": "Colunas obrigatórias vazias em linhas preenchidas",
     "Valor fora do domínio": "Valor não consta na lista de domínios válidos (aba Dominios)",
@@ -652,6 +785,8 @@ _DESCRICOES = {
     "Tipologia de família ≠ Tipo de Comunidade": "Tipo de Comunidade 1/2/3/4 exige “Sim” na família correspondente (IV.1/IV.2/IV.3/IV.4)",
     "Enquadramento × “0 - Não é prioridade”": "Enquadramento “2 - CadÚnico” e os de equipamento (8, 9, 10 e 11) exigem “Não”; “0 - Não é prioridade” exige “Sim” na coluna “0 - Não é prioridade”",
     "Enquadramento × equipamento (AF:AZ)": "Enquadramento 8, 9, 10 ou 11 exige exatamente um “Sim” entre as 21 colunas de equipamento (AF a AZ — grupos V, VI e VII), com “Não” em todas as demais",
+    "Comunidade quilombola fora de território do INCRA": "Tipo de Comunidade “2 - Comunidade quilombola” com coordenada fora de todas as áreas de quilombolas do INCRA (entrada/areas_quilombolas/)",
+    "Comunidade indígena fora de Terra Indígena da FUNAI": "Tipo de Comunidade “1 - Comunidade indígena” com coordenada fora de todas as Terras Indígenas da FUNAI (entrada/areas_indigenas/)",
     "Planilha sem dados": "Nenhuma linha com ODI/UC na aba Preenchimento",
 }
 
@@ -736,12 +871,16 @@ def _preview(linhas, achados):
     return preview
 
 
-def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False, vigente=None):
+def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False, vigente=None,
+            quilombolas=None, indigenas=None):
     """Valida a planilha inteira e monta a resposta do painel (D5, §6/§7).
 
     Entrada: `linhas` (parseadas), `dominios` (aba Dominios), `chaves_uc`/`odi_ref` (da
-             referência do contrato) e `novo_como_aviso` (flag do workaround de
-             2026-09-16, repassada a `regras_cruzamento`; default False = regra original).
+             referência do contrato), `novo_como_aviso` (flag do workaround de
+             2026-09-16, repassada a `regras_cruzamento`; default False = regra original) e
+             as duas bases territoriais `quilombolas`/`indigenas` (2026-10-21) — **dados**,
+             como `chaves_uc`, e não configuração: `None` desliga a regra correspondente, o que
+             mantém a função testável sem arquivo e permite implantar uma base antes da outra.
     Fase 1: guarda — 0 linhas de dados → erro 'Planilha sem dados' (não envia).
     Fase 2: roda as regras (formato/domínio + cruzamento) e agrupa os achados.
     Fase 3: calcula totais e monta o preview.
@@ -762,7 +901,10 @@ def validar(linhas, dominios, chaves_uc, odi_ref, novo_como_aviso=False, vigente
     achados = (regras_formato_dominio(linhas, dominios)
                # A flag do workaround só afeta o cruzamento com a base.
                + regras_cruzamento(linhas, chaves_uc, odi_ref,
-                                   novo_como_aviso=novo_como_aviso, vigente=vigente))
+                                   novo_como_aviso=novo_como_aviso, vigente=vigente)
+               # Regras territoriais (2026-10-21): cada uma só roda se a sua base vier.
+               + regras_quilombola(linhas, quilombolas)
+               + regras_indigena(linhas, indigenas))
     grupos = _agrupar(achados)
     # Fase 3: totais, preview e ok.
     total_erros = sum(g["count"] for g in grupos if g["sev"] == "err")
