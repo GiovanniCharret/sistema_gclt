@@ -663,7 +663,9 @@ def _regras_territorio(linhas, base, tipo_comunidade, regra, rotulo, unidade):
     """
     # Fase 1: sem base carregada a regra não roda. É falha ABERTA e deliberada — o arquivo de
     # referência não pode derrubar o recebimento de planilha —, mas nunca silenciosa: a
-    # ausência sai no log do processo e em `GET /api/health`.
+    # ausência sai no log do processo e na rota de diagnóstico de saúde
+    # (`/api/health/detalhado` onde a rota foi dividida em 2026-10-01; `/api/health`
+    # onde ela ainda é uma só).
     if base is None:
         return []
 

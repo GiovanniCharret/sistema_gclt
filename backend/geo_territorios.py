@@ -305,7 +305,7 @@ class BaseTerritorial:
     def resumo(self):
         """Resumo para o diagnóstico de saúde: rótulo, contagem e arquivo de origem.
 
-        Por que existe: sem terminal na VM, `GET /api/health` é o único jeito de saber
+        Por que existe: sem terminal na VM, a rota de diagnóstico de saúde é o único jeito de saber
         se a base chegou na imagem — o mesmo papel que `email.origem` cumpre para o SMTP.
         """
         # Só metadado: nenhuma coordenada e nenhum caminho absoluto de máquina de desenvolvimento.
@@ -532,10 +532,9 @@ def _obter(chave, carregar, caminho):
     o contrário: lá o dado é do próprio sistema, aqui é base externa.
     ⚠️ **Mas não falha em SILÊNCIO** — e esse é o ponto que já custou caro neste projeto (o
     e-mail de identidade que não chegava por um remetente errado que ninguém via). A
-    indisponibilidade sai no log do contêiner, uma vez por processo, e aparece em
-    `GET /api/health` (⚠️ neste repositório a rota de saúde é uma só; no repositório de
-    produção a mesma informação fica em `/api/health/detalhado`, que exige token desde
-    2026-10-01).
+    indisponibilidade sai no log do contêiner, uma vez por processo, e na rota de diagnóstico
+    de saúde — `GET /api/health/detalhado` onde a rota foi dividida em 2026-10-01 (com token),
+    `GET /api/health` onde ela ainda é uma só.
 
     Entrada: chave do cache, função de carga e caminho base.
     Fase 1: se a base está em cache e o `.shp` não mudou, devolve o que está em memória.
