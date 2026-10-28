@@ -7,19 +7,19 @@
     "producao": "https://monitoramentolpt.enbpar.gov.br"
   },
   "gerado_em": "2026-10-02",
-  "versao_app": "V0.0.1006",
+  "versao_app": "V0.0.1028",
   "ultima_atualizacao": {
-    "data": "2026-10-06",
+    "data": "2026-10-28",
     "fase": "F9",
-    "subfase": "F9.6",
-    "titulo": "Dado novo só é aceito em contrato em andamento",
-    "resumo": "A tolerância com unidades ainda não cadastradas na base passou a valer apenas para contratos em “Andamento”. Contrato fora do andamento não deveria receber unidade nova, então ali o dado desconhecido volta a bloquear o envio."
+    "subfase": "F9.10",
+    "titulo": "Cópia de segurança das planilhas enviadas",
+    "resumo": "Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha."
   },
   "contadores": {
     "fases": 9,
-    "subfases": 48,
+    "subfases": 52,
     "primeira_data": "2026-06-23",
-    "ultima_data": "2026-10-06"
+    "ultima_data": "2026-10-28"
   },
   "legenda_tipos": {
     "entrega": "Funcionalidade nova, disponível para quem usa o sistema",
@@ -536,6 +536,42 @@
           "resumo": "A tolerância com unidades ainda não cadastradas na base passou a valer apenas para contratos em “Andamento”. Contrato fora do andamento não deveria receber unidade nova, então ali o dado desconhecido volta a bloquear o envio.",
           "impacto": "Atinge os contratos em “Encerramento”; os encerrados já não podiam enviar planilha.",
           "fonte": "backend/validacao.py"
+        },
+        {
+          "id": "F9.7",
+          "data": "2026-10-20",
+          "tipo": "dados",
+          "titulo": "Mapas oficiais de territórios quilombolas e indígenas entram no sistema",
+          "resumo": "Foram incorporados os contornos das 390 áreas quilombolas demarcadas pelo INCRA e das 665 terras indígenas da FUNAI, de todo o país. Valem só esses registros oficiais: as mais de 8 mil localidades do Censo do IBGE ficaram de fora, por decisão da gestão.",
+          "impacto": "O sistema passa a saber se uma coordenada cai dentro de um território demarcado. A área de cada território sai do próprio contorno, nunca do número informado no cadastro, que tem erros comprovados.",
+          "fonte": "entrada/areas_quilombolas/LEIA-ME.md, entrada/areas_indigenas/LEIA-ME.md"
+        },
+        {
+          "id": "F9.8",
+          "data": "2026-10-21",
+          "tipo": "decisao",
+          "titulo": "Tipo de comunidade conferido pela localização da unidade",
+          "resumo": "A coordenada de cada unidade é comparada com os territórios demarcados. Se o ponto está dentro de um e a coluna “Tipo de Comunidade” declara outro tipo, o envio é bloqueado e a mensagem diz o valor a preencher. Se a coluna declara comunidade indígena ou quilombola e o ponto não está em território nenhum, o envio também é bloqueado, com o território mais próximo e a distância. Onde os dois territórios se sobrepõem, qualquer um dos dois tipos é aceito.",
+          "impacto": "Na planilha de teste do contrato ECO 011/2018, 235 unidades dentro de território demarcado estavam declaradas como rural geral. Uma primeira versão, que só conferia quem já se declarava indígena ou quilombola, não acusava nenhuma e foi reprovada pela gerência.",
+          "fonte": "backend/validacao.py (commits 8d88343 e 4491fa4)"
+        },
+        {
+          "id": "F9.9",
+          "data": "2026-10-28",
+          "tipo": "incidente",
+          "titulo": "Planilhas aprovadas não chegaram ao e-mail da gestão",
+          "resumo": "O servidor de e-mail aceitou as mensagens e depois as descartou por sobrecarga. Para o sistema, aceitar é entregar: a tela mostrou “Planilha enviada” e nada chegou aos destinatários.",
+          "impacto": "Nenhum erro apareceu para quem enviou, e a gestão só percebeu pela falta dos arquivos.",
+          "fonte": "planning/specs/2026-10-28-backup-envio-anexo-v-plano.md"
+        },
+        {
+          "id": "F9.10",
+          "data": "2026-10-28",
+          "tipo": "entrega",
+          "titulo": "Cópia de segurança das planilhas enviadas",
+          "resumo": "Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha.",
+          "impacto": "Se o e-mail sumir de novo, a planilha não se perde: a gestão a baixa pela auditoria. É uma solução provisória, não o fluxo principal.",
+          "fonte": "backend/backup_anexo.py"
         }
       ]
     }

@@ -126,6 +126,17 @@ def conferir(doc):
     return problemas
 
 
+def _ordem_do_id(id_subfase):
+    """Chave numérica de um id de sub-fase: "F9.10" → (9, 10), que vem depois de (9, 9).
+
+    Id fora do formato (não deveria passar por `conferir`) vai para o fim, sem quebrar.
+    """
+    try:
+        return tuple(int(parte) for parte in id_subfase.lstrip("F").split("."))
+    except ValueError:
+        return (float("inf"),)
+
+
 def derivar(doc):
     """Recalcula os campos que o rodapé do site lê, e diz se algo mudou.
 
@@ -144,8 +155,11 @@ def derivar(doc):
     todas = [(s["data"], f["id"], s) for f in doc["fases"] for s in f["subfases"]]
     if not todas:
         return doc, []
-    # Ordenação textual funciona porque a data está em AAAA-MM-DD.
-    todas.sort(key=lambda t: (t[0], t[2]["id"]))
+    # Ordenação textual funciona para a DATA, porque ela está em AAAA-MM-DD.
+    # ⚠️ Para o ID, não (corrigido em 28/10/2026): como texto, "F9.10" vem antes de
+    # "F9.9", e no empate do mesmo dia a "última" saía errada — o rodapé mostrou o
+    # incidente F9.9 em vez da entrega F9.10. O id é comparado pelos seus números.
+    todas.sort(key=lambda t: (t[0], _ordem_do_id(t[2]["id"])))
     data_ult, fase_ult, sub_ult = todas[-1]
 
     # Fase 2: a versão exibida segue o padrão já usado no site: V<produto>.<marco>.<MMDD>.

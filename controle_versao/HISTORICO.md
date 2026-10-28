@@ -7,10 +7,10 @@ Anexo V — Painel de Monitoramento · Programa Luz para Todos / MME / ENBPar
 
 | | |
 |---|---|
-| Versão exibida no rodapé | **V0.0.1006** |
-| Última atualização | **2026-10-06** — Dado novo só é aceito em contrato em andamento (F9.6) |
-| Período coberto | 2026-06-23 a 2026-10-06 |
-| Tamanho | 9 fases, 48 sub-fases |
+| Versão exibida no rodapé | **V0.0.1028** |
+| Última atualização | **2026-10-28** — Cópia de segurança das planilhas enviadas (F9.10) |
+| Período coberto | 2026-06-23 a 2026-10-28 |
+| Tamanho | 9 fases, 52 sub-fases |
 | Produção | https://monitoramentolpt.enbpar.gov.br |
 
 ## Como ler
@@ -154,3 +154,7 @@ Com o login novo no ar, apareceu o primeiro defeito de uso real — e começou o
 | 2026-10-02 | Entrega | **Área do gerente e trilha de auditoria em produção** — Mergeada a branch da fase 2: perfil gerente, tela de administração de contas, trilha de auditoria com filtros e exportação em CSV/PDF, e a rota protegida que lê a trilha. Homologada à mão em setembro, antes de o servidor de teste ser encerrado. *O gerente passa a administrar contas e consultar quem fez o quê, sem depender de ninguém com acesso ao banco.* |
 | 2026-10-02 | Decisão | **Regra nova: equipamento público exige um e só um tipo** — Quando o enquadramento descreve um equipamento público ou comunitário (8, 9, 10 ou 11), exatamente uma das 21 colunas de equipamento da planilha — escolas, unidades de saúde, poços, infraestrutura comunitária, associações, igrejas e projetos produtivos — deve estar marcada, e todas as demais não. Os mesmos enquadramentos passaram a exigir “Não” na coluna de prioridade. *A segunda parte não é detalhe: sem ela a linha ficaria impossível de preencher, com dois erros se contradizendo.* |
 | 2026-10-06 | Decisão | **Dado novo só é aceito em contrato em andamento** — A tolerância com unidades ainda não cadastradas na base passou a valer apenas para contratos em “Andamento”. Contrato fora do andamento não deveria receber unidade nova, então ali o dado desconhecido volta a bloquear o envio. *Atinge os contratos em “Encerramento”; os encerrados já não podiam enviar planilha.* |
+| 2026-10-20 | Dados | **Mapas oficiais de territórios quilombolas e indígenas entram no sistema** — Foram incorporados os contornos das 390 áreas quilombolas demarcadas pelo INCRA e das 665 terras indígenas da FUNAI, de todo o país. Valem só esses registros oficiais: as mais de 8 mil localidades do Censo do IBGE ficaram de fora, por decisão da gestão. *O sistema passa a saber se uma coordenada cai dentro de um território demarcado. A área de cada território sai do próprio contorno, nunca do número informado no cadastro, que tem erros comprovados.* |
+| 2026-10-21 | Decisão | **Tipo de comunidade conferido pela localização da unidade** — A coordenada de cada unidade é comparada com os territórios demarcados. Se o ponto está dentro de um e a coluna “Tipo de Comunidade” declara outro tipo, o envio é bloqueado e a mensagem diz o valor a preencher. Se a coluna declara comunidade indígena ou quilombola e o ponto não está em território nenhum, o envio também é bloqueado, com o território mais próximo e a distância. Onde os dois territórios se sobrepõem, qualquer um dos dois tipos é aceito. *Na planilha de teste do contrato ECO 011/2018, 235 unidades dentro de território demarcado estavam declaradas como rural geral. Uma primeira versão, que só conferia quem já se declarava indígena ou quilombola, não acusava nenhuma e foi reprovada pela gerência.* |
+| 2026-10-28 | Incidente | **Planilhas aprovadas não chegaram ao e-mail da gestão** — O servidor de e-mail aceitou as mensagens e depois as descartou por sobrecarga. Para o sistema, aceitar é entregar: a tela mostrou “Planilha enviada” e nada chegou aos destinatários. *Nenhum erro apareceu para quem enviou, e a gestão só percebeu pela falta dos arquivos.* |
+| 2026-10-28 | Entrega | **Cópia de segurança das planilhas enviadas** — Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha. *Se o e-mail sumir de novo, a planilha não se perde: a gestão a baixa pela auditoria. É uma solução provisória, não o fluxo principal.* |

@@ -862,6 +862,21 @@ vs which owner; 409 says the contract is visible but has no ODIs/UCs loaded), an
 `UploadAnexoV.jsx` shows the raw status + detail on screen. That is deliberate (2026-07-22)
 — don't "soften" those messages back.
 
+### Backup do envio do Anexo V — PRODUCTION-ONLY (2026-10-28)
+
+On 2026-10-28 `smtp.office365.com` accepted messages and then dropped them under load; `smtplib`
+treats acceptance as delivery, so the screen said "Planilha enviada" and nothing arrived. The
+workaround lives **only in the production repo** (it depends on the MySQL trail, which this repo
+does not have): `backend/backup_anexo.py` keeps every **approved** .xlsx byte-for-byte in table
+`backup_anexo_v` for `retencao_dias` (60, `backend/parametros/backup_anexo.json`), and the audit
+screen offers a "baixar planilha" link. Full rules in the production `CLAUDE.md`. The ones that
+bite when editing: the table has its **own `METADATA_BACKUP`** (inside the identity `METADATA` a
+missing table would stop `obter_engine` and take the login down); the **event id is drawn in the
+send route** and passed to both the backup and the trail; the 502 path now **records the trail
+event** before raising; write failures are **silent with no log, by the user's decision**. It is a
+workaround with no mandate to store ODI/UC data — not the mainstream. Plan and decisions:
+`planning/specs/2026-10-28-backup-envio-anexo-v-plano.md`. Production suite: **663**.
+
 ### The sibling production repo (`monitoramentolpt_producao_enbpar/`)
 
 Deploy target 2 lives in a **separate local repo and separate GitHub remote**:
