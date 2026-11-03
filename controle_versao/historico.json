@@ -7,19 +7,19 @@
     "producao": "https://monitoramentolpt.enbpar.gov.br"
   },
   "gerado_em": "2026-10-02",
-  "versao_app": "V0.0.1028",
+  "versao_app": "V0.0.1103",
   "ultima_atualizacao": {
-    "data": "2026-10-28",
+    "data": "2026-11-03",
     "fase": "F9",
-    "subfase": "F9.10",
-    "titulo": "Cópia de segurança das planilhas enviadas",
-    "resumo": "Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha."
+    "subfase": "F9.11",
+    "titulo": "Planilhas reprovadas separadas dos envios na auditoria",
+    "resumo": "A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro \"Evento\" da auditoria ganha a opção nova sem nenhum botão a mais."
   },
   "contadores": {
     "fases": 9,
-    "subfases": 52,
+    "subfases": 53,
     "primeira_data": "2026-06-23",
-    "ultima_data": "2026-10-28"
+    "ultima_data": "2026-11-03"
   },
   "legenda_tipos": {
     "entrega": "Funcionalidade nova, disponível para quem usa o sistema",
@@ -572,6 +572,15 @@
           "resumo": "Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha.",
           "impacto": "Se o e-mail sumir de novo, a planilha não se perde: a gestão a baixa pela auditoria. É uma solução provisória, não o fluxo principal.",
           "fonte": "backend/backup_anexo.py"
+        },
+        {
+          "id": "F9.11",
+          "data": "2026-11-03",
+          "tipo": "entrega",
+          "titulo": "Planilhas reprovadas separadas dos envios na auditoria",
+          "resumo": "A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro \"Evento\" da auditoria ganha a opção nova sem nenhum botão a mais.",
+          "impacto": "Quem analisa os envios deixa de garimpá-los entre as reprovadas, que eram 4 de cada 5 eventos.",
+          "fonte": "backend/app.py"
         }
       ]
     }

@@ -7,10 +7,10 @@ Anexo V — Painel de Monitoramento · Programa Luz para Todos / MME / ENBPar
 
 | | |
 |---|---|
-| Versão exibida no rodapé | **V0.0.1028** |
-| Última atualização | **2026-10-28** — Cópia de segurança das planilhas enviadas (F9.10) |
-| Período coberto | 2026-06-23 a 2026-10-28 |
-| Tamanho | 9 fases, 52 sub-fases |
+| Versão exibida no rodapé | **V0.0.1103** |
+| Última atualização | **2026-11-03** — Planilhas reprovadas separadas dos envios na auditoria (F9.11) |
+| Período coberto | 2026-06-23 a 2026-11-03 |
+| Tamanho | 9 fases, 53 sub-fases |
 | Produção | https://monitoramentolpt.enbpar.gov.br |
 
 ## Como ler
@@ -158,3 +158,4 @@ Com o login novo no ar, apareceu o primeiro defeito de uso real — e começou o
 | 2026-10-21 | Decisão | **Tipo de comunidade conferido pela localização da unidade** — A coordenada de cada unidade é comparada com os territórios demarcados. Se o ponto está dentro de um e a coluna “Tipo de Comunidade” declara outro tipo, o envio é bloqueado e a mensagem diz o valor a preencher. Se a coluna declara comunidade indígena ou quilombola e o ponto não está em território nenhum, o envio também é bloqueado, com o território mais próximo e a distância. Onde os dois territórios se sobrepõem, qualquer um dos dois tipos é aceito. *Na planilha de teste do contrato ECO 011/2018, 235 unidades dentro de território demarcado estavam declaradas como rural geral. Uma primeira versão, que só conferia quem já se declarava indígena ou quilombola, não acusava nenhuma e foi reprovada pela gerência.* |
 | 2026-10-28 | Incidente | **Planilhas aprovadas não chegaram ao e-mail da gestão** — O servidor de e-mail aceitou as mensagens e depois as descartou por sobrecarga. Para o sistema, aceitar é entregar: a tela mostrou “Planilha enviada” e nada chegou aos destinatários. *Nenhum erro apareceu para quem enviou, e a gestão só percebeu pela falta dos arquivos.* |
 | 2026-10-28 | Entrega | **Cópia de segurança das planilhas enviadas** — Toda planilha aprovada passa a ser guardada no banco por 60 dias, exatamente como chegou, e quem consulta a auditoria pode baixá-la na linha do envio. A falha de e-mail, que antes não deixava rastro, passa a aparecer na trilha. *Se o e-mail sumir de novo, a planilha não se perde: a gestão a baixa pela auditoria. É uma solução provisória, não o fluxo principal.* |
+| 2026-11-03 | Entrega | **Planilhas reprovadas separadas dos envios na auditoria** — A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro "Evento" da auditoria ganha a opção nova sem nenhum botão a mais. *Quem analisa os envios deixa de garimpá-los entre as reprovadas, que eram 4 de cada 5 eventos.* |

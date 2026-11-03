@@ -876,6 +876,19 @@ send route** and passed to both the backup and the trail; the 502 path now **rec
 event** before raising; write failures are **silent with no log, by the user's decision**. It is a
 workaround with no mandate to store ODI/UC data — not the mainstream. Plan and decisions:
 `planning/specs/2026-10-28-backup-envio-anexo-v-plano.md`. Production suite: **663**.
+**Live since 2026-10-28**: deployed (`6b97cf0`, V0.0.1028), table created in `db_lpt` from the
+Hostinger (same database as production), user test passed (link + download).
+
+### Envio reprovado tem tipo próprio na trilha — PRODUCTION-ONLY (2026-11-03)
+
+The audit trail used to record every upload attempt as `anexo_v_enviado`, and 120 of 150 were rejected
+sheets. Since 2026-11-03 the type follows one criterion — **did the sheet pass validation?** — so passed
+(e-mail sent, failed or dry-run) stays `anexo_v_enviado` and rejected becomes **`anexo_v_reprovado`**;
+the detalhe text is unchanged. Lives only in the production repo (the trail does not exist here). The
+front needed nothing: the "Evento" filter is drawn from `TIPOS_DE_EVENTO`. ⚠️ The new type is also in
+`TIPOS_COM_CONTRATO`, or contracts with only rejected sheets would vanish from the contract filter. Old
+events are reclassified by a one-shot migration with a full table copy (`evento_copia_20261103`). Plan:
+`planning/specs/2026-11-03-anexo-v-reprovado-plano.md`. Production suite: **673**.
 
 ### The sibling production repo (`monitoramentolpt_producao_enbpar/`)
 
