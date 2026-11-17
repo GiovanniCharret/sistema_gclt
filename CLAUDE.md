@@ -890,6 +890,29 @@ front needed nothing: the "Evento" filter is drawn from `TIPOS_DE_EVENTO`. ⚠�
 events are reclassified by a one-shot migration with a full table copy (`evento_copia_20261103`). Plan:
 `planning/specs/2026-11-03-anexo-v-reprovado-plano.md`. Production suite: **673**.
 
+### Painel dos beneficiários, operadores `casacivil`/`mme` e perfil `governo` — PRODUCTION-ONLY (2026-11-17)
+
+Lives only in the production repo's `main` (commits `663963d`, `015804f`, `d81fa11`; V0.0.1117 =
+F9.12/F9.13); this repo's code did not receive it, and neither did `feature/amostragem-emissao-os`.
+Full rules in the production `CLAUDE.md`. The ones that bite when editing:
+
+- **New menu card `painel_beneficiarios`** in `perfis.MODULOS` with a **`url`** — an EXTERNAL link
+  (the LPT beneficiaries BI on GitHub Pages, public), opened in a new tab. Seen by every internal perfil
+  and `governo`; **not** by `usuario` (distribuidoras — user's decision) nor `sem_perfil`.
+- **The operador login's menu now comes from the server** (`cartoes` + `nome` on `/api/login` and
+  `/api/trocar-senha`). Everything specific to one operador lives in **`backend/acesso.py`**, four lists:
+  `OPERADORES_SEM_GRUPO`, `OPERADORES_CRIADOS_NO_LOGIN`, `MODULOS_DO_OPERADOR`, `NOMES_DE_OPERADOR`.
+  `enbpar` sees monitoramento + painel; `casacivil` ("Casa Civil") and `mme` ("MME") only the painel.
+- ⚠️ **`casacivil` and `mme` are created on their first login** (`Senha123`, forced change), in the
+  container's store — no IT needed. Never overwrites an existing (or disabled) account. Don't "fix" this
+  into `usuarios.json`: the deploy discards the git copy, and the display name must not go into the
+  `operador` field (it is the token's `sub`).
+- ⚠️ **Perfil `governo`** for `mme.gov.br` / `presidencia.gov.br`: an **exception** to the domain file's
+  default (every domain there is born `usuario`). A domain is `governo` only if it is in the JSON **and**
+  in `autorizacao.DOMINIOS_GOVERNO`. Its JSON value is the agency's name, not a sigla, so
+  `siglas_do_email` returns `[]`. Fixed perfil: `AlterarPerfil` refuses both directions.
+- Production suite: **715**.
+
 ### The sibling production repo (`monitoramentolpt_producao_enbpar/`)
 
 Deploy target 2 lives in a **separate local repo and separate GitHub remote**:

@@ -7,19 +7,19 @@
     "producao": "https://monitoramentolpt.enbpar.gov.br"
   },
   "gerado_em": "2026-10-02",
-  "versao_app": "V0.0.1103",
+  "versao_app": "V0.0.1117",
   "ultima_atualizacao": {
-    "data": "2026-11-03",
+    "data": "2026-11-17",
     "fase": "F9",
-    "subfase": "F9.11",
-    "titulo": "Planilhas reprovadas separadas dos envios na auditoria",
-    "resumo": "A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro \"Evento\" da auditoria ganha a opção nova sem nenhum botão a mais."
+    "subfase": "F9.13",
+    "titulo": "Perfil Governo para e-mails do MME e da Presidência",
+    "resumo": "Quem tem e-mail @mme.gov.br ou @presidencia.gov.br pede acesso pela tela de entrada e nasce com o perfil Governo, que vê só o painel dos beneficiários. É uma exceção à regra do arquivo de domínios, em que todo domínio nasce como distribuidora. O perfil é fixo: o gerente não o altera, e nenhuma conta da casa pode recebê-lo."
   },
   "contadores": {
     "fases": 9,
-    "subfases": 53,
+    "subfases": 55,
     "primeira_data": "2026-06-23",
-    "ultima_data": "2026-11-03"
+    "ultima_data": "2026-11-17"
   },
   "legenda_tipos": {
     "entrega": "Funcionalidade nova, disponível para quem usa o sistema",
@@ -581,6 +581,24 @@
           "resumo": "A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro \"Evento\" da auditoria ganha a opção nova sem nenhum botão a mais.",
           "impacto": "Quem analisa os envios deixa de garimpá-los entre as reprovadas, que eram 4 de cada 5 eventos.",
           "fonte": "backend/app.py"
+        },
+        {
+          "id": "F9.12",
+          "data": "2026-11-17",
+          "tipo": "entrega",
+          "titulo": "Painel dos Beneficiários do LPT no menu; acesso da Casa Civil e do MME",
+          "resumo": "O menu ganha o cartão \"Painel dos Beneficiários do LPT\", um link para o BI dos beneficiários feito por outra área, que abre numa aba nova. Todos os perfis internos e o operador enbpar o veem; as distribuidoras, não. Os operadores casacivil e mme entram só com esse cartão, e a conta deles nasce no primeiro login, sem depender da TI.",
+          "impacto": "A Casa Civil e o MME acompanham os beneficiários pelo mesmo endereço do sistema, sem acesso a contratos nem ao envio do Anexo V.",
+          "fonte": "commits 663963d e 015804f"
+        },
+        {
+          "id": "F9.13",
+          "data": "2026-11-17",
+          "tipo": "entrega",
+          "titulo": "Perfil Governo para e-mails do MME e da Presidência",
+          "resumo": "Quem tem e-mail @mme.gov.br ou @presidencia.gov.br pede acesso pela tela de entrada e nasce com o perfil Governo, que vê só o painel dos beneficiários. É uma exceção à regra do arquivo de domínios, em que todo domínio nasce como distribuidora. O perfil é fixo: o gerente não o altera, e nenhuma conta da casa pode recebê-lo.",
+          "impacto": "Pessoas dos órgãos do governo entram com o próprio e-mail, como os demais, em vez de dividir um login de operador.",
+          "fonte": "commit d81fa11"
         }
       ]
     }
