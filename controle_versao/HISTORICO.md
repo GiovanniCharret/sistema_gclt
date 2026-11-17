@@ -8,9 +8,9 @@ Anexo V — Painel de Monitoramento · Programa Luz para Todos / MME / ENBPar
 | | |
 |---|---|
 | Versão exibida no rodapé | **V0.0.1117** |
-| Última atualização | **2026-11-17** — Perfil Governo para e-mails do MME e da Presidência (F9.13) |
+| Última atualização | **2026-11-17** — Painel dos Beneficiários servido pelo endereço do sistema (F9.14) |
 | Período coberto | 2026-06-23 a 2026-11-17 |
-| Tamanho | 9 fases, 55 sub-fases |
+| Tamanho | 9 fases, 56 sub-fases |
 | Produção | https://monitoramentolpt.enbpar.gov.br |
 
 ## Como ler
@@ -161,3 +161,4 @@ Com o login novo no ar, apareceu o primeiro defeito de uso real — e começou o
 | 2026-11-03 | Entrega | **Planilhas reprovadas separadas dos envios na auditoria** — A tentativa com planilha reprovada passa a ter um nome próprio na trilha, anexo_v_reprovado. O nome anexo_v_enviado fica só para as planilhas que passaram na validação, com o e-mail disparado ou falho. O filtro "Evento" da auditoria ganha a opção nova sem nenhum botão a mais. *Quem analisa os envios deixa de garimpá-los entre as reprovadas, que eram 4 de cada 5 eventos.* |
 | 2026-11-17 | Entrega | **Painel dos Beneficiários do LPT no menu; acesso da Casa Civil e do MME** — O menu ganha o cartão "Painel dos Beneficiários do LPT", um link para o BI dos beneficiários feito por outra área, que abre numa aba nova. Todos os perfis internos e o operador enbpar o veem; as distribuidoras, não. Os operadores casacivil e mme entram só com esse cartão, e a conta deles nasce no primeiro login, sem depender da TI. *A Casa Civil e o MME acompanham os beneficiários pelo mesmo endereço do sistema, sem acesso a contratos nem ao envio do Anexo V.* |
 | 2026-11-17 | Entrega | **Perfil Governo para e-mails do MME e da Presidência** — Quem tem e-mail @mme.gov.br ou @presidencia.gov.br pede acesso pela tela de entrada e nasce com o perfil Governo, que vê só o painel dos beneficiários. É uma exceção à regra do arquivo de domínios, em que todo domínio nasce como distribuidora. O perfil é fixo: o gerente não o altera, e nenhuma conta da casa pode recebê-lo. *Pessoas dos órgãos do governo entram com o próprio e-mail, como os demais, em vez de dividir um login de operador.* |
+| 2026-11-17 | Entrega | **Painel dos Beneficiários servido pelo endereço do sistema** — O cartão do painel deixa de levar ao endereço do GitHub: abre monitoramentolpt.enbpar.gov.br/painel-lpt/, e o servidor do site busca a página lá e a entrega daqui. Os cabeçalhos que denunciavam a origem foram retirados, e, se o GitHub estiver fora do ar, aparece uma mensagem do próprio sistema, sem afetar o resto do site. *Pedido da diretoria: o sistema não exibe mais um endereço externo, enquanto o BI não ganha URL própria. Quando ganhar, muda uma linha do servidor.* |

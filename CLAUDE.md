@@ -896,8 +896,12 @@ Lives only in the production repo's `main` (commits `663963d`, `015804f`, `d81fa
 F9.12/F9.13); this repo's code did not receive it, and neither did `feature/amostragem-emissao-os`.
 Full rules in the production `CLAUDE.md`. The ones that bite when editing:
 
-- **New menu card `painel_beneficiarios`** in `perfis.MODULOS` with a **`url`** — an EXTERNAL link
-  (the LPT beneficiaries BI on GitHub Pages, public), opened in a new tab. Seen by every internal perfil
+- **New menu card `painel_beneficiarios`** in `perfis.MODULOS` with a **`url`** — the LPT
+  beneficiaries BI (GitHub Pages, public), opened in a new tab. ⚠️ **Since F9.14 the url is
+  `/painel-lpt/`**, a reverse proxy in the front's `modelo/nginx.conf` (the diretoria asked not to show
+  the GitHub address); the origin lives only there. `resolver 127.0.0.11` (Docker DNS) + a variable in
+  `proxy_pass`, so a DNS failure takes down only the painel, never nginx's startup; GitHub's HSTS is
+  hidden. Pinned by `backend/tests/test_nginx_painel.py`. Seen by every internal perfil
   and `governo`; **not** by `usuario` (distribuidoras — user's decision) nor `sem_perfil`.
 - **The operador login's menu now comes from the server** (`cartoes` + `nome` on `/api/login` and
   `/api/trocar-senha`). Everything specific to one operador lives in **`backend/acesso.py`**, four lists:
@@ -911,7 +915,7 @@ Full rules in the production `CLAUDE.md`. The ones that bite when editing:
   default (every domain there is born `usuario`). A domain is `governo` only if it is in the JSON **and**
   in `autorizacao.DOMINIOS_GOVERNO`. Its JSON value is the agency's name, not a sigla, so
   `siglas_do_email` returns `[]`. Fixed perfil: `AlterarPerfil` refuses both directions.
-- Production suite: **715**.
+- Production suite: **723**.
 
 ### The sibling production repo (`monitoramentolpt_producao_enbpar/`)
 
